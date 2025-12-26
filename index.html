@@ -16,6 +16,11 @@
         <header>
             <h1>Side Picker</h1>
             <p>Optimize your game night happiness</p>
+            <div class="header-actions" style="margin-top: 10px;">
+                <button class="btn-sm" onclick="saveConfig()">💾 Save Setup</button>
+                <button class="btn-sm" onclick="triggerLoad()">📂 Load Setup</button>
+                <input type="file" id="file-input" style="display: none;" onchange="loadConfig(this)">
+            </div>
         </header>
 
         <main>
@@ -75,17 +80,22 @@
                         <div class="empty-state">No players added yet</div>
                     </div>
 
-                    <div class="options-panel"
-                        style="margin-top: 1rem; margin-bottom: 1rem; padding: 1rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
-                        <label
-                            style="color: var(--text-muted); font-size: 0.9rem; display: block; margin-bottom: 0.5rem;">Optimization
-                            Goal:</label>
-                        <div style="display: flex; gap: 1rem;">
-                            <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
-                                <input type="radio" name="opt-mode" value="total" checked> Maximize Total Happiness
+                    <div class="options-panel">
+                        <h3>Optimization Goal</h3>
+                        <div class="opt-choices">
+                            <label class="opt-choice">
+                                <input type="radio" name="opt-mode" value="total" checked>
+                                <div>
+                                    <strong>Highest Group Score</strong>
+                                    <p>Finds the combination that gives the group the most total happines points.</p>
+                                </div>
                             </label>
-                            <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
-                                <input type="radio" name="opt-mode" value="fairness"> Ensure Fairness (Maximin)
+                            <label class="opt-choice">
+                                <input type="radio" name="opt-mode" value="fairness">
+                                <div>
+                                    <strong>Minimize Player Unhappiness</strong>
+                                    <p>Finds the combination that gives the lowest unhappiness to each player</p>
+                                </div>
                             </label>
                         </div>
                     </div>

@@ -544,3 +544,64 @@ function resetApp() {
         switchView('view-factions');
     }
 }
+
+// --- Save/Load Configuration ---
+
+function saveConfig() {
+    if (state.factions.length === 0 && state.players.length === 0) {
+        alert("Nothing to save!");
+        return;
+    }
+
+    const config = {
+        factions: state.factions,
+        players: state.players,
+        timestamp: new Date().toISOString()
+    };
+
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(config));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", "side-picker-setup.json");
+    document.body.appendChild(downloadAnchorNode); // required for firefox
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+}
+
+function triggerLoad() {
+    get('file-input').click();
+}
+
+function loadConfig(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function (e) {
+        try {
+            const config = JSON.parse(e.target.result);
+
+            if (config.factions && Array.isArray(config.factions)) {
+                state.factions = config.factions;
+            }
+
+            if (config.players && Array.isArray(config.players)) {
+                state.players = config.players;
+            }
+
+            // UI Reset
+            get('game-select').value = 'custom';
+            renderFactions();
+            renderPlayers();
+            switchView('view-players'); // Jump to players assuming factions are loaded
+
+            alert("Configuration loaded successfully!");
+
+        } catch (err) {
+            alert("Error loading file: Invalid JSON format.");
+            console.error(err);
+        }
+    };
+    reader.readAsText(file);
+    input.value = ''; // reset so same file can be loaded again
+}

@@ -51,6 +51,7 @@ header h1 {
     font-weight: 700;
     background: linear-gradient(to right, var(--primary), var(--accent));
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
     margin-bottom: 0.5rem;
 }
@@ -176,6 +177,22 @@ input[type="text"]:focus {
 }
 
 .btn.text:hover {
+    color: var(--text-main);
+}
+
+.btn-sm {
+    padding: 6px 12px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: rgba(30, 41, 59, 0.6);
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-sm:hover {
+    background: rgba(255, 255, 255, 0.1);
     color: var(--text-main);
 }
 
@@ -456,5 +473,76 @@ footer {
 
     .card {
         padding: 1.5rem;
+    }
+}
+
+/* Optimization Panel */
+.options-panel {
+    margin: 1rem 0;
+    padding: 1.5rem;
+    background: rgba(15, 23, 42, 0.4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.options-panel h3 {
+    font-size: 1rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 1rem;
+}
+
+.opt-choices {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.opt-choice {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.opt-choice:hover {
+    background: rgba(255, 255, 255, 0.07);
+}
+
+.opt-choice:has(input:checked) {
+    background: rgba(59, 130, 246, 0.1);
+    border-color: var(--primary);
+}
+
+.opt-choice input {
+    margin-top: 5px;
+}
+
+.opt-choice strong {
+    display: block;
+    color: var(--text-main);
+    margin-bottom: 4px;
+}
+
+.opt-choice p {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+    margin: 0;
+}
+
+@media (min-width: 768px) {
+    .opt-choices {
+        flex-direction: row;
+    }
+
+    .opt-choice {
+        flex: 1;
     }
 }
