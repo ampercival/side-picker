@@ -359,6 +359,19 @@ function randomizeAllPreferences() {
 }
 
 // --- Drag and Drop Logic ---
+const touchDragState = {
+    item: null,
+    ghost: null,
+    offsetX: 0,
+    offsetY: 0,
+    allLists: null,
+    player: null,
+    lastTargetList: null,
+    lastAfterElement: null,
+    rafId: null,
+    lastTouch: null
+};
+
 function setupDragAndDrop(list1, list2, list3, playerObj) {
     const lists = [list1, list2, list3];
 
@@ -391,94 +404,134 @@ function setupDragAndDrop(list1, list2, list3, playerObj) {
 }
 
 function setupTouchDrag(list, allLists, playerObj) {
-    let touchedItem = null;
-    let ghost = null;
-    let touchOffsetX = 0;
-    let touchOffsetY = 0;
-
-    const cleanup = () => {
-        if (touchedItem) {
-            touchedItem.classList.remove('dragging');
-            touchedItem = null;
-        }
-        if (ghost) {
-            ghost.remove();
-            ghost = null;
-        }
-        // Remove any stray ghosts just in case
-        document.querySelectorAll('.drag-ghost').forEach(el => el.remove());
-
-        // Save state
-        const [l1, l2, l3] = allLists;
-        updatePlayerStateFromDOM(playerObj, l1, l2, l3);
-    };
-
     list.addEventListener('touchstart', e => {
         const li = e.target.closest('li');
         if (!li) return;
 
-        // Cleanup any previous mess first
-        cleanup();
-
+        if (touchDragState.item) return;
         e.preventDefault();
-
-        touchedItem = li;
-        touchedItem.classList.add('dragging');
-
-        // Create Ghost
-        const rect = li.getBoundingClientRect();
-        ghost = li.cloneNode(true);
-        ghost.classList.add('drag-ghost'); // Mark it
-        ghost.style.position = 'fixed';
-        ghost.style.width = `${rect.width}px`;
-        ghost.style.height = `${rect.height}px`;
-        ghost.style.left = `${rect.left}px`;
-        ghost.style.top = `${rect.top}px`;
-        ghost.style.zIndex = '10000'; // Super high
-        ghost.style.opacity = '0.9';
-        ghost.style.pointerEvents = 'none';
-        ghost.style.background = '#3b82f6';
-        ghost.style.transform = 'scale(1.05)';
-        ghost.style.boxShadow = '0 10px 20px rgba(0,0,0,0.3)';
-        document.body.appendChild(ghost);
-
         const touch = e.touches[0];
-        touchOffsetX = touch.clientX - rect.left;
-        touchOffsetY = touch.clientY - rect.top;
+        if (!touch) return;
+        startTouchDrag(li, allLists, playerObj, touch);
     }, { passive: false });
+}
 
-    list.addEventListener('touchmove', e => {
-        if (!touchedItem || !ghost) return;
-        e.preventDefault();
+function startTouchDrag(li, allLists, playerObj, touch) {
+    cleanupTouchDrag();
 
-        const touch = e.touches[0];
+    touchDragState.item = li;
+    touchDragState.allLists = allLists;
+    touchDragState.player = playerObj;
+    touchDragState.lastTargetList = null;
+    touchDragState.lastAfterElement = null;
+    touchDragState.lastTouch = touch;
 
-        // Move Ghost
-        ghost.style.left = `${touch.clientX - touchOffsetX}px`;
-        ghost.style.top = `${touch.clientY - touchOffsetY}px`;
+    li.classList.add('dragging');
 
-        // Hide ghost to peek underneath
-        ghost.style.visibility = 'hidden';
-        const target = document.elementFromPoint(touch.clientX, touch.clientY);
-        ghost.style.visibility = 'visible';
+    const rect = li.getBoundingClientRect();
+    const ghost = li.cloneNode(true);
+    ghost.classList.add('drag-ghost');
+    ghost.style.position = 'fixed';
+    ghost.style.left = '0px';
+    ghost.style.top = '0px';
+    ghost.style.width = `${rect.width}px`;
+    ghost.style.height = `${rect.height}px`;
+    ghost.style.zIndex = '10000';
+    ghost.style.opacity = '0.9';
+    ghost.style.pointerEvents = 'none';
+    ghost.style.background = '#3b82f6';
+    ghost.style.transform = `translate3d(${rect.left}px, ${rect.top}px, 0) scale(1.05)`;
+    ghost.style.transformOrigin = 'top left';
+    ghost.style.boxShadow = '0 10px 20px rgba(0,0,0,0.3)';
+    ghost.style.willChange = 'transform';
+    document.body.appendChild(ghost);
 
-        if (!target) return;
+    touchDragState.ghost = ghost;
+    touchDragState.offsetX = touch.clientX - rect.left;
+    touchDragState.offsetY = touch.clientY - rect.top;
 
-        const targetList = target.closest('.sortable-list');
+    document.addEventListener('touchmove', onTouchMove, { passive: false });
+    document.addEventListener('touchend', onTouchEnd, { passive: false });
+    document.addEventListener('touchcancel', onTouchEnd, { passive: false });
+}
 
-        // Only allow dropping in one of the lists for this player
-        if (targetList && allLists.includes(targetList)) {
-            const afterElement = getDragAfterElement(targetList, touch.clientY);
-            if (afterElement == null) {
-                targetList.appendChild(touchedItem);
-            } else {
-                targetList.insertBefore(touchedItem, afterElement);
-            }
-        }
-    }, { passive: false });
+function onTouchMove(e) {
+    if (!touchDragState.item || !touchDragState.ghost) return;
+    const touch = e.touches[0];
+    if (!touch) return;
+    e.preventDefault();
+    touchDragState.lastTouch = touch;
 
-    list.addEventListener('touchend', cleanup);
-    list.addEventListener('touchcancel', cleanup);
+    if (touchDragState.rafId) return;
+    touchDragState.rafId = requestAnimationFrame(updateTouchDragPosition);
+}
+
+function updateTouchDragPosition() {
+    touchDragState.rafId = null;
+    const touch = touchDragState.lastTouch;
+    if (!touch || !touchDragState.item || !touchDragState.ghost) return;
+
+    const x = touch.clientX - touchDragState.offsetX;
+    const y = touch.clientY - touchDragState.offsetY;
+    touchDragState.ghost.style.transform = `translate3d(${x}px, ${y}px, 0) scale(1.05)`;
+
+    const target = document.elementFromPoint(touch.clientX, touch.clientY);
+    if (!target) return;
+
+    const targetList = target.closest('.sortable-list');
+    if (!targetList || !touchDragState.allLists.includes(targetList)) return;
+
+    const afterElement = getDragAfterElement(targetList, touch.clientY);
+    if (targetList === touchDragState.lastTargetList && afterElement === touchDragState.lastAfterElement) {
+        return;
+    }
+
+    if (afterElement == null) {
+        targetList.appendChild(touchDragState.item);
+    } else if (afterElement !== touchDragState.item) {
+        targetList.insertBefore(touchDragState.item, afterElement);
+    }
+
+    touchDragState.lastTargetList = targetList;
+    touchDragState.lastAfterElement = afterElement;
+}
+
+function onTouchEnd() {
+    cleanupTouchDrag();
+}
+
+function cleanupTouchDrag() {
+    if (touchDragState.rafId) {
+        cancelAnimationFrame(touchDragState.rafId);
+        touchDragState.rafId = null;
+    }
+
+    if (touchDragState.item) {
+        touchDragState.item.classList.remove('dragging');
+    }
+
+    if (touchDragState.ghost) {
+        touchDragState.ghost.remove();
+    }
+
+    document.querySelectorAll('.drag-ghost').forEach(el => el.remove());
+
+    if (touchDragState.player && touchDragState.allLists) {
+        const [l1, l2, l3] = touchDragState.allLists;
+        updatePlayerStateFromDOM(touchDragState.player, l1, l2, l3);
+    }
+
+    touchDragState.item = null;
+    touchDragState.ghost = null;
+    touchDragState.allLists = null;
+    touchDragState.player = null;
+    touchDragState.lastTargetList = null;
+    touchDragState.lastAfterElement = null;
+    touchDragState.lastTouch = null;
+
+    document.removeEventListener('touchmove', onTouchMove);
+    document.removeEventListener('touchend', onTouchEnd);
+    document.removeEventListener('touchcancel', onTouchEnd);
 }
 
 function getDragAfterElement(container, y) {
