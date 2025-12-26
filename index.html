@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Side Picker - Faction Allocator</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="app-container">
+        <header>
+            <h1>Side Picker</h1>
+            <p>Optimize your game night happiness</p>
+        </header>
+
+        <main>
+            <!-- View 1: Faction Setup -->
+            <section id="view-factions" class="view active">
+                <div class="card">
+                    <h2>Step 1: Setup Factions</h2>
+                    <p class="subtitle">Choose a game or enter factions manually.</p>
+
+                    <div class="preset-selector" style="margin-bottom: 1.5rem;">
+                        <label for="game-select"
+                            style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.9rem;">Load
+                            Presets:</label>
+                        <select id="game-select" onchange="loadPreset()"
+                            style="width: 100%; padding: 10px; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border); color: white; border-radius: 8px;">
+                            <option value="custom">Custom (Manual Entry)</option>
+                            <option value="here_i_stand">Here I Stand</option>
+                        </select>
+                    </div>
+
+                    <div class="input-group">
+                        <input type="text" id="faction-input" placeholder="e.g., The Empire, Rebels, Scum..."
+                            onkeypress="handleEnter(event, addFaction)">
+                        <button class="btn primary" onclick="addFaction()">Add</button>
+                    </div>
+
+                    <div id="faction-list" class="tag-container">
+                        <!-- Factions go here -->
+                        <div class="empty-state">No factions added yet</div>
+                    </div>
+
+                    <div class="actions right">
+                        <button class="btn secondary" onclick="nextStep('view-players')">Next: Setup Players</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- View 2: Player Setup -->
+            <section id="view-players" class="view">
+                <div class="card">
+                    <h2>Step 2: Setup Players</h2>
+                    <p class="subtitle">Add players and drag to rank their preferences.</p>
+
+                    <div class="input-group">
+                        <input type="text" id="player-input" placeholder="Player Name"
+                            onkeypress="handleEnter(event, addPlayer)">
+                        <button class="btn primary" onclick="addPlayer()">Add Player</button>
+                    </div>
+
+                    <div class="toolbar" style="margin-bottom: 1rem; display: flex; justify-content: flex-end;">
+                        <button class="btn secondary" onclick="randomizeAllPreferences()"
+                            title="Randomize choices for all players">🎲 Randomize Choices</button>
+                    </div>
+
+                    <div id="players-container" class="accordion-container">
+                        <!-- Player cards go here -->
+                        <div class="empty-state">No players added yet</div>
+                    </div>
+
+                    <div class="actions space-between">
+                        <button class="btn text" onclick="prevStep('view-factions')">Back</button>
+                        <button class="btn accent" onclick="calculateOptimization()">Optimize & Assign</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- View 3: Results -->
+            <section id="view-results" class="view">
+                <div class="card">
+                    <h2>Optimal Assignment</h2>
+                    <p class="subtitle">The happiness algorithm has spoken.</p>
+
+                    <div id="results-container" class="results-grid">
+                        <!-- Results go here -->
+                    </div>
+
+                    <div class="stats-panel">
+                        <div class="stat-item">
+                            <span class="label">Total Happiness</span>
+                            <span class="value" id="total-score">0</span>
+                        </div>
+                    </div>
+
+                    <div class="actions center">
+                        <button class="btn secondary" onclick="resetApp()">Start Over</button>
+                        <button class="btn text" onclick="prevStep('view-players')">Back to Players</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>Side Picker &copy; 2025</p>
+        </footer>
+    </div>
+
+    <!-- Templates -->
+    <template id="template-faction-tag">
+        <div class="tag faction-tag">
+            <span class="name"></span>
+            <button class="remove-btn" onclick="removeFaction(this)">&times;</button>
+        </div>
+    </template>
+
+    <template id="template-player-card">
+        <div class="player-card" data-player-id="">
+            <div class="player-header" onclick="togglePlayerCard(this)">
+                <span class="player-name">Name</span>
+                <span class="expand-icon">▼</span>
+                <button class="remove-btn-sm" onclick="removePlayer(event, this)">Remove</button>
+            </div>
+            <div class="player-body">
+                <div class="preference-column">
+                    <h4>Available Factions</h4>
+                    <ul class="sortable-list available-list">
+                        <!-- Unassigned factions -->
+                    </ul>
+                </div>
+                <div class="preference-column">
+                    <h4>Preference Rank (1st = Top)</h4>
+                    <ul class="sortable-list preference-list">
+                        <!-- Ranked factions -->
+                    </ul>
+                </div>
+                <div class="preference-column">
+                    <h4>Banned (Do Not Want)</h4>
+                    <ul class="sortable-list banned-list">
+                        <!-- Banned factions -->
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
