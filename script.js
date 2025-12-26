@@ -148,7 +148,7 @@ function showConfirm(title, message, callback, btnText = 'Confirm', btnClass = '
     confirmBtn.textContent = btnText;
     confirmBtn.className = `btn ${btnClass}`;
     confirmBtn.onclick = () => {
-        closeModals();
+        closeModal('confirm-modal');
         callback();
     };
 
@@ -156,6 +156,18 @@ function showConfirm(title, message, callback, btnText = 'Confirm', btnClass = '
 
     get('modal-overlay').classList.add('active');
     get('confirm-modal').classList.add('active');
+}
+
+function closeModal(id) {
+    const modal = get(id);
+    if (modal) modal.classList.remove('active');
+
+    // Only close overlay if no other modals are active (checking effectively by class)
+    // Actually, simple check:
+    const active = document.querySelectorAll('.modal.active');
+    if (active.length === 0) {
+        get('modal-overlay').classList.remove('active');
+    }
 }
 
 function closeModals() {
@@ -1092,7 +1104,7 @@ function saveSession(name) {
     closeModals();
 }
 
-function deleteSession(name) {
+function deleteSession(name, onSuccess) {
     showConfirm(
         'Delete Session?',
         `Are you sure you want to delete "${name}"?`,
@@ -1100,13 +1112,9 @@ function deleteSession(name) {
             const sessions = getSessions();
             delete sessions[name];
             localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
-            // We need to refresh the list, but we don't have direct access to the callback or container ID here easily without passing it.
-            // However, since this is called from the render loop, we might need a way to refresh.
-            // Simplified: Close modal or just acknowledge. If staying in modal, we need to re-render.
-            // Actually, renderSessionList passed 'onSelectCurrent' but we are inside delete click.
-            // Let's just close modal for simplicity as re-rendering the same modal dynamic content is tricky with current structure.
+
             showToast('info', 'Deleted', `Session "${name}" deleted.`);
-            closeModals();
+            if (onSuccess) onSuccess();
         },
         'Delete',
         'danger'
@@ -1198,9 +1206,9 @@ function renderSessionList(containerId, onSelectCurrent) {
         // Delete click
         item.querySelector('.delete-btn').onclick = (e) => {
             e.stopPropagation();
-            deleteSession(name);
-            // Refresh the current list
-            renderSessionList(containerId, onSelectCurrent);
+            deleteSession(name, () => {
+                renderSessionList(containerId, onSelectCurrent);
+            });
         };
 
         container.appendChild(clone);

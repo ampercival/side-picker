@@ -38,6 +38,9 @@
 
     --surface-dim: rgba(15, 23, 42, 0.3);
     --btn-secondary-bg: rgba(255, 255, 255, 0.05);
+
+    --modal-bg: rgba(30, 41, 59, 0.95);
+    /* More opaque for modals */
 }
 
 [data-theme="light"] {
@@ -68,6 +71,9 @@
 
     --surface-dim: rgba(255, 255, 255, 0.5);
     --btn-secondary-bg: white;
+
+    --modal-bg: rgba(255, 255, 255, 0.98);
+    /* Almost solid for light mode */
 }
 
 * {
@@ -120,6 +126,14 @@ header h1 {
 
 header p {
     color: var(--text-muted);
+}
+
+.header-actions {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    flex-wrap: wrap;
 }
 
 /* Views & Transitions */
@@ -198,7 +212,7 @@ h2 {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%) scale(0.95);
-    background: rgba(15, 23, 42, 0.95);
+    background: var(--modal-bg);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 2rem;
@@ -209,6 +223,10 @@ h2 {
     opacity: 0;
     transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+#confirm-modal {
+    z-index: 200;
 }
 
 .modal.active {
@@ -226,10 +244,10 @@ h2 {
 .modal input[type="text"] {
     width: 100%;
     padding: 12px;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--input-bg);
     border: 1px solid var(--border);
     border-radius: 8px;
-    color: white;
+    color: var(--text-main);
     font-size: 1rem;
     margin-bottom: 1.5rem;
 }
@@ -237,7 +255,6 @@ h2 {
 .modal input[type="text"]:focus {
     outline: none;
     border-color: var(--primary);
-    background: rgba(255, 255, 255, 0.1);
 }
 
 /* Load List */
@@ -254,7 +271,7 @@ h2 {
     display: flex;
     align-items: center;
     padding: 12px;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--btn-secondary-bg);
     border: 1px solid transparent;
     border-radius: 8px;
     cursor: pointer;
@@ -262,7 +279,7 @@ h2 {
 }
 
 .load-item:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--surface-dim);
     border-color: var(--border);
 }
 
