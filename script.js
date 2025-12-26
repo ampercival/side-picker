@@ -1,9 +1,11 @@
-// Side Picker Logic
-
 // Initialization and State
 const state = {
     factions: [],
-    players: [] // { id, name, preferences: [], bans: [] }
+    players: [], // { id, name, preferences: [], bans: [] }
+    discord: {
+        url: '',
+        enabled: false
+    }
 };
 
 // --- DOM Helpers ---
@@ -139,7 +141,8 @@ function addPlayer() {
             id: id,
             name: name,
             preferences: [], // Ordered list of favored factions
-            bans: [] // List of unwanted factions
+            bans: [], // List of unwanted factions
+            locked: false
         });
 
         autoSave();
@@ -203,6 +206,19 @@ function clearPlayerChoices(btn) {
     }
 }
 
+function togglePlayerLock(event, btn) {
+    event.stopPropagation();
+    const card = btn.closest('.player-card');
+    const id = card.getAttribute('data-player-id');
+    const player = state.players.find(p => p.id === id);
+
+    if (player) {
+        player.locked = !player.locked;
+        autoSave();
+        renderPlayers(); // Re-render to update icon
+    }
+}
+
 function togglePlayerCard(header) {
     const card = header.closest('.player-card');
     card.classList.toggle('active');
@@ -228,6 +244,20 @@ function renderPlayers() {
         const card = clone.querySelector('.player-card');
         card.setAttribute('data-player-id', player.id);
         clone.querySelector('.player-name').textContent = player.name;
+
+        // Lock State
+        const lockBtn = clone.querySelector('.unlock');
+        if (player.locked) {
+            lockBtn.querySelector('.locked').style.display = 'none';
+            lockBtn.querySelector('.unlocked').style.display = 'inline';
+            lockBtn.title = "Unlock randomization";
+            card.classList.add('locked-mode');
+        } else {
+            lockBtn.querySelector('.locked').style.display = 'inline';
+            lockBtn.querySelector('.unlocked').style.display = 'none';
+            lockBtn.title = "Lock randomization";
+            card.classList.remove('locked-mode');
+        }
 
         // Populate Lists
         const availableList = clone.querySelector('.available-list');
@@ -303,6 +333,8 @@ function randomizeAllPreferences() {
 
     if (confirm("This will randomize preferences and bans for ALL players. Existing choices will be lost. Continue?")) {
         state.players.forEach(player => {
+            if (player.locked) return; // Skip locked players
+
             // Shuffle a copy of factions
             const shuffled = [...state.factions].sort(() => 0.5 - Math.random());
 
@@ -396,8 +428,70 @@ function calculateOptimization() {
     if (result.success) {
         displayResults(result);
         switchView('view-results');
+
+        // Discord Webhook
+        if (state.discord && state.discord.enabled && state.discord.url) {
+            sendToDiscord(state.discord.url, result, state.players);
+        }
     } else {
         alert("Could not find a valid assignment! Try removing some bans.");
+    }
+}
+
+async function sendToDiscord(url, result, players) {
+    const fields = [];
+
+    // Sort by name for the report
+    const sortedPlayers = [...players].sort((a, b) => a.name.localeCompare(b.name));
+
+    sortedPlayers.forEach(p => {
+        const faction = result.assignment[p.id];
+        const score = getScore(p, faction);
+        let icon = "😐"; // Neutral
+        if (score > 5) icon = "🤩"; // Top choice
+        else if (score > 0) icon = "🙂"; // Good choice
+        else if (score < 0) icon = "🤬"; // Bad/Banned (shouldn't happen)
+
+        fields.push({
+            name: `${icon} ${p.name}`,
+            value: `**${faction}**`,
+            inline: true
+        });
+    });
+
+    const payload = {
+        username: "Side Picker Bot",
+        avatar_url: "https://cdn-icons-png.flaticon.com/512/1021/1021203.png",
+        embeds: [{
+            title: "🎲 Faction Assignments Ready!",
+            description: `**Optimization Goal:** ${document.querySelector('input[name="opt-mode"]:checked').parentElement.querySelector('strong').textContent}\n**Total Happiness:** ${get('total-score').textContent}`,
+            color: 3900382, // #3b82f6 (Primary Blueish)
+            fields: fields,
+            footer: {
+                text: "Side Picker • Game Night Optimized"
+            },
+            timestamp: new Date().toISOString()
+        }]
+    };
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (response.ok) {
+            console.log("Discord notification sent!");
+        } else {
+            console.error("Discord Error:", response.status, await response.text());
+            alert("Failed to send Discord message. Check console.");
+        }
+    } catch (e) {
+        console.error("Discord Fetch Error:", e);
+        alert("Network error sending to Discord.");
     }
 }
 
@@ -608,6 +702,7 @@ function autoSave() {
     const data = {
         factions: state.factions,
         players: state.players,
+        discord: state.discord,
         timestamp: Date.now()
     };
     localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(data));
@@ -620,15 +715,41 @@ function loadAutoSave() {
             const data = JSON.parse(json);
             if (data.factions) state.factions = data.factions;
             if (data.players) state.players = data.players;
+            if (data.discord) state.discord = data.discord; // Restore Discord settings
 
             renderFactions();
             renderPlayers();
+
+            // Restore Discord UI inputs
+            if (state.discord) {
+                get('discord-webhook').value = state.discord.url || '';
+                get('send-to-discord').checked = state.discord.enabled || false;
+            }
+
             // Don't auto-switch view, let user start fresh but with data loaded
         } catch (e) {
             console.error("Failed to load autosave", e);
         }
     }
 }
+
+// ... (Rest of Session Management) ...
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+    loadAutoSave();
+
+    // Discord Listeners
+    get('discord-webhook').addEventListener('input', (e) => {
+        state.discord.url = e.target.value.trim();
+        autoSave();
+    });
+
+    get('send-to-discord').addEventListener('change', (e) => {
+        state.discord.enabled = e.target.checked;
+        autoSave();
+    });
+});
 
 // Named Sessions
 function getSessions() {
@@ -752,7 +873,4 @@ function closeModals() {
     document.querySelectorAll('.modal, .modal-overlay').forEach(el => el.classList.remove('active'));
 }
 
-// Initialize
-document.addEventListener('DOMContentLoaded', () => {
-    loadAutoSave();
-});
+
