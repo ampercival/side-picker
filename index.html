@@ -16,10 +16,25 @@
         <header>
             <h1>Side Picker</h1>
             <p>Optimize your game night happiness</p>
-            <div class="header-actions" style="margin-top: 10px;">
-                <button class="btn-sm" onclick="saveConfig()">💾 Save Setup</button>
-                <button class="btn-sm" onclick="triggerLoad()">📂 Load Setup</button>
-                <input type="file" id="file-input" style="display: none;" onchange="loadConfig(this)">
+            <div class="header-actions">
+                <button class="btn-sm" onclick="openSaveModal()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                        <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                        <polyline points="7 3 7 8 15 8"></polyline>
+                    </svg>
+                    Save Setup
+                </button>
+                <button class="btn-sm" onclick="openLoadModal()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Load Setup
+                </button>
             </div>
         </header>
 
@@ -148,11 +163,19 @@
     <template id="template-player-card">
         <div class="player-card" data-player-id="">
             <div class="player-header" onclick="togglePlayerCard(this)">
-                <span class="player-name">Name</span>
+                <span class="player-name" contenteditable="true" onclick="event.stopPropagation()"
+                    onblur="updatePlayerName(this)" onkeydown="handleNameEdit(event, this)">Name</span>
                 <span class="expand-icon">▼</span>
                 <button class="remove-btn-sm" onclick="removePlayer(event, this)">Remove</button>
             </div>
             <div class="player-body">
+                <div class="player-toolbar"
+                    style="grid-column: 1 / -1; display: flex; justify-content: flex-end; margin-bottom: 0.5rem;">
+                    <button class="btn-sm" onclick="clearPlayerChoices(this)"
+                        style="font-size: 0.8rem; padding: 4px 10px;">
+                        <span>↺</span> Clear Choices
+                    </button>
+                </div>
                 <div class="preference-column">
                     <h4>Available Factions</h4>
                     <ul class="sortable-list available-list">
@@ -172,6 +195,40 @@
                     </ul>
                 </div>
             </div>
+        </div>
+    </template>
+
+    <!-- Modals -->
+    <div id="modal-overlay" class="modal-overlay" onclick="closeModals()"></div>
+
+    <div id="save-modal" class="modal">
+        <h3>Save Session</h3>
+        <div id="save-list" class="load-list" style="margin-bottom: 1rem; max-height: 200px;">
+            <!-- Items injected by JS -->
+        </div>
+        <input type="text" id="save-name-input" placeholder="Session Name (e.g. Friday Game Night)"
+            onkeypress="handleEnter(event, confirmSave)">
+        <div class="actions right">
+            <button class="btn" onclick="closeModals()">Cancel</button>
+            <button class="btn primary" onclick="confirmSave()">Save</button>
+        </div>
+    </div>
+
+    <div id="load-modal" class="modal">
+        <h3>Load Session</h3>
+        <div id="load-list" class="load-list">
+            <!-- Items injected by JS -->
+        </div>
+        <div class="actions right">
+            <button class="btn" onclick="closeModals()">Cancel</button>
+        </div>
+    </div>
+
+    <template id="template-load-item">
+        <div class="load-item">
+            <span class="session-name"></span>
+            <span class="session-date"></span>
+            <button class="btn-sm danger delete-btn" title="Delete">×</button>
         </div>
     </template>
 

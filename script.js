@@ -63,6 +63,7 @@ function loadPreset() {
     } else {
         if (state.factions.length === 0 || confirm("Load preset? This will overwrite current factions.")) {
             state.factions = [...PRESETS[select.value]];
+            autoSave();
         } else {
             select.value = 'custom'; // revert
             return;
@@ -79,6 +80,7 @@ function addFaction() {
 
     if (name && !state.factions.includes(name)) {
         state.factions.push(name);
+        autoSave();
         // Switch element back to custom if we edit manually
         const select = get('game-select');
         if (select.value !== 'custom') select.value = 'custom';
@@ -96,6 +98,7 @@ function removeFaction(btn) {
     const tag = btn.closest('.tag');
     const name = tag.querySelector('.name').textContent;
     state.factions = state.factions.filter(f => f !== name);
+    saveState();
 
     // Switch to custom since we modified it
     const select = get('game-select');
@@ -139,6 +142,7 @@ function addPlayer() {
             bans: [] // List of unwanted factions
         });
 
+        autoSave();
         renderPlayers();
         input.value = '';
     }
@@ -150,7 +154,53 @@ function removePlayer(event, btn) {
     const card = btn.closest('.player-card');
     const id = card.getAttribute('data-player-id');
     state.players = state.players.filter(p => p.id !== id);
+    autoSave();
     renderPlayers();
+}
+
+function updatePlayerName(element) {
+    const card = element.closest('.player-card');
+    const id = card.getAttribute('data-player-id');
+    const newName = element.textContent.trim();
+
+    // Find player
+    const player = state.players.find(p => p.id === id);
+
+    if (!newName) {
+        // Revert to old name if empty
+        if (player) element.textContent = player.name;
+        return;
+    }
+
+    if (player && player.name !== newName) {
+        player.name = newName;
+        autoSave();
+        console.log(`Renamed player to ${newName}`);
+    }
+}
+
+function handleNameEdit(event, element) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        element.blur(); // Trigger commit
+    }
+}
+
+function clearPlayerChoices(btn) {
+    const card = btn.closest('.player-card');
+    const id = card.getAttribute('data-player-id');
+    const player = state.players.find(p => p.id === id);
+
+    if (player && confirm(`Reset choices for ${player.name}?`)) {
+        player.preferences = [];
+        player.bans = [];
+        autoSave();
+        // Just refresh the lists for this card directly for performance/UX
+        const availableList = card.querySelector('.available-list');
+        const prefList = card.querySelector('.preference-list');
+        const banList = card.querySelector('.banned-list');
+        refreshListsForCard(player, availableList, prefList, banList);
+    }
 }
 
 function togglePlayerCard(header) {
@@ -271,6 +321,7 @@ function randomizeAllPreferences() {
             // The rest are strictly "Neutral" / "Available" (implicitly handled by renderer)
         });
 
+        autoSave();
         renderPlayers();
     }
 }
@@ -321,6 +372,7 @@ function updatePlayerStateFromDOM(player, availableList, prefList, banList) {
     // Read names from DOM lists and update state object
     player.preferences = [...prefList.querySelectorAll('li')].map(li => li.textContent);
     player.bans = [...banList.querySelectorAll('li')].map(li => li.textContent);
+    autoSave();
     console.log(`Updated ${player.name}`, player);
 }
 
@@ -538,6 +590,7 @@ function resetApp() {
     if (confirm("Start over? This will clear everything including factions.")) {
         state.factions = [];
         state.players = [];
+        saveState();
         get('game-select').value = 'custom';
         renderFactions();
         renderPlayers();
@@ -545,63 +598,161 @@ function resetApp() {
     }
 }
 
-// --- Save/Load Configuration ---
+// --- Session Management (LocalStorage) ---
 
-function saveConfig() {
-    if (state.factions.length === 0 && state.players.length === 0) {
-        alert("Nothing to save!");
+const SESSIONS_KEY = 'side_picker_sessions';
+const AUTOSAVE_KEY = 'side_picker_autosave';
+
+// Auto-save on every change for resilience
+function autoSave() {
+    const data = {
+        factions: state.factions,
+        players: state.players,
+        timestamp: Date.now()
+    };
+    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(data));
+}
+
+function loadAutoSave() {
+    const json = localStorage.getItem(AUTOSAVE_KEY);
+    if (json) {
+        try {
+            const data = JSON.parse(json);
+            if (data.factions) state.factions = data.factions;
+            if (data.players) state.players = data.players;
+
+            renderFactions();
+            renderPlayers();
+            // Don't auto-switch view, let user start fresh but with data loaded
+        } catch (e) {
+            console.error("Failed to load autosave", e);
+        }
+    }
+}
+
+// Named Sessions
+function getSessions() {
+    const json = localStorage.getItem(SESSIONS_KEY);
+    return json ? JSON.parse(json) : {};
+}
+
+function saveSession(name) {
+    if (!name) return alert("Please enter a name.");
+
+    const sessions = getSessions();
+    sessions[name] = {
+        factions: state.factions,
+        players: state.players,
+        date: new Date().toISOString()
+    };
+
+    localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+    alert(`Session "${name}" saved!`);
+    closeModals();
+}
+
+function deleteSession(name) {
+    if (!confirm(`Delete "${name}"?`)) return;
+
+    const sessions = getSessions();
+    delete sessions[name];
+    localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+    renderLoadList(); // Refresh list
+}
+
+function loadSession(name) {
+    const sessions = getSessions();
+    const data = sessions[name];
+
+    if (data) {
+        if (confirm("Load session? This will overwrite current setup.")) {
+            state.factions = data.factions || [];
+            state.players = data.players || [];
+            renderFactions();
+            renderPlayers();
+            updateAllPlayerFactions();
+            autoSave(); // Sync to autosave
+            closeModals();
+            alert(`Loaded "${name}"`);
+        }
+    } else {
+        alert("Session not found.");
+    }
+}
+
+// --- Modals ---
+
+function openSaveModal() {
+    get('modal-overlay').classList.add('active');
+    get('save-modal').classList.add('active');
+    const input = get('save-name-input');
+    input.value = '';
+    renderSessionList('save-list', (name) => {
+        input.value = name;
+        input.focus();
+    });
+    input.focus();
+}
+
+function confirmSave() {
+    const name = get('save-name-input').value.trim();
+    if (name) saveSession(name);
+}
+
+function openLoadModal() {
+    get('modal-overlay').classList.add('active');
+    get('load-modal').classList.add('active');
+    renderSessionList('load-list', (name) => {
+        loadSession(name);
+    });
+}
+
+function renderSessionList(containerId, onSelectCurrent) {
+    const container = get(containerId);
+    container.innerHTML = '';
+
+    const sessions = getSessions();
+    const names = Object.keys(sessions).sort((a, b) => new Date(sessions[b].date) - new Date(sessions[a].date));
+
+    if (names.length === 0) {
+        container.innerHTML = '<div class="empty-state">No saved sessions</div>';
         return;
     }
 
-    const config = {
-        factions: state.factions,
-        players: state.players,
-        timestamp: new Date().toISOString()
-    };
+    const template = get('template-load-item');
 
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(config));
-    const downloadAnchorNode = document.createElement('a');
-    downloadAnchorNode.setAttribute("href", dataStr);
-    downloadAnchorNode.setAttribute("download", "side-picker-setup.json");
-    document.body.appendChild(downloadAnchorNode); // required for firefox
-    downloadAnchorNode.click();
-    downloadAnchorNode.remove();
-}
+    names.forEach(name => {
+        const data = sessions[name];
+        const clone = template.content.cloneNode(true);
+        const item = clone.querySelector('.load-item');
 
-function triggerLoad() {
-    get('file-input').click();
-}
+        item.querySelector('.session-name').textContent = name;
+        item.querySelector('.session-date').textContent = new Date(data.date).toLocaleDateString();
 
-function loadConfig(input) {
-    const file = input.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = function (e) {
-        try {
-            const config = JSON.parse(e.target.result);
-
-            if (config.factions && Array.isArray(config.factions)) {
-                state.factions = config.factions;
+        // Click behavior depends on context (Save or Load)
+        item.onclick = (e) => {
+            if (!e.target.closest('.delete-btn')) {
+                onSelectCurrent(name);
             }
+        };
 
-            if (config.players && Array.isArray(config.players)) {
-                state.players = config.players;
-            }
+        // Delete click
+        item.querySelector('.delete-btn').onclick = (e) => {
+            e.stopPropagation();
+            deleteSession(name);
+            // Refresh the current list
+            renderSessionList(containerId, onSelectCurrent);
+        };
 
-            // UI Reset
-            get('game-select').value = 'custom';
-            renderFactions();
-            renderPlayers();
-            switchView('view-players'); // Jump to players assuming factions are loaded
-
-            alert("Configuration loaded successfully!");
-
-        } catch (err) {
-            alert("Error loading file: Invalid JSON format.");
-            console.error(err);
-        }
-    };
-    reader.readAsText(file);
-    input.value = ''; // reset so same file can be loaded again
+        container.appendChild(clone);
+    });
 }
+
+function closeModals() {
+    document.querySelectorAll('.modal, .modal-overlay').forEach(el => el.classList.remove('active'));
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+    loadAutoSave();
+});
