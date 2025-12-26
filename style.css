@@ -538,6 +538,8 @@ input[type="text"]:focus {
     font-size: 0.9rem;
     user-select: none;
     transition: transform 0.1s, box-shadow 0.1s;
+    touch-action: none;
+    /* Prevent scroll on mobile */
 }
 
 .sortable-list li:active {

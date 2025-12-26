@@ -363,6 +363,7 @@ function setupDragAndDrop(list1, list2, list3, playerObj) {
     const lists = [list1, list2, list3];
 
     lists.forEach(list => {
+        // Desktop Drag
         list.addEventListener('dragstart', e => {
             e.target.classList.add('dragging');
             e.dataTransfer.effectAllowed = 'move';
@@ -383,6 +384,92 @@ function setupDragAndDrop(list1, list2, list3, playerObj) {
                 list.insertBefore(draggable, afterElement);
             }
         });
+
+        // Touch Drag
+        setupTouchDrag(list, [list1, list2, list3], playerObj);
+    });
+}
+
+function setupTouchDrag(list, allLists, playerObj) {
+    let touchedItem = null;
+    let ghost = null;
+    let touchOffsetX = 0;
+    let touchOffsetY = 0;
+
+    list.addEventListener('touchstart', e => {
+        if (e.target.tagName !== 'LI') return;
+        const li = e.target;
+
+        // Prevent default to stop scrolling IF we are strictly dragging
+        // But we want to allow scrolling if they aren't holding long enough? 
+        // For simplicity, let's assume immediate drag.
+        e.preventDefault();
+
+        touchedItem = li;
+        touchedItem.classList.add('dragging');
+
+        // Create Ghost
+        const rect = li.getBoundingClientRect();
+        ghost = li.cloneNode(true);
+        ghost.style.position = 'fixed';
+        ghost.style.width = `${rect.width}px`;
+        ghost.style.height = `${rect.height}px`;
+        ghost.style.left = `${rect.left}px`;
+        ghost.style.top = `${rect.top}px`;
+        ghost.style.zIndex = '1000';
+        ghost.style.opacity = '0.8';
+        ghost.style.pointerEvents = 'none'; // Essential for elementFromPoint
+        ghost.style.background = '#3b82f6'; // Highlight color
+        ghost.style.transform = 'scale(1.05)';
+        document.body.appendChild(ghost);
+
+        const touch = e.touches[0];
+        touchOffsetX = touch.clientX - rect.left;
+        touchOffsetY = touch.clientY - rect.top;
+    }, { passive: false });
+
+    list.addEventListener('touchmove', e => {
+        if (!touchedItem || !ghost) return;
+        e.preventDefault(); // Stop scroll
+
+        const touch = e.touches[0];
+
+        // Move Ghost
+        ghost.style.left = `${touch.clientX - touchOffsetX}px`;
+        ghost.style.top = `${touch.clientY - touchOffsetY}px`;
+
+        // Find drop target
+        // We need to look for lists, not just the starting list
+        // Hide ghost momentarily to look under it (handled by pointer-events: none, but let's be safe)
+        const target = document.elementFromPoint(touch.clientX, touch.clientY);
+
+        if (!target) return;
+
+        const targetList = target.closest('.sortable-list');
+
+        // Only allow dropping in one of the lists for this player
+        if (targetList && allLists.includes(targetList)) {
+            const afterElement = getDragAfterElement(targetList, touch.clientY);
+            if (afterElement == null) {
+                targetList.appendChild(touchedItem);
+            } else {
+                targetList.insertBefore(touchedItem, afterElement);
+            }
+        }
+    }, { passive: false });
+
+    list.addEventListener('touchend', e => {
+        if (touchedItem) {
+            touchedItem.classList.remove('dragging');
+            touchedItem = null;
+        }
+        if (ghost) {
+            ghost.remove();
+            ghost = null;
+        }
+        // Save
+        const [l1, l2, l3] = allLists;
+        updatePlayerStateFromDOM(playerObj, l1, l2, l3);
     });
 }
 
