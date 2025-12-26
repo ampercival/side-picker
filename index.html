@@ -17,6 +17,15 @@
             <h1>Side Picker</h1>
             <p>Optimize your game night happiness</p>
             <div class="header-actions">
+                <button class="btn-sm" onclick="openInfoModal()" aria-label="How it works">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="16" x2="12" y2="12"></line>
+                        <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                    </svg>
+                    Help
+                </button>
                 <button class="btn-sm" onclick="openSaveModal()">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -35,6 +44,29 @@
                     </svg>
                     Load Setup
                 </button>
+                <button class="btn-sm" onclick="toggleTheme()" id="theme-toggle" aria-label="Toggle Dark Mode">
+                    <span class="icon-sun" style="display: none;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="5"></circle>
+                            <line x1="12" y1="1" x2="12" y2="3"></line>
+                            <line x1="12" y1="21" x2="12" y2="23"></line>
+                            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                            <line x1="1" y1="12" x2="3" y2="12"></line>
+                            <line x1="21" y1="12" x2="23" y2="12"></line>
+                            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                        </svg>
+                    </span>
+                    <span class="icon-moon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                        </svg>
+                    </span>
+                    Theme
+                </button>
             </div>
         </header>
 
@@ -49,8 +81,7 @@
                         <label for="game-select"
                             style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.9rem;">Load
                             Presets:</label>
-                        <select id="game-select" onchange="loadPreset()"
-                            style="width: 100%; padding: 10px; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border); color: white; border-radius: 8px;">
+                        <select id="game-select" class="game-select" onchange="loadPreset()">
                             <option value="custom">Custom (Manual Entry)</option>
                             <option value="here_i_stand">Here I Stand</option>
                         </select>
@@ -87,7 +118,19 @@
 
                     <div class="toolbar" style="margin-bottom: 1rem; display: flex; justify-content: flex-end;">
                         <button class="btn secondary" onclick="randomizeAllPreferences()"
-                            title="Randomize choices for all players">🎲 Randomize Choices</button>
+                            title="Randomize choices for all players">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" style="margin-right: 6px;">
+                                <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+                                <path d="M16 8h.01"></path>
+                                <path d="M8 8h.01"></path>
+                                <path d="M8 16h.01"></path>
+                                <path d="M16 16h.01"></path>
+                                <path d="M12 12h.01"></path>
+                            </svg>
+                            Randomize Choices
+                        </button>
                     </div>
 
                     <div id="players-container" class="accordion-container">
@@ -226,8 +269,33 @@
         </div>
     </template>
 
+    <!-- Notifications -->
+    <div class="toast-container" id="toast-container"></div>
+
     <!-- Modals -->
     <div id="modal-overlay" class="modal-overlay" onclick="closeModals()"></div>
+
+    <div id="info-modal" class="modal">
+        <h3>How it Works</h3>
+        <div style="color: var(--text-muted); line-height: 1.6; font-size: 0.95rem;">
+            <p style="margin-bottom: 1rem;"><strong>1. Setup Factions:</strong> Choose a preset game or enter faction
+                names manually.</p>
+            <p style="margin-bottom: 1rem;"><strong>2. Add Players:</strong> Enter player names. Each player gets a
+                card.</p>
+            <p style="margin-bottom: 1rem;"><strong>3. Rank Choices:</strong>
+                <br>• Drag specific factions to <strong>Preferences</strong> (Green) for high points.
+                <br>• Drag disliked factions to <strong>Banned</strong> (Red) to block them.
+                <br>• Leave others in <strong>Available</strong>.
+            </p>
+            <p style="margin-bottom: 1rem;"><strong>4. Optimize:</strong> Click 'Optimize & Assign'. The algorithm
+                maximizes total group happiness score.</p>
+            <p style="font-size: 0.85rem; opacity: 0.7;"><em>Pro-Tip: Use "Lock" on a player to exclude them from the
+                    Randomize button.</em></p>
+        </div>
+        <div class="actions right">
+            <button class="btn primary" onclick="closeModals()">Got it</button>
+        </div>
+    </div>
 
     <div id="save-modal" class="modal">
         <h3>Save Session</h3>
@@ -239,6 +307,16 @@
         <div class="actions right">
             <button class="btn" onclick="closeModals()">Cancel</button>
             <button class="btn primary" onclick="confirmSave()">Save</button>
+        </div>
+    </div>
+
+    <div id="confirm-modal" class="modal">
+        <h3 id="confirm-title">Confirm Action</h3>
+        <p id="confirm-message" style="margin-bottom: 2rem; line-height: 1.5; color: var(--text-muted);">Are you sure
+            you want to proceed?</p>
+        <div class="actions right">
+            <button class="btn secondary" onclick="closeModals()">Cancel</button>
+            <button class="btn primary" id="confirm-btn">Confirm</button>
         </div>
     </div>
 

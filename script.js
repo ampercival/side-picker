@@ -8,14 +8,98 @@ const state = {
     }
 };
 
+
+// --- Theme Management ---
+function initTheme() {
+    const savedTheme = localStorage.getItem('theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+    // Default is dark if no save and no preference, or if preference is dark
+    // So distinct 'light' preference is needed to go light
+    if (savedTheme === 'light' || (!savedTheme && !prefersDark)) {
+        document.documentElement.setAttribute('data-theme', 'light');
+        updateThemeIcon('light');
+    } else {
+        document.documentElement.removeAttribute('data-theme');
+        updateThemeIcon('dark');
+    }
+}
+
+function toggleTheme() {
+    const currentTheme = document.documentElement.getAttribute('data-theme');
+    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+
+    if (newTheme === 'light') {
+        document.documentElement.setAttribute('data-theme', 'light');
+        localStorage.setItem('theme', 'light');
+    } else {
+        document.documentElement.removeAttribute('data-theme');
+        localStorage.setItem('theme', 'dark');
+    }
+
+    updateThemeIcon(newTheme);
+}
+
+function updateThemeIcon(theme) {
+    const btn = document.getElementById('theme-toggle');
+    if (!btn) return;
+
+    const sun = btn.querySelector('.icon-sun');
+    const moon = btn.querySelector('.icon-moon');
+
+    if (theme === 'light') {
+        sun.style.display = 'none';
+        moon.style.display = 'block';
+        btn.setAttribute('aria-label', 'Switch to Dark Mode');
+        btn.title = 'Switch to Dark Mode';
+    } else {
+        sun.style.display = 'block';
+        moon.style.display = 'none';
+        btn.setAttribute('aria-label', 'Switch to Light Mode');
+        btn.title = 'Switch to Light Mode';
+    }
+}
+
+// Initialize immediately
+initTheme();
+
 // --- DOM Helpers ---
 function get(id) { return document.getElementById(id); }
+
+// --- Toast Notifications ---
+function showToast(type, title, message) {
+    const container = get('toast-container');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+
+    // Icons based on type
+    let icon = '';
+    if (type === 'success') icon = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>';
+    else if (type === 'error') icon = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>';
+    else icon = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>';
+
+    toast.innerHTML = `
+        ${icon}
+        <div class="toast-content">
+            <div class="toast-title">${title}</div>
+            <div class="toast-message">${message}</div>
+        </div>
+    `;
+
+    container.appendChild(toast);
+
+    // Auto remove
+    setTimeout(() => {
+        toast.classList.add('hiding');
+        toast.addEventListener('animationend', () => toast.remove());
+    }, 4000);
+}
 
 // --- View Navigation ---
 function nextStep(viewId) {
     if (viewId === 'view-players') {
         if (state.factions.length === 0) {
-            alert("Please add at least one faction.");
+            showToast('error', 'No Factions', "Please add at least one faction.");
             return;
         }
     }
@@ -48,32 +132,77 @@ const PRESETS = {
 };
 
 // --- Faction Setup ---
+// --- Modal Management ---
+let confirmCallback = null;
+
+function openInfoModal() {
+    get('modal-overlay').classList.add('active');
+    get('info-modal').classList.add('active');
+}
+
+function showConfirm(title, message, callback, btnText = 'Confirm', btnClass = 'primary') {
+    get('confirm-title').textContent = title;
+    get('confirm-message').textContent = message;
+
+    const confirmBtn = get('confirm-btn');
+    confirmBtn.textContent = btnText;
+    confirmBtn.className = `btn ${btnClass}`;
+    confirmBtn.onclick = () => {
+        closeModals();
+        callback();
+    };
+
+    confirmCallback = callback;
+
+    get('modal-overlay').classList.add('active');
+    get('confirm-modal').classList.add('active');
+}
+
+function closeModals() {
+    get('modal-overlay').classList.remove('active');
+    document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+    confirmCallback = null;
+}
+
+// --- Faction Setup ---
 function loadPreset() {
     const select = get('game-select');
-    const inputGroup = get('faction-input').parentElement; // To toggle visibility if needed, or just keep it open for additions
 
     if (select.value === 'custom') {
-        // Do nothing? Or clear? Let's just keep current state to avoid accidental data loss.
-        // Or maybe clearing is expected? Let's leave it. User can clear manually or reset.
-        // Actually, usually presets replace everything.
-        if (state.factions.length > 0 && confirm("Switching presets will clear current factions. Continue?")) {
-            state.factions = [];
-        } else if (state.factions.length > 0) {
-            select.value = 'custom'; // revert
-            return;
+        if (state.factions.length > 0) {
+            showConfirm(
+                'Clear Factions',
+                'Switching to Custom mode will not automatically clear factions, but are you sure you want to proceed?',
+                () => {
+                    // Logic for reset if needed, or just allow switch
+                },
+                'Understand',
+                'secondary'
+            );
         }
-    } else {
-        if (state.factions.length === 0 || confirm("Load preset? This will overwrite current factions.")) {
-            state.factions = [...PRESETS[select.value]];
-            autoSave();
-        } else {
-            select.value = 'custom'; // revert
-            return;
-        }
+        return;
     }
 
-    renderFactions();
-    updateAllPlayerFactions();
+    // Loading a preset
+    const applyPreset = () => {
+        state.factions = [...PRESETS[select.value]];
+        autoSave();
+        renderFactions();
+        updateAllPlayerFactions();
+        showToast('success', 'Preset Loaded', `Loaded ${PRESETS[select.value].length} factions.`);
+    };
+
+    if (state.factions.length > 0) {
+        showConfirm(
+            'Overwrite Factions?',
+            'Loading this preset will delete all current factions. This cannot be undone.',
+            applyPreset,
+            'Load Preset',
+            'accent'
+        );
+    } else {
+        applyPreset();
+    }
 }
 
 function addFaction() {
@@ -91,7 +220,7 @@ function addFaction() {
         input.value = '';
         updateAllPlayerFactions(); // If players exist, update their lists
     } else if (state.factions.includes(name)) {
-        alert("Faction already exists!");
+        showToast('error', 'Duplicate', "Faction already exists!");
     }
     input.focus();
 }
@@ -194,15 +323,23 @@ function clearPlayerChoices(btn) {
     const id = card.getAttribute('data-player-id');
     const player = state.players.find(p => p.id === id);
 
-    if (player && confirm(`Reset choices for ${player.name}?`)) {
-        player.preferences = [];
-        player.bans = [];
-        autoSave();
-        // Just refresh the lists for this card directly for performance/UX
-        const availableList = card.querySelector('.available-list');
-        const prefList = card.querySelector('.preference-list');
-        const banList = card.querySelector('.banned-list');
-        refreshListsForCard(player, availableList, prefList, banList);
+    if (player) {
+        showConfirm(
+            'Reset Choices?',
+            `Are you sure you want to clear all preferences for ${player.name}?`,
+            () => {
+                player.preferences = [];
+                player.bans = [];
+                autoSave();
+                const availableList = card.querySelector('.available-list');
+                const prefList = card.querySelector('.preference-list');
+                const banList = card.querySelector('.banned-list');
+                refreshListsForCard(player, availableList, prefList, banList);
+                showToast('info', 'Choices Cleared', `Reset for ${player.name}`);
+            },
+            'Clear Choices',
+            'secondary' // Not super dangerous
+        );
     }
 }
 
@@ -327,35 +464,36 @@ function updateAllPlayerFactions() {
 // --- Randomization ---
 function randomizeAllPreferences() {
     if (state.players.length === 0) {
-        alert("Add players first!");
+        showToast('error', 'No Players', "Add players first!");
         return;
     }
 
-    if (confirm("This will randomize preferences and bans for ALL players. Existing choices will be lost. Continue?")) {
-        state.players.forEach(player => {
-            if (player.locked) return; // Skip locked players
+    showConfirm(
+        'Randomize Everything?',
+        'This will randomly assign preferences and bans for ALL players (except locked ones). Existing choices will be lost.',
+        () => {
+            let count = 0;
+            state.players.forEach(player => {
+                if (player.locked) return;
 
-            // Shuffle a copy of factions
-            const shuffled = [...state.factions].sort(() => 0.5 - Math.random());
+                count++;
+                const shuffled = [...state.factions].sort(() => 0.5 - Math.random());
+                const total = shuffled.length;
+                const numPrefs = Math.floor(Math.random() * total) + 1;
+                const remaining = total - numPrefs;
+                const numBans = Math.floor(Math.random() * (remaining + 1));
 
-            // Determine random split points
-            // Ensure at least 1 preference if possible, but keep it varying
-            const total = shuffled.length;
-            // Prefs: Random between 1 and total
-            const numPrefs = Math.floor(Math.random() * total) + 1;
+                player.preferences = shuffled.slice(0, numPrefs);
+                player.bans = shuffled.slice(numPrefs, numPrefs + numBans);
+            });
 
-            // Bans: Random between 0 and remainder
-            const remaining = total - numPrefs;
-            const numBans = Math.floor(Math.random() * (remaining + 1));
-
-            player.preferences = shuffled.slice(0, numPrefs);
-            player.bans = shuffled.slice(numPrefs, numPrefs + numBans);
-            // The rest are strictly "Neutral" / "Available" (implicitly handled by renderer)
-        });
-
-        autoSave();
-        renderPlayers();
-    }
+            autoSave();
+            renderPlayers();
+            showToast('success', 'Randomized', `Updated choices for ${count} players.`);
+        },
+        'Randomize',
+        'accent'
+    );
 }
 
 // --- Drag and Drop Logic ---
@@ -560,12 +698,12 @@ function updatePlayerStateFromDOM(player, availableList, prefList, banList) {
 
 function calculateOptimization() {
     if (state.players.length === 0) {
-        alert("Add players first!");
+        showToast('error', 'No Players', "Add players first!");
         return;
     }
 
     if (state.factions.length < state.players.length) {
-        alert(`Not enough factions! You have ${state.factions.length} factions for ${state.players.length} players.`);
+        showToast('error', 'Not Enough Factions', `You have ${state.factions.length} factions for ${state.players.length} players.`);
         return;
     }
 
@@ -582,7 +720,7 @@ function calculateOptimization() {
             sendToDiscord(state.discord.url, result, state.players);
         }
     } else {
-        alert("Could not find a valid assignment! Try removing some bans.");
+        showToast('error', 'Optimization Failed', "Could not find a valid assignment! Try removing some bans.");
     }
 }
 
@@ -832,7 +970,11 @@ function displayResults(result) {
     // get('total-score').title = `${result.score} / ${maxPossible} points`; 
     // Let's stick to the user's request for normalized percent.
 
-    state.players.forEach(p => {
+    // Sort slightly? Or keep random order of map?
+    // Map doesn't guarantee order but array iteration does.
+    // players is array.
+
+    state.players.forEach((p, index) => {
         const assignedFaction = result.assignment[p.id];
         const score = getScore(p, assignedFaction);
 
@@ -846,6 +988,9 @@ function displayResults(result) {
 
         const card = document.createElement('div');
         card.className = 'result-card';
+        // Stagger animation
+        card.style.animationDelay = `${index * 0.1}s`;
+
         card.innerHTML = `
             <div class="player">${p.name}</div>
             <div class="assigned-faction">${assignedFaction}</div>
@@ -933,7 +1078,7 @@ function getSessions() {
 }
 
 function saveSession(name) {
-    if (!name) return alert("Please enter a name.");
+    if (!name) return showToast('error', 'Missing Name', "Please enter a name.");
 
     const sessions = getSessions();
     sessions[name] = {
@@ -943,17 +1088,29 @@ function saveSession(name) {
     };
 
     localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
-    alert(`Session "${name}" saved!`);
+    showToast('success', 'Saved', `Session "${name}" saved!`);
     closeModals();
 }
 
 function deleteSession(name) {
-    if (!confirm(`Delete "${name}"?`)) return;
-
-    const sessions = getSessions();
-    delete sessions[name];
-    localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
-    renderLoadList(); // Refresh list
+    showConfirm(
+        'Delete Session?',
+        `Are you sure you want to delete "${name}"?`,
+        () => {
+            const sessions = getSessions();
+            delete sessions[name];
+            localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+            // We need to refresh the list, but we don't have direct access to the callback or container ID here easily without passing it.
+            // However, since this is called from the render loop, we might need a way to refresh.
+            // Simplified: Close modal or just acknowledge. If staying in modal, we need to re-render.
+            // Actually, renderSessionList passed 'onSelectCurrent' but we are inside delete click.
+            // Let's just close modal for simplicity as re-rendering the same modal dynamic content is tricky with current structure.
+            showToast('info', 'Deleted', `Session "${name}" deleted.`);
+            closeModals();
+        },
+        'Delete',
+        'danger'
+    );
 }
 
 function loadSession(name) {
@@ -961,18 +1118,24 @@ function loadSession(name) {
     const data = sessions[name];
 
     if (data) {
-        if (confirm("Load session? This will overwrite current setup.")) {
-            state.factions = data.factions || [];
-            state.players = data.players || [];
-            renderFactions();
-            renderPlayers();
-            updateAllPlayerFactions();
-            autoSave(); // Sync to autosave
-            closeModals();
-            alert(`Loaded "${name}"`);
-        }
+        showConfirm(
+            'Load Session?',
+            `Loading "${name}" will overwrite your current setup. Continue?`,
+            () => {
+                state.factions = data.factions || [];
+                state.players = data.players || [];
+                renderFactions();
+                renderPlayers();
+                updateAllPlayerFactions();
+                autoSave(); // Sync to autosave
+                closeModals();
+                showToast('success', 'Loaded', `Session "${name}" loaded.`);
+            },
+            'Load',
+            'accent'
+        );
     } else {
-        alert("Session not found.");
+        showToast('error', 'Error', "Session not found.");
     }
 }
 
