@@ -337,14 +337,15 @@ function calculateOptimization() {
         return;
     }
 
-    const result = findOptimalAssignment(state.players, state.factions);
+    // Get Mode
+    const mode = document.querySelector('input[name="opt-mode"]:checked').value; // 'total' or 'fairness'
+    const result = findOptimalAssignment(state.players, state.factions, mode);
 
     if (result.success) {
         displayResults(result);
         switchView('view-results');
     } else {
         alert("Could not find a valid assignment! Try removing some bans.");
-        // Even in failure, we might want to show partials, but backtracking usually finds something unless constraints are impossible.
     }
 }
 
@@ -372,29 +373,51 @@ function getScore(player, faction) {
     return SCORES.neutral; // Not in preferences, not banned
 }
 
-function findOptimalAssignment(players, factions) {
-    // Backtracking with Pruning/Max finding
-    let maxScore = -Infinity;
-    let bestAssignment = null;
+function findOptimalAssignment(players, factions, mode) {
+    // Mode: 'total' (Maximize Sum) or 'fairness' (Maximize Minimum, tie-break with Sum)
+
+    let bestMetric = { primary: -Infinity, secondary: -Infinity };
+    let bestAssignments = [];
 
     // Helper to calculate score of a complete assignment map
-    // assignment: { playerId: factionName }
-
-    function solve(playerIndex, usedFactions, currentScore, currentAssignment) {
+    function solve(playerIndex, usedFactions, currentSum, currentMin, currentAssignment) {
         // Base case: All players assigned
         if (playerIndex === players.length) {
-            if (currentScore > maxScore) {
-                maxScore = currentScore;
-                bestAssignment = { ...currentAssignment };
+            // Calculate Metric based on Mode
+            let primary, secondary;
+
+            if (mode === 'fairness') {
+                primary = currentMin; // Maximize the lowest score
+                secondary = currentSum; // Tiebreaker: Total Happiness
+            } else {
+                primary = currentSum; // Maximize Total Happiness
+                secondary = currentMin; // Tiebreaker: Improve worst player if totals equal
+            }
+
+            if (primary > bestMetric.primary) {
+                bestMetric = { primary, secondary };
+                bestAssignments = [{ ...currentAssignment }];
+            } else if (primary === bestMetric.primary) {
+                // Check secondary
+                if (secondary > bestMetric.secondary) {
+                    bestMetric = { primary, secondary };
+                    bestAssignments = [{ ...currentAssignment }];
+                } else if (secondary === bestMetric.secondary) {
+                    bestAssignments.push({ ...currentAssignment });
+                }
             }
             return;
         }
 
         const player = players[playerIndex];
 
-        // Optimisation: Sort potential factions by score yield for this player to hit max sooner? 
-        // Or just iterate all available.
-        // To speed up, we can iterate: Preferences 1st -> Last, then Neutrals. Skip Bans.
+        // Pruning checks (Optimization)
+        // If we are in fairness mode, and currentMin is already worse than bestMetric.primary, we can prune?
+        // currentMin only decreases (or stays same). It never goes up.
+        // So if currentMin < bestMetric.primary (and mode is fairness), we can STOP.
+        if (mode === 'fairness' && currentMin < bestMetric.primary) {
+            return;
+        }
 
         // Construct ordered list of candidates
         let candidates = [];
@@ -404,20 +427,17 @@ function findOptimalAssignment(players, factions) {
             if (!usedFactions.has(f)) candidates.push(f);
         });
 
-        // 2. Neutrals (Any faction not in pref, not in ban, not used)
+        // 2. Neutrals
+        const neutrals = [];
         factions.forEach(f => {
             if (!usedFactions.has(f) && !player.preferences.includes(f) && !player.bans.includes(f)) {
-                candidates.push(f);
+                neutrals.push(f);
             }
         });
+        candidates = candidates.concat(neutrals);
 
-        // 3. Bans (Only if desperate? No, we treat ban as -1000, so valid but bad)
-        // If we strictly forbid bans, don't add them. 
-        // Let's add them but at end, only if we must. 
-        // Actually, if score drops too low, maybe we prune.
-
+        // 3. Bans (Only if desperate)
         if (candidates.length === 0) {
-            // Must pick a ban or stuck (if no bans left either, impossible branch)
             factions.forEach(f => {
                 if (!usedFactions.has(f) && player.bans.includes(f)) {
                     candidates.push(f);
@@ -428,26 +448,53 @@ function findOptimalAssignment(players, factions) {
         if (candidates.length === 0) return; // Dead end
 
         for (const faction of candidates) {
-            const scoreDelta = getScore(player, faction);
+            const score = getScore(player, faction);
 
-            // Simple bound pruning could go here if we tracked "max possible remaining score"
+            // Sum Pruning (Only for total mode)
+            if (mode === 'total') {
+                const maxRemaining = (players.length - 1 - playerIndex) * SCORES.rank1;
+                // If even with perfect remainder we can't beat the best primary, prune.
+                if (currentSum + score + maxRemaining < bestMetric.primary) {
+                    continue;
+                }
+            }
 
             usedFactions.add(faction);
             currentAssignment[player.id] = faction;
 
-            solve(playerIndex + 1, usedFactions, currentScore + scoreDelta, currentAssignment);
+            solve(
+                playerIndex + 1,
+                usedFactions,
+                currentSum + score,
+                Math.min(currentMin, score),
+                currentAssignment
+            );
 
             delete currentAssignment[player.id];
             usedFactions.delete(faction);
         }
     }
 
-    solve(0, new Set(), 0, {});
+    solve(0, new Set(), 0, Infinity, {});
+
+    if (bestAssignments.length > 0) {
+        const winner = bestAssignments[Math.floor(Math.random() * bestAssignments.length)];
+        const finalSum = mode === 'fairness' ? bestMetric.secondary : bestMetric.primary;
+
+        console.log(`[${mode}] Found ${bestAssignments.length} optimal solutions. Metric:`, bestMetric);
+
+        return {
+            success: true,
+            score: finalSum, // Always return total score for display
+            assignment: winner,
+            tieCount: bestAssignments.length
+        };
+    }
 
     return {
-        success: bestAssignment !== null,
-        score: maxScore,
-        assignment: bestAssignment
+        success: false,
+        score: -Infinity,
+        assignment: null
     };
 }
 
