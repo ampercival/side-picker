@@ -458,7 +458,7 @@ function setupTouchDrag(list, allLists, playerObj) {
         }
     }, { passive: false });
 
-    list.addEventListener('touchend', e => {
+    const cleanup = () => {
         if (touchedItem) {
             touchedItem.classList.remove('dragging');
             touchedItem = null;
@@ -467,10 +467,13 @@ function setupTouchDrag(list, allLists, playerObj) {
             ghost.remove();
             ghost = null;
         }
-        // Save
+        // Save state after move
         const [l1, l2, l3] = allLists;
         updatePlayerStateFromDOM(playerObj, l1, l2, l3);
-    });
+    };
+
+    list.addEventListener('touchend', cleanup);
+    list.addEventListener('touchcancel', cleanup);
 }
 
 function getDragAfterElement(container, y) {
@@ -525,19 +528,66 @@ function calculateOptimization() {
     }
 }
 
-async function sendToDiscord(url, result, players) {
-    const fields = [];
+const delay = ms => new Promise(res => setTimeout(res, ms));
 
-    // Sort by name for the report
+async function postToDiscord(url, payload) {
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) console.error("Discord Error:", response.status);
+    } catch (e) {
+        console.error("Discord Network Error:", e);
+    }
+}
+
+async function sendToDiscord(url, result, players) {
+    // 1. Intro Message
+    const goalText = document.querySelector('input[name="opt-mode"]:checked').parentElement.querySelector('strong').textContent;
+    await postToDiscord(url, {
+        content: `🎲 **Side Picker Optimization Initiated**\n**Goal:** ${goalText}`
+    });
+
+    // 2. Player Details (Sequence)
+    // Sort players for consistent order
     const sortedPlayers = [...players].sort((a, b) => a.name.localeCompare(b.name));
 
+    for (const p of sortedPlayers) {
+        await delay(300); // Slight delay for ordering
+
+        const prefs = p.preferences.length > 0
+            ? p.preferences.map((f, i) => `${i + 1}. ${f}`).join('\n')
+            : "*No strict preferences*";
+
+        const bans = p.bans.length > 0
+            ? p.bans.join(', ')
+            : "*No bans*";
+
+        await postToDiscord(url, {
+            embeds: [{
+                author: { name: p.name },
+                color: 10181046, // Purple-ish
+                fields: [
+                    { name: "💚 Preferences", value: prefs, inline: true },
+                    { name: "❌ Bans", value: bans, inline: true }
+                ]
+            }]
+        });
+    }
+
+    // 3. Final Results
+    await delay(500);
+
+    const fields = [];
     sortedPlayers.forEach(p => {
         const faction = result.assignment[p.id];
         const score = getScore(p, faction);
-        let icon = "😐"; // Neutral
-        if (score > 5) icon = "🤩"; // Top choice
-        else if (score > 0) icon = "🙂"; // Good choice
-        else if (score < 0) icon = "🤬"; // Bad/Banned (shouldn't happen)
+        let icon = "😐";
+        if (score > 5) icon = "🤩";
+        else if (score > 0) icon = "🙂";
+        else if (score < 0) icon = "🤬";
 
         fields.push({
             name: `${icon} ${p.name}`,
@@ -546,12 +596,10 @@ async function sendToDiscord(url, result, players) {
         });
     });
 
-    const payload = {
-        username: "Side Picker Bot",
-        avatar_url: "https://cdn-icons-png.flaticon.com/512/1021/1021203.png",
+    await postToDiscord(url, {
         embeds: [{
-            title: "🎲 Faction Assignments Ready!",
-            description: `**Optimization Goal:** ${document.querySelector('input[name="opt-mode"]:checked').parentElement.querySelector('strong').textContent}\n**Total Happiness:** ${get('total-score').textContent}`,
+            title: "🏆 Final Assignments",
+            description: `**Total Happiness:** ${get('total-score').textContent}`,
             color: 3900382, // #3b82f6 (Primary Blueish)
             fields: fields,
             footer: {
@@ -559,27 +607,9 @@ async function sendToDiscord(url, result, players) {
             },
             timestamp: new Date().toISOString()
         }]
-    };
+    });
 
-    try {
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
-        });
-
-        if (response.ok) {
-            console.log("Discord notification sent!");
-        } else {
-            console.error("Discord Error:", response.status, await response.text());
-            alert("Failed to send Discord message. Check console.");
-        }
-    } catch (e) {
-        console.error("Discord Fetch Error:", e);
-        alert("Network error sending to Discord.");
-    }
+    console.log("Discord notification sequence complete.");
 }
 
 // Scores
