@@ -1081,8 +1081,12 @@ function displayResults(result) {
 
         let note = "Neutral";
         if (p.preferences.includes(assignedFaction)) {
-            const rank = p.preferences.indexOf(assignedFaction) + 1;
-            note = `Choice #${rank}`;
+            if (p.noPreference) {
+                note = "Choice";
+            } else {
+                const rank = p.preferences.indexOf(assignedFaction) + 1;
+                note = `Choice #${rank}`;
+            }
         } else if (p.bans.includes(assignedFaction)) {
             note = "BANNED (Forced)";
         }
