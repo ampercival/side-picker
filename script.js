@@ -283,7 +283,9 @@ function addPlayer() {
             name: name,
             preferences: [], // Ordered list of favored factions
             bans: [], // List of unwanted factions
-            locked: false
+            locked: false,
+            noPreference: false, // New flag: if true, all preferences have equal weight (10)
+            expanded: true // Default to open when added
         });
 
         autoSave();
@@ -300,6 +302,26 @@ function removePlayer(event, btn) {
     state.players = state.players.filter(p => p.id !== id);
     autoSave();
     renderPlayers();
+}
+
+function clearAllPlayerChoices() {
+    if (state.players.length === 0) return;
+
+    showConfirm(
+        'Reset All Choices?',
+        'This will clear preferences and bans for ALL players. This cannot be undone.',
+        () => {
+            state.players.forEach(p => {
+                p.preferences = [];
+                p.bans = [];
+            });
+            autoSave();
+            renderPlayers();
+            showToast('success', 'Reset Complete', 'All player choices have been cleared.');
+        },
+        'Clear All',
+        'danger'
+    );
 }
 
 function updatePlayerName(element) {
@@ -368,9 +390,36 @@ function togglePlayerLock(event, btn) {
     }
 }
 
+function togglePlayerNoPreference(event, btn) {
+    event.stopPropagation();
+    const card = btn.closest('.player-card');
+    const id = card.getAttribute('data-player-id');
+    const player = state.players.find(p => p.id === id);
+
+    if (player) {
+        player.noPreference = !player.noPreference;
+        autoSave();
+        // Update UI state - check the checkbox
+        // Since we are re-rendering often, we might need to rely on renderPlayers or manual toggle
+        // Ideally renderPlayers should handle the checked state
+        renderPlayers();
+    }
+}
+
 function togglePlayerCard(header) {
     const card = header.closest('.player-card');
-    card.classList.toggle('active');
+    const id = card.getAttribute('data-player-id');
+    const player = state.players.find(p => p.id === id);
+
+    if (player) {
+        player.expanded = !player.expanded;
+        // We don't always autoSave on simple UI toggle to avoid thrashing, but for persistence we should.
+        autoSave();
+        // Manually toggle class to avoid full re-render on simple click, 
+        // BUT if we want consistency with other re-renders, state is key.
+        // Let's just toggle class for perf, but state is saved for next render.
+        card.classList.toggle('active');
+    }
 }
 
 
@@ -392,6 +441,12 @@ function renderPlayers() {
         const clone = template.content.cloneNode(true);
         const card = clone.querySelector('.player-card');
         card.setAttribute('data-player-id', player.id);
+
+        // Restore expanded state
+        if (player.expanded) {
+            card.classList.add('active');
+        }
+
         clone.querySelector('.player-name').textContent = player.name;
 
         // Lock State
@@ -421,6 +476,13 @@ function renderPlayers() {
 
         // Setup Drag and Drop
         setupDragAndDrop(availableList, prefList, banList, player);
+
+        // No Preference Toggle
+        const npCheckbox = clone.querySelector('.no-preference-check');
+        if (npCheckbox) {
+            npCheckbox.checked = player.noPreference || false;
+            npCheckbox.onchange = (e) => togglePlayerNoPreference(e, e.target);
+        }
 
         container.appendChild(clone);
     });
@@ -765,9 +827,16 @@ async function sendToDiscord(url, result, players) {
     for (const p of sortedPlayers) {
         await delay(300); // Slight delay for ordering
 
-        const prefs = p.preferences.length > 0
-            ? p.preferences.map((f, i) => `${i + 1}. ${f}`).join('\n')
-            : "*No strict preferences*";
+        let prefs;
+        if (p.noPreference) {
+            prefs = p.preferences.length > 0
+                ? "• " + p.preferences.join('\n• ')
+                : "*No preferences selected*";
+        } else {
+            prefs = p.preferences.length > 0
+                ? p.preferences.map((f, i) => `${i + 1}. ${f}`).join('\n')
+                : "*No strict preferences*";
+        }
 
         const bans = p.bans.length > 0
             ? p.bans.join(', ')
@@ -835,6 +904,26 @@ function getScore(player, faction) {
     if (player.bans.includes(faction)) return SCORES.ban;
 
     const rankIndex = player.preferences.indexOf(faction);
+    if (rankIndex === 0) return SCORES.rank1;
+    if (rankIndex === 1) return SCORES.rank2;
+    if (rankIndex === 2) return SCORES.rank3;
+    if (rankIndex === 3) return SCORES.rank4;
+    if (rankIndex >= 4) return SCORES.rank5Plus;
+
+    return SCORES.neutral; // Not in preferences, not banned
+}
+
+function getScore(player, faction) {
+    if (player.bans.includes(faction)) return SCORES.ban;
+
+    const rankIndex = player.preferences.indexOf(faction);
+
+    // Modification: No Preference Mode
+    if (player.noPreference) {
+        if (rankIndex >= 0) return 10; // Treat all preferences as top rank
+        return SCORES.neutral;
+    }
+
     if (rankIndex === 0) return SCORES.rank1;
     if (rankIndex === 1) return SCORES.rank2;
     if (rankIndex === 2) return SCORES.rank3;
@@ -1013,15 +1102,22 @@ function displayResults(result) {
 }
 
 function resetApp() {
-    if (confirm("Start over? This will clear everything including factions.")) {
-        state.factions = [];
-        state.players = [];
-        saveState();
-        get('game-select').value = 'custom';
-        renderFactions();
-        renderPlayers();
-        switchView('view-factions');
-    }
+    showConfirm(
+        'Reset Application?',
+        'This will clear ALL players and factions. Saved sessions will remain.',
+        () => {
+            state.factions = [];
+            state.players = [];
+            autoSave();
+            get('game-select').value = 'custom';
+            renderFactions();
+            renderPlayers();
+            switchView('view-factions');
+            showToast('success', 'Reset', 'Application has been reset.');
+        },
+        'Reset Everything',
+        'danger'
+    );
 }
 
 // --- Session Management (LocalStorage) ---
