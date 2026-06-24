@@ -861,6 +861,31 @@ footer {
 }
 
 /* Sessions Home */
+.workspace-indicator {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 1.25rem;
+}
+
+.workspace-indicator strong {
+    color: var(--text-main);
+}
+
+.link-btn {
+    background: none;
+    border: none;
+    color: var(--primary);
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.85rem;
+    padding: 0;
+    text-decoration: underline;
+}
+
+.link-btn:hover {
+    color: var(--accent);
+}
+
 .session-cards {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -991,6 +1016,105 @@ body.shared-mode .header-actions {
 
 body.shared-mode #view-results .actions {
     display: none;
+}
+
+/* Danger button (confirm dialogs, Close Room) */
+.btn.danger {
+    background: linear-gradient(135deg, var(--danger), #dc2626);
+    color: white;
+    box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.3);
+}
+
+.btn.danger:hover {
+    box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.4);
+    transform: translateY(-2px);
+}
+
+/* Live room — organizer */
+.room-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: var(--radius);
+    padding: 0.75rem 1rem;
+    margin-bottom: 1.5rem;
+    font-size: 0.9rem;
+}
+
+.room-banner strong {
+    letter-spacing: 0.08em;
+}
+
+.room-code-pill {
+    font-family: monospace;
+    font-size: 1rem;
+    letter-spacing: 0.12em;
+    background: var(--surface-dim);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 2px 10px;
+    margin-left: 6px;
+    color: var(--primary);
+}
+
+.room-status {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 220px;
+    overflow-y: auto;
+}
+
+.room-status-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: var(--surface-dim);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+.room-status-row .rs-name {
+    font-weight: 500;
+}
+
+.room-status-row .rs-state {
+    font-size: 0.8rem;
+}
+
+.room-status-row .rs-state.done {
+    color: var(--success);
+}
+
+.room-status-row .rs-state.waiting {
+    color: var(--text-muted);
+}
+
+/* Guest — error + submitted states */
+.guest-error {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: var(--text-main);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    text-align: center;
+    line-height: 1.5;
+}
+
+.guest-submitted {
+    margin-top: 1.5rem;
+    padding: 1rem;
+    text-align: center;
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    color: var(--success);
+    border-radius: var(--radius);
+    font-weight: 500;
 }
 
 .code-area {
