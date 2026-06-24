@@ -1717,6 +1717,7 @@ const GUEST_STATE_KEY = 'side_picker_guest';
 let isGuestMode = false;
 let isSharedMode = false;
 let guestSession = null; // { factions: [], roster: [] }
+let guestRosterPicks = {}; // name -> { p: [...], b: [...], u: bool } as of invite generation
 let guestPick = { id: 'guest', name: '', preferences: [], bans: [], noPreference: false };
 
 // UTF-8 safe, URL-safe base64 encoding of a JSON payload.
@@ -1762,10 +1763,19 @@ function openInviteModal() {
         return;
     }
 
+    // Roster carries each player's current picks so a returning guest sees what
+    // the session currently has for them, not a blank slate.
+    const roster = state.players.map(p => ({
+        n: p.name,
+        p: p.preferences || [],
+        b: p.bans || [],
+        u: !!p.noPreference
+    }));
+
     const payload = {
         v: 1,
         f: state.factions,
-        r: names,
+        r: roster,
         s: (state.sessionName || '').trim(),
         gm: (state.gameTitle || '').trim()
     };
@@ -1872,7 +1882,16 @@ function enterGuestMode(invite) {
     isGuestMode = true;
     document.body.classList.add('guest-mode');
 
-    guestSession = { factions: invite.f, roster: invite.r };
+    // Normalize the roster (supports legacy name-only arrays) and index picks by name.
+    const roster = invite.r.map(entry =>
+        typeof entry === 'string'
+            ? { n: entry, p: [], b: [], u: false }
+            : { n: entry.n, p: entry.p || [], b: entry.b || [], u: !!entry.u }
+    );
+    guestSession = { factions: invite.f, roster };
+    guestRosterPicks = {};
+    roster.forEach(r => { guestRosterPicks[r.n] = r; });
+
     state.factions = [...invite.f]; // Lets the shared list/drag helpers work unchanged.
 
     // Show the session name and game so players know what they're picking for.
@@ -1889,28 +1908,12 @@ function enterGuestMode(invite) {
 
     // Populate the name dropdown from the roster.
     const select = get('guest-name-select');
-    invite.r.forEach(name => {
+    roster.forEach(r => {
         const opt = document.createElement('option');
-        opt.value = name;
-        opt.textContent = name;
+        opt.value = r.n;
+        opt.textContent = r.n;
         select.appendChild(opt);
     });
-
-    // Restore a previous in-progress pick if it belongs to this roster.
-    // (Done before wiring drag-and-drop so handlers capture the final guestPick object.)
-    try {
-        const saved = JSON.parse(localStorage.getItem(GUEST_STATE_KEY));
-        if (saved && saved.name && invite.r.includes(saved.name)) {
-            guestPick = {
-                id: 'guest',
-                name: saved.name,
-                preferences: (saved.preferences || []).filter(f => state.factions.includes(f)),
-                bans: (saved.bans || []).filter(f => state.factions.includes(f)),
-                noPreference: !!saved.noPreference
-            };
-            select.value = saved.name;
-        }
-    } catch (e) { /* ignore */ }
 
     // Wire drag-and-drop once; the <ul>s are static and items are added dynamically.
     const available = get('guest-available');
@@ -1918,6 +1921,7 @@ function enterGuestMode(invite) {
     const banned = get('guest-banned');
     setupDragAndDrop(available, pref, banned, guestPick);
 
+    // Start with no name selected: nothing below the dropdown is shown until they pick.
     switchView('view-guest');
     renderGuestPicks();
 }
@@ -1925,12 +1929,23 @@ function enterGuestMode(invite) {
 function onGuestNameChange() {
     const name = get('guest-name-select').value;
     guestPick.name = name;
-    // Switching to a fresh name starts from a clean slate.
-    guestPick.preferences = [];
-    guestPick.bans = [];
-    guestPick.noPreference = false;
-    get('guest-no-preference').checked = false;
     get('guest-code-output').style.display = 'none';
+
+    if (!name) {
+        guestPick.preferences = [];
+        guestPick.bans = [];
+        guestPick.noPreference = false;
+    } else {
+        // Reset to what the session currently has for this player (per the invite),
+        // keeping only factions that still exist.
+        const saved = guestRosterPicks[name] || { p: [], b: [], u: false };
+        const isValid = f => guestSession.factions.includes(f);
+        guestPick.preferences = (saved.p || []).filter(isValid);
+        guestPick.bans = (saved.b || []).filter(isValid);
+        guestPick.noPreference = !!saved.u;
+    }
+
+    get('guest-no-preference').checked = !!guestPick.noPreference;
     saveGuestState();
     renderGuestPicks();
 }
