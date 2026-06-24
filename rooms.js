@@ -109,6 +109,44 @@ async function deleteSessionFromDb(name) {
 }
 
 // ---------------------------------------------------------------------------
+// Presets — stored in Supabase (scoped by workspace key), cached in memory.
+// ---------------------------------------------------------------------------
+let presetsCache = {}; // name -> factions[]
+
+async function loadPresetsFromDb() {
+    presetsCache = {};
+    const sb = getSupabaseClient();
+    if (!sb || !hasWorkspaceKey()) return presetsCache;
+
+    const { data, error } = await sb.from('presets').select('*').eq('owner_key', getWorkspaceKey());
+    if (error) {
+        showToast('error', 'Presets Error', error.message);
+        return presetsCache;
+    }
+    (data || []).forEach(row => { presetsCache[row.name] = row.factions || []; });
+    return presetsCache;
+}
+
+async function upsertPresetToDb(name, factions) {
+    const sb = getSupabaseClient();
+    if (!sb || !hasWorkspaceKey()) return;
+    const { error } = await sb.from('presets').upsert({
+        owner_key: getWorkspaceKey(),
+        name,
+        factions,
+        updated_at: new Date().toISOString()
+    }, { onConflict: 'owner_key,name' });
+    if (error) showToast('error', 'Save Error', error.message);
+}
+
+async function deletePresetFromDb(name) {
+    const sb = getSupabaseClient();
+    if (!sb || !hasWorkspaceKey()) return;
+    const { error } = await sb.from('presets').delete().eq('owner_key', getWorkspaceKey()).eq('name', name);
+    if (error) showToast('error', 'Delete Error', error.message);
+}
+
+// ---------------------------------------------------------------------------
 // Shared guest pick state (used by the guest faction-picker view)
 // ---------------------------------------------------------------------------
 let guestPick = { id: 'guest', name: '', preferences: [], bans: [], noPreference: false };

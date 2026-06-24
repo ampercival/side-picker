@@ -140,15 +140,18 @@
 
                     <div class="preset-selector" style="margin-bottom: 1.5rem;">
                         <label for="game-select"
-                            style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.9rem;">Load
-                            Presets:</label>
+                            style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.9rem;">Select
+                            Game</label>
                         <div style="display: flex; gap: 8px;">
                             <select id="game-select" class="game-select" onchange="loadPreset()">
-                                <option value="custom">Custom (Manual Entry)</option>
+                                <option value="custom">Custom (no game)</option>
                             </select>
-                            <button class="btn-sm" onclick="openPresetModal()" title="Add, edit, or delete presets"
+                            <button class="btn-sm" onclick="openPresetModal()" title="Add, edit, or delete games"
                                 style="white-space: nowrap;">Manage</button>
                         </div>
+                        <p id="game-select-hint"
+                            style="margin-top: 0.5rem; color: var(--text-muted); font-size: 0.8rem; opacity: 0.85;">
+                            Add or edit games with Manage.</p>
                     </div>
 
                     <div class="input-group">
@@ -482,19 +485,19 @@
     <div id="preset-modal" class="modal">
         <!-- List View -->
         <div class="preset-list-view">
-            <h3>Manage Presets</h3>
+            <h3>Manage Games</h3>
             <div id="preset-list" class="load-list">
                 <!-- Items injected by JS -->
             </div>
             <div class="actions space-between">
-                <button class="btn secondary" onclick="openPresetEditor()">+ New Preset</button>
+                <button class="btn secondary" onclick="openPresetEditor()">+ New Game</button>
                 <button class="btn" onclick="closeModals()">Close</button>
             </div>
         </div>
         <!-- Edit View -->
         <div class="preset-edit-view" style="display: none;">
-            <h3 id="preset-edit-title">New Preset</h3>
-            <input type="text" id="preset-name-input" placeholder="Preset Name (e.g. Twilight Imperium)">
+            <h3 id="preset-edit-title">New Game</h3>
+            <input type="text" id="preset-name-input" placeholder="Game Name (e.g. Twilight Imperium)">
             <div class="input-group" style="margin: 1rem 0 0.75rem;">
                 <input type="text" id="preset-faction-input" placeholder="Add a faction..."
                     onkeypress="handleEnter(event, addPresetFaction)">
@@ -505,7 +508,7 @@
             </div>
             <div class="actions space-between">
                 <button class="btn text" onclick="showPresetListView()">Back</button>
-                <button class="btn primary" onclick="savePreset()">Save Preset</button>
+                <button class="btn primary" onclick="savePreset()">Save Game</button>
             </div>
         </div>
     </div>

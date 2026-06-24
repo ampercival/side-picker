@@ -142,47 +142,22 @@ function handleEnter(e, callback) {
 }
 
 // --- Presets ---
-const PRESETS_KEY = 'side_picker_presets';
-
-// Seeded into storage on first run; afterwards presets are fully user-managed.
-const DEFAULT_PRESETS = {
-    "Here I Stand": [
-        "England",
-        "France",
-        "Habsburg Empire",
-        "Ottoman Empire",
-        "Protestant Reformation",
-        "The Papacy"
-    ]
-};
-
+// Preset games are stored in Supabase (scoped by workspace key); presetsCache
+// lives in rooms.js. getPresets() returns that in-memory cache for rendering.
 function getPresets() {
-    const json = localStorage.getItem(PRESETS_KEY);
-    if (json === null) {
-        // First run: seed defaults so they can be edited/deleted like any other preset.
-        localStorage.setItem(PRESETS_KEY, JSON.stringify(DEFAULT_PRESETS));
-        return { ...DEFAULT_PRESETS };
-    }
-    try {
-        return JSON.parse(json) || {};
-    } catch (e) {
-        console.error("Failed to parse presets", e);
-        return {};
-    }
+    return presetsCache;
 }
 
-function savePresets(presets) {
-    localStorage.setItem(PRESETS_KEY, JSON.stringify(presets));
-}
-
-// Populate the dropdown from stored presets, preserving the current selection when possible.
+// Populate the "Select Game" dropdown from cached presets, preserving the
+// current selection when possible.
 function renderPresetOptions() {
     const select = get('game-select');
     const current = select.value;
     const presets = getPresets();
+    const names = Object.keys(presets).sort((a, b) => a.localeCompare(b));
 
-    select.innerHTML = '<option value="custom">Custom (Manual Entry)</option>';
-    Object.keys(presets).sort((a, b) => a.localeCompare(b)).forEach(name => {
+    select.innerHTML = '<option value="custom">Custom (no game)</option>';
+    names.forEach(name => {
         const opt = document.createElement('option');
         opt.value = name;
         opt.textContent = name;
@@ -190,6 +165,14 @@ function renderPresetOptions() {
     });
 
     select.value = [...select.options].some(o => o.value === current) ? current : 'custom';
+
+    // Hint that points users at Manage when they have no games yet.
+    const hint = get('game-select-hint');
+    if (hint) {
+        hint.textContent = names.length === 0
+            ? 'No games yet — add one with Manage.'
+            : 'Add or edit games with Manage.';
+    }
 }
 
 // --- Modal Management ---
@@ -1288,6 +1271,8 @@ async function initWorkspaceAndSessions() {
         return;
     }
     await loadSessionsFromDb();
+    await loadPresetsFromDb();
+    renderPresetOptions();
     renderHomeSessions();
 }
 
@@ -1309,6 +1294,8 @@ async function confirmWorkspaceKey() {
     closeModals();
     updateWorkspaceIndicator();
     await loadSessionsFromDb();
+    await loadPresetsFromDb();
+    renderPresetOptions();
     renderHomeSessions();
     showToast('success', 'Workspace Set', `Loaded sessions for "${key}".`);
 }
@@ -1618,9 +1605,14 @@ function renderSessionList(containerId, onSelectCurrent) {
 // --- Preset Management ---
 let presetEditState = { originalName: null, factions: [] };
 
-function openPresetModal() {
+async function openPresetModal() {
+    if (!isSupabaseConfigured()) return showToast('error', 'Not Configured', 'Games need Supabase set up.');
+    if (!hasWorkspaceKey()) { openWorkspaceModal(); return; }
+
     get('modal-overlay').classList.add('active');
     get('preset-modal').classList.add('active');
+    await loadPresetsFromDb();
+    renderPresetOptions();
     showPresetListView();
 }
 
@@ -1639,7 +1631,7 @@ function renderPresetList() {
     const names = Object.keys(presets).sort((a, b) => a.localeCompare(b));
 
     if (names.length === 0) {
-        container.innerHTML = '<div class="empty-state">No presets yet</div>';
+        container.innerHTML = '<div class="empty-state">No games yet — add one below</div>';
         return;
     }
 
@@ -1677,10 +1669,10 @@ function openPresetEditor(name = null) {
 
     if (name && presets[name]) {
         presetEditState = { originalName: name, factions: [...presets[name]] };
-        get('preset-edit-title').textContent = 'Edit Preset';
+        get('preset-edit-title').textContent = 'Edit Game';
     } else {
         presetEditState = { originalName: null, factions: [] };
-        get('preset-edit-title').textContent = 'New Preset';
+        get('preset-edit-title').textContent = 'New Game';
     }
 
     get('preset-name-input').value = presetEditState.originalName || '';
@@ -1758,19 +1750,22 @@ function savePreset() {
     const original = presetEditState.originalName;
     const overwritingDifferent = (name in presets) && name !== original;
 
-    const doSave = () => {
-        if (original && original !== name) delete presets[original]; // Renamed
+    const doSave = async () => {
+        if (original && original !== name) {
+            delete presets[original]; // Renamed
+            await deletePresetFromDb(original);
+        }
         presets[name] = [...presetEditState.factions];
-        savePresets(presets);
+        await upsertPresetToDb(name, presets[name]);
         renderPresetOptions();
-        showToast('success', 'Preset Saved', `"${name}" saved.`);
+        showToast('success', 'Game Saved', `"${name}" saved.`);
         showPresetListView();
     };
 
     if (overwritingDifferent) {
         showConfirm(
-            'Overwrite Preset?',
-            `A preset named "${name}" already exists. Overwrite it?`,
+            'Overwrite Game?',
+            `A game named "${name}" already exists. Overwrite it?`,
             doSave,
             'Overwrite',
             'danger'
@@ -1782,19 +1777,19 @@ function savePreset() {
 
 function deletePreset(name) {
     showConfirm(
-        'Delete Preset?',
-        `Are you sure you want to delete the preset "${name}"? This cannot be undone.`,
-        () => {
+        'Delete Game?',
+        `Are you sure you want to delete the game "${name}"? This cannot be undone.`,
+        async () => {
             const presets = getPresets();
             delete presets[name];
-            savePresets(presets);
+            await deletePresetFromDb(name);
 
             const select = get('game-select');
             if (select.value === name) select.value = 'custom';
 
             renderPresetOptions();
             renderPresetList();
-            showToast('info', 'Deleted', `Preset "${name}" deleted.`);
+            showToast('info', 'Deleted', `Game "${name}" deleted.`);
         },
         'Delete',
         'danger'

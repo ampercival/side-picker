@@ -74,3 +74,22 @@ create policy sessions_all on public.sessions
   for all to anon using (true) with check (true);
 
 grant select, insert, update, delete on public.sessions to anon;
+
+-- Preset games (named faction lists), scoped by the same workspace key.
+create table if not exists public.presets (
+  owner_key  text not null,
+  name       text not null,
+  factions   jsonb not null default '[]'::jsonb,
+  updated_at timestamptz not null default now(),
+  primary key (owner_key, name)
+);
+
+create index if not exists presets_owner_idx on public.presets (owner_key);
+
+alter table public.presets enable row level security;
+
+drop policy if exists presets_all on public.presets;
+create policy presets_all on public.presets
+  for all to anon using (true) with check (true);
+
+grant select, insert, update, delete on public.presets to anon;
