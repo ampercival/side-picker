@@ -294,6 +294,10 @@ h2 {
     margin: 0 10px;
 }
 
+.load-item .btn-sm {
+    margin-left: 8px;
+}
+
 .load-item .delete-btn {
     padding: 4px 8px;
     font-size: 1.2rem;
@@ -731,53 +735,6 @@ input[type="password"]:focus {
 /* Results */
 .results-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 1rem;
-    margin-bottom: 2rem;
-}
-
-.result-card {
-    background: rgba(15, 23, 42, 0.5);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 1.5rem;
-    text-align: center;
-    animation: fadeIn 0.5s ease-out;
-}
-
-.result-card .player {
-    font-size: 1.1rem;
-    font-weight: 600;
-    margin-bottom: 0.5rem;
-}
-
-.result-card .assigned-faction {
-    font-size: 1.25rem;
-    color: var(--primary);
-    margin-bottom: 0.5rem;
-}
-
-.result-card .score-badge {
-    display: inline-block;
-    padding: 4px 10px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
-    font-size: 0.8rem;
-    color: var(--text-muted);
-}
-
-.stats-panel {
-    text-align: center;
-    margin-bottom: 2rem;
-    padding: 1rem;
-    background: rgba(139, 92, 246, 0.1);
-    border-radius: var(--radius);
-    border: 1px solid rgba(139, 92, 246, 0.2);
-}
-
-/* Results */
-.results-grid {
-    display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 1.5rem;
     margin-bottom: 3rem;
@@ -901,6 +858,45 @@ footer {
     .card {
         padding: 1.5rem;
     }
+}
+
+/* Guest / Share mode */
+.guest-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+@media (max-width: 600px) {
+    .guest-body {
+        grid-template-columns: 1fr;
+    }
+}
+
+body.guest-mode .header-actions {
+    display: none;
+}
+
+.code-area {
+    width: 100%;
+    min-height: 90px;
+    padding: 12px;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-main);
+    font-family: monospace;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    resize: vertical;
+    word-break: break-all;
+    margin-bottom: 1.5rem;
+}
+
+.code-area:focus {
+    outline: none;
+    border-color: var(--primary);
 }
 
 /* Optimization Panel */

@@ -89,10 +89,13 @@
                         <label for="game-select"
                             style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.9rem;">Load
                             Presets:</label>
-                        <select id="game-select" class="game-select" onchange="loadPreset()">
-                            <option value="custom">Custom (Manual Entry)</option>
-                            <option value="here_i_stand">Here I Stand</option>
-                        </select>
+                        <div style="display: flex; gap: 8px;">
+                            <select id="game-select" class="game-select" onchange="loadPreset()">
+                                <option value="custom">Custom (Manual Entry)</option>
+                            </select>
+                            <button class="btn-sm" onclick="openPresetModal()" title="Add, edit, or delete presets"
+                                style="white-space: nowrap;">Manage</button>
+                        </div>
                     </div>
 
                     <div class="input-group">
@@ -124,7 +127,30 @@
                         <button class="btn primary" onclick="addPlayer()">Add Player</button>
                     </div>
 
-                    <div class="toolbar" style="margin-bottom: 1rem; display: flex; justify-content: flex-end;">
+                    <div class="toolbar"
+                        style="margin-bottom: 1rem; display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap;">
+                        <button class="btn secondary" onclick="openInviteModal()"
+                            title="Create a shareable link for players to submit their picks">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" style="margin-right: 6px;">
+                                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z">
+                                </path>
+                                <polyline points="22,6 12,13 2,6"></polyline>
+                            </svg>
+                            Invite Players
+                        </button>
+                        <button class="btn secondary" onclick="openImportModal()"
+                            title="Paste codes that players sent back to you">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" style="margin-right: 6px;">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="7 10 12 15 17 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                            Import Picks
+                        </button>
                         <button class="btn secondary" onclick="randomizeAllPreferences()"
                             title="Randomize choices for all players">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
@@ -205,6 +231,62 @@
                     <div class="actions center">
                         <button class="btn secondary" onclick="resetApp()">Start Over</button>
                         <button class="btn text" onclick="prevStep('view-players')">Back to Players</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Guest View: shown only when opened via an invite link -->
+            <section id="view-guest" class="view">
+                <div class="card">
+                    <h2>Make Your Picks</h2>
+                    <p class="subtitle">Pick your name, rank the factions, then copy your picks and send them back to
+                        the organizer.</p>
+
+                    <div style="margin-bottom: 1.5rem;">
+                        <label for="guest-name-select"
+                            style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.9rem;">Who
+                            are you?</label>
+                        <select id="guest-name-select" class="game-select" onchange="onGuestNameChange()">
+                            <option value="">— Select your name —</option>
+                        </select>
+                    </div>
+
+                    <div id="guest-pick-area" style="display: none;">
+                        <div class="player-toolbar"
+                            style="display: flex; justify-content: flex-start; align-items: center; margin-bottom: 0.75rem;">
+                            <label class="toggle-switch" title="Treat all your preferences equally (no ranking)">
+                                <input type="checkbox" id="guest-no-preference" onchange="onGuestNoPreferenceChange()">
+                                <span class="slider"></span>
+                                <span class="label-text">Unranked Preferences</span>
+                            </label>
+                        </div>
+
+                        <div class="guest-body">
+                            <div class="preference-column">
+                                <h4>Available Factions</h4>
+                                <ul class="sortable-list available-list" id="guest-available"></ul>
+                            </div>
+                            <div class="preference-column">
+                                <h4>Preference Rank (1st = Top)</h4>
+                                <ul class="sortable-list preference-list" id="guest-preference"></ul>
+                            </div>
+                            <div class="preference-column">
+                                <h4>Banned (Do Not Want)</h4>
+                                <ul class="sortable-list banned-list" id="guest-banned"></ul>
+                            </div>
+                        </div>
+
+                        <div class="actions center">
+                            <button class="btn accent" onclick="copyMyPicks()">Copy My Picks</button>
+                        </div>
+
+                        <div id="guest-code-output" style="display: none; margin-top: 1.5rem;">
+                            <p class="subtitle" style="margin-bottom: 0.5rem;">Send this code back to the organizer:</p>
+                            <textarea id="guest-code-text" class="code-area" readonly></textarea>
+                            <div class="actions center">
+                                <button class="btn secondary" onclick="copyMyPicks()">Copy Again</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -330,7 +412,7 @@
         <p id="confirm-message" style="margin-bottom: 2rem; line-height: 1.5; color: var(--text-muted);">Are you sure
             you want to proceed?</p>
         <div class="actions right">
-            <button class="btn secondary" onclick="closeModals()">Cancel</button>
+            <button class="btn secondary" id="confirm-cancel-btn" onclick="closeModals()">Cancel</button>
             <button class="btn primary" id="confirm-btn">Confirm</button>
         </div>
     </div>
@@ -342,6 +424,61 @@
         </div>
         <div class="actions right">
             <button class="btn" onclick="closeModals()">Cancel</button>
+        </div>
+    </div>
+
+    <div id="preset-modal" class="modal">
+        <!-- List View -->
+        <div class="preset-list-view">
+            <h3>Manage Presets</h3>
+            <div id="preset-list" class="load-list">
+                <!-- Items injected by JS -->
+            </div>
+            <div class="actions space-between">
+                <button class="btn secondary" onclick="openPresetEditor()">+ New Preset</button>
+                <button class="btn" onclick="closeModals()">Close</button>
+            </div>
+        </div>
+        <!-- Edit View -->
+        <div class="preset-edit-view" style="display: none;">
+            <h3 id="preset-edit-title">New Preset</h3>
+            <input type="text" id="preset-name-input" placeholder="Preset Name (e.g. Twilight Imperium)">
+            <div class="input-group" style="margin: 1rem 0 0.75rem;">
+                <input type="text" id="preset-faction-input" placeholder="Add a faction..."
+                    onkeypress="handleEnter(event, addPresetFaction)">
+                <button class="btn primary" onclick="addPresetFaction()">Add</button>
+            </div>
+            <div id="preset-faction-list" class="tag-container" style="min-height: 60px; margin-bottom: 1.5rem;">
+                <!-- Faction tags injected by JS -->
+            </div>
+            <div class="actions space-between">
+                <button class="btn text" onclick="showPresetListView()">Back</button>
+                <button class="btn primary" onclick="savePreset()">Save Preset</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="invite-modal" class="modal">
+        <h3>Invite Players</h3>
+        <p style="color: var(--text-muted); line-height: 1.5; font-size: 0.9rem; margin-bottom: 1rem;">
+            Share this link. Each player picks their name, makes their choices, and sends you back a code to import.
+        </p>
+        <input type="text" id="invite-link-input" readonly onclick="this.select()">
+        <div class="actions right">
+            <button class="btn" onclick="closeModals()">Close</button>
+            <button class="btn primary" onclick="copyInviteLink()">Copy Link</button>
+        </div>
+    </div>
+
+    <div id="import-modal" class="modal">
+        <h3>Import Picks</h3>
+        <p style="color: var(--text-muted); line-height: 1.5; font-size: 0.9rem; margin-bottom: 1rem;">
+            Paste one or more codes from players (one per line). Each is matched to a player by name.
+        </p>
+        <textarea id="import-code-input" class="code-area" placeholder="Paste codes here..."></textarea>
+        <div class="actions right">
+            <button class="btn" onclick="closeModals()">Cancel</button>
+            <button class="btn primary" onclick="confirmImport()">Import</button>
         </div>
     </div>
 
