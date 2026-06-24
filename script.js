@@ -1060,6 +1060,25 @@ function findOptimalAssignment(players, factions, mode) {
 }
 
 
+// Most recent optimization, captured for the shareable results link.
+let lastResults = null;
+
+function buildResultCard({ name, faction, note, score, index }) {
+    const card = document.createElement('div');
+    card.className = 'result-card';
+    card.style.animationDelay = `${index * 0.1}s`; // Stagger animation
+
+    const badgeClass = score < 0 ? 'score-badge negative' : 'score-badge';
+    const scoreLabel = score >= 0 ? `+${score}` : `${score}`;
+
+    card.innerHTML = `
+        <div class="player">${escapeHtml(name)}</div>
+        <div class="assigned-faction">${escapeHtml(faction)}</div>
+        <div class="${badgeClass}">${escapeHtml(note)} (${scoreLabel})</div>
+    `;
+    return card;
+}
+
 function displayResults(result) {
     const container = get('results-container');
     container.innerHTML = '';
@@ -1069,37 +1088,27 @@ function displayResults(result) {
 
     get('total-score').textContent = `${percent}%`;
 
+    const goalEl = document.querySelector('input[name="opt-mode"]:checked');
+    const goalText = goalEl ? goalEl.parentElement.querySelector('strong').textContent : '';
+
+    const shareRows = [];
+
     state.players.forEach((p, index) => {
         const assignedFaction = result.assignment[p.id];
         const score = getScore(p, assignedFaction);
 
         let note = "Neutral";
         if (p.preferences.includes(assignedFaction)) {
-            if (p.noPreference) {
-                note = "Choice";
-            } else {
-                const rank = p.preferences.indexOf(assignedFaction) + 1;
-                note = `Choice #${rank}`;
-            }
+            note = p.noPreference ? "Choice" : `Choice #${p.preferences.indexOf(assignedFaction) + 1}`;
         } else if (p.bans.includes(assignedFaction)) {
             note = "BANNED (Forced)";
         }
 
-        const card = document.createElement('div');
-        card.className = 'result-card';
-        // Stagger animation
-        card.style.animationDelay = `${index * 0.1}s`;
-
-        const badgeClass = score < 0 ? 'score-badge negative' : 'score-badge';
-        const scoreLabel = score >= 0 ? `+${score}` : `${score}`;
-
-        card.innerHTML = `
-            <div class="player">${escapeHtml(p.name)}</div>
-            <div class="assigned-faction">${escapeHtml(assignedFaction)}</div>
-            <div class="${badgeClass}">${escapeHtml(note)} (${scoreLabel})</div>
-        `;
-        container.appendChild(card);
+        container.appendChild(buildResultCard({ name: p.name, faction: assignedFaction, note, score, index }));
+        shareRows.push({ n: p.name, f: assignedFaction, note: note, s: score });
     });
+
+    lastResults = { v: 1, t: activeSessionName || '', g: goalText, pct: percent, r: shareRows };
 }
 
 function resetApp() {
@@ -1109,6 +1118,7 @@ function resetApp() {
         () => {
             state.factions = [];
             state.players = [];
+            activeSessionName = null;
             autoSave();
             get('game-select').value = 'custom';
             renderFactions();
@@ -1126,6 +1136,10 @@ function resetApp() {
 const SESSIONS_KEY = 'side_picker_sessions';
 const AUTOSAVE_KEY = 'side_picker_autosave';
 
+// Name of the saved session currently being worked on, if any. Changes are
+// persisted back into it live, so e.g. imported picks don't need a manual re-save.
+let activeSessionName = null;
+
 // Auto-save on every change for resilience
 function autoSave() {
     // In guest mode there is no organizer state to persist; save the guest's picks instead.
@@ -1137,9 +1151,21 @@ function autoSave() {
         factions: state.factions,
         players: state.players,
         discord: state.discord,
+        activeSessionName: activeSessionName,
         timestamp: Date.now()
     };
     localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(data));
+
+    // Keep the active named session in sync with the working state.
+    if (activeSessionName) {
+        const sessions = getSessions();
+        sessions[activeSessionName] = {
+            factions: state.factions,
+            players: state.players,
+            date: new Date().toISOString()
+        };
+        localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+    }
 }
 
 function loadAutoSave() {
@@ -1150,6 +1176,7 @@ function loadAutoSave() {
             if (data.factions) state.factions = data.factions;
             if (data.players) state.players = data.players;
             if (data.discord) state.discord = data.discord; // Restore Discord settings
+            if (data.activeSessionName) activeSessionName = data.activeSessionName;
 
             renderFactions();
             renderPlayers();
@@ -1178,8 +1205,15 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
+    const sharedResults = parseResultsFromUrl();
+    if (sharedResults) {
+        enterSharedResultsMode(sharedResults);
+        return;
+    }
+
     renderPresetOptions();
     loadAutoSave();
+    renderHomeSessions(); // Land on the sessions home screen
 
     // Discord Listeners
     get('discord-webhook').addEventListener('input', (e) => {
@@ -1210,6 +1244,8 @@ function saveSession(name) {
     };
 
     localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+    activeSessionName = name; // Future edits sync into this session.
+    autoSave();
     showToast('success', 'Saved', `Session "${name}" saved!`);
     closeModals();
 }
@@ -1222,6 +1258,11 @@ function deleteSession(name, onSuccess) {
             const sessions = getSessions();
             delete sessions[name];
             localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+
+            if (activeSessionName === name) {
+                activeSessionName = null;
+                autoSave();
+            }
 
             showToast('info', 'Deleted', `Session "${name}" deleted.`);
             if (onSuccess) onSuccess();
@@ -1242,6 +1283,7 @@ function loadSession(name) {
             () => {
                 state.factions = data.factions || [];
                 state.players = data.players || [];
+                activeSessionName = name;
                 renderFactions();
                 renderPlayers();
                 updateAllPlayerFactions();
@@ -1254,6 +1296,117 @@ function loadSession(name) {
         );
     } else {
         showToast('error', 'Error', "Session not found.");
+    }
+}
+
+// --- Sessions Home ---
+function goHome() {
+    renderHomeSessions();
+    switchView('view-home');
+}
+
+function renderHomeSessions() {
+    // "Continue" card reflects the current in-memory working setup.
+    const hasWorking = state.factions.length > 0 || state.players.length > 0;
+    const continueWrap = get('home-continue');
+    if (hasWorking) {
+        continueWrap.style.display = 'block';
+        get('home-continue-label').textContent = activeSessionName
+            ? `Continue "${activeSessionName}"`
+            : 'Continue current setup';
+        const fc = state.factions.length;
+        const pc = state.players.length;
+        get('home-continue-meta').textContent =
+            `${fc} faction${fc === 1 ? '' : 's'} · ${pc} player${pc === 1 ? '' : 's'}`;
+    } else {
+        continueWrap.style.display = 'none';
+    }
+
+    const container = get('home-session-list');
+    container.innerHTML = '';
+
+    const sessions = getSessions();
+    const names = Object.keys(sessions).sort((a, b) => new Date(sessions[b].date) - new Date(sessions[a].date));
+
+    if (names.length === 0) {
+        container.innerHTML = '<div class="empty-state">No saved sessions yet</div>';
+        return;
+    }
+
+    const template = get('template-session-card');
+    names.forEach(name => {
+        const data = sessions[name];
+        const clone = template.content.cloneNode(true);
+        const card = clone.querySelector('.session-card');
+
+        clone.querySelector('.sc-name').textContent = name;
+        const fc = (data.factions || []).length;
+        const pc = (data.players || []).length;
+        clone.querySelector('.sc-meta').textContent =
+            `${fc} faction${fc === 1 ? '' : 's'} · ${pc} player${pc === 1 ? '' : 's'}`;
+        clone.querySelector('.sc-date').textContent = new Date(data.date).toLocaleString();
+
+        if (name === activeSessionName) card.classList.add('active-session');
+
+        clone.querySelector('.sc-resume').onclick = () => resumeSession(name);
+        clone.querySelector('.sc-delete').onclick = (e) => {
+            e.stopPropagation();
+            deleteSession(name, () => renderHomeSessions());
+        };
+
+        container.appendChild(clone);
+    });
+}
+
+function continueCurrent() {
+    renderFactions();
+    renderPlayers();
+    switchView(state.players.length > 0 ? 'view-players' : 'view-factions');
+}
+
+function resumeSession(name) {
+    const sessions = getSessions();
+    const data = sessions[name];
+    if (!data) {
+        showToast('error', 'Error', 'Session not found.');
+        renderHomeSessions();
+        return;
+    }
+
+    state.factions = data.factions || [];
+    state.players = data.players || [];
+    activeSessionName = name;
+
+    renderFactions();
+    updateAllPlayerFactions(); // Cleans stale faction refs and re-renders player cards.
+    autoSave();
+
+    switchView('view-players');
+    showToast('success', 'Resumed', `Loaded "${name}".`);
+}
+
+function startNewSession() {
+    const proceed = () => {
+        state.factions = [];
+        state.players = [];
+        activeSessionName = null;
+        get('game-select').value = 'custom';
+        renderFactions();
+        renderPlayers();
+        autoSave();
+        switchView('view-factions');
+    };
+
+    if (state.factions.length > 0 || state.players.length > 0) {
+        showConfirm(
+            'Start New Session?',
+            'This clears the current working setup. Saved sessions are kept. Continue?',
+            proceed,
+            'Start New',
+            'accent'
+        );
+    } else {
+        proceed();
     }
 }
 
@@ -1514,6 +1667,7 @@ function deletePreset(name) {
 // --- Share / Collect Picks (serverless) ---
 const GUEST_STATE_KEY = 'side_picker_guest';
 let isGuestMode = false;
+let isSharedMode = false;
 let guestSession = null; // { factions: [], roster: [] }
 let guestPick = { id: 'guest', name: '', preferences: [], bans: [], noPreference: false };
 
@@ -1763,6 +1917,66 @@ async function copyMyPicks() {
         textArea.select();
         showToast('info', 'Copy Manually', 'Press Ctrl/Cmd+C to copy the selected code.');
     }
+}
+
+// --- Share results (read-only link) ---
+function openResultsShareModal() {
+    if (!lastResults) {
+        showToast('error', 'No Results', 'Run an optimization first.');
+        return;
+    }
+    const base = location.origin + location.pathname;
+    const link = `${base}#results=${encodeData(lastResults)}`;
+
+    get('results-link-input').value = link;
+    get('modal-overlay').classList.add('active');
+    get('results-share-modal').classList.add('active');
+    get('results-link-input').focus();
+    get('results-link-input').select();
+}
+
+async function copyResultsLink() {
+    const link = get('results-link-input').value;
+    const ok = await copyToClipboard(link);
+    if (ok) {
+        showToast('success', 'Link Copied', 'Share it with your players.');
+    } else {
+        get('results-link-input').select();
+        showToast('info', 'Copy Manually', 'Press Ctrl/Cmd+C to copy the selected link.');
+    }
+}
+
+function parseResultsFromUrl() {
+    const match = location.hash.match(/results=([^&]+)/);
+    if (!match) return null;
+    try {
+        const data = decodeData(match[1]);
+        if (data && Array.isArray(data.r)) return data;
+    } catch (e) {
+        console.error('Invalid results link', e);
+    }
+    return null;
+}
+
+function enterSharedResultsMode(payload) {
+    isSharedMode = true;
+    document.body.classList.add('shared-mode');
+
+    const container = get('results-container');
+    container.innerHTML = '';
+    get('total-score').textContent = `${payload.pct != null ? payload.pct : 0}%`;
+
+    // Show the session name / goal as context, if present.
+    const parts = [];
+    if (payload.t) parts.push(payload.t);
+    if (payload.g) parts.push(`Goal: ${payload.g}`);
+    get('results-subtitle').textContent = parts.length ? parts.join(' · ') : 'Final assignments';
+
+    (payload.r || []).forEach((row, index) => {
+        container.appendChild(buildResultCard({ name: row.n, faction: row.f, note: row.note, score: row.s, index }));
+    });
+
+    switchView('view-results');
 }
 
 function closeModals() {

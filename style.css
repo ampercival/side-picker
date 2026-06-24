@@ -860,6 +860,87 @@ footer {
     }
 }
 
+/* Sessions Home */
+.session-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1rem;
+}
+
+.session-card {
+    background: var(--surface-dim);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    transition: border-color 0.2s, transform 0.2s;
+}
+
+.session-card:hover {
+    border-color: var(--primary);
+    transform: translateY(-2px);
+}
+
+.session-card.active-session {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+}
+
+.session-card.continue-card {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(139, 92, 246, 0.12));
+    border-color: rgba(139, 92, 246, 0.3);
+}
+
+.session-card-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.session-card .sc-name {
+    font-weight: 600;
+    font-size: 1.05rem;
+    word-break: break-word;
+}
+
+.session-card .sc-meta {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.session-card .sc-date {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    opacity: 0.7;
+    margin-bottom: 0.5rem;
+}
+
+.session-card .sc-resume {
+    margin-top: auto;
+    padding: 10px 16px;
+    font-size: 0.9rem;
+}
+
+.session-card .sc-delete {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 1.3rem;
+    line-height: 1;
+    padding: 0 4px;
+    border-radius: 4px;
+    transition: color 0.2s, background 0.2s;
+}
+
+.session-card .sc-delete:hover {
+    color: var(--danger);
+    background: rgba(239, 68, 68, 0.1);
+}
+
 /* Guest / Share mode */
 .guest-body {
     display: grid;
@@ -875,6 +956,15 @@ footer {
 }
 
 body.guest-mode .header-actions {
+    display: none;
+}
+
+/* Read-only shared results view */
+body.shared-mode .header-actions {
+    display: none;
+}
+
+body.shared-mode #view-results .actions {
     display: none;
 }
 

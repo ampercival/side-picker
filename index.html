@@ -17,6 +17,14 @@
             <h1>Side Picker</h1>
             <p>Optimize your game night happiness</p>
             <div class="header-actions">
+                <button class="btn-sm" onclick="goHome()" title="Your sessions" aria-label="Your sessions">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                        <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                    </svg>
+                    Sessions
+                </button>
                 <button class="btn-sm" onclick="openInfoModal()" aria-label="How it works">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -79,8 +87,34 @@
         </header>
 
         <main>
+            <!-- View 0: Sessions Home -->
+            <section id="view-home" class="view active">
+                <div class="card">
+                    <h2>Your Sessions</h2>
+                    <p class="subtitle">Resume a game night to import picks and optimize, or start a new one.</p>
+
+                    <div class="actions" style="margin-bottom: 1.5rem;">
+                        <button class="btn primary" onclick="startNewSession()">+ New Session</button>
+                    </div>
+
+                    <div id="home-continue" style="display: none; margin-bottom: 1.5rem;">
+                        <div class="session-card continue-card">
+                            <div class="session-card-head">
+                                <span class="sc-name" id="home-continue-label"></span>
+                            </div>
+                            <div class="sc-meta" id="home-continue-meta"></div>
+                            <button class="btn accent sc-resume" onclick="continueCurrent()">Continue →</button>
+                        </div>
+                    </div>
+
+                    <div id="home-session-list" class="session-cards">
+                        <!-- Session cards injected by JS -->
+                    </div>
+                </div>
+            </section>
+
             <!-- View 1: Faction Setup -->
-            <section id="view-factions" class="view active">
+            <section id="view-factions" class="view">
                 <div class="card">
                     <h2>Step 1: Setup Factions</h2>
                     <p class="subtitle">Choose a game or enter factions manually.</p>
@@ -215,7 +249,7 @@
             <section id="view-results" class="view">
                 <div class="card">
                     <h2>Optimal Assignment</h2>
-                    <p class="subtitle">The happiness algorithm has spoken.</p>
+                    <p class="subtitle" id="results-subtitle">The happiness algorithm has spoken.</p>
 
                     <div id="results-container" class="results-grid">
                         <!-- Results go here -->
@@ -229,6 +263,7 @@
                     </div>
 
                     <div class="actions center">
+                        <button class="btn primary" onclick="openResultsShareModal()">Share Results Link</button>
                         <button class="btn secondary" onclick="resetApp()">Start Over</button>
                         <button class="btn text" onclick="prevStep('view-players')">Back to Players</button>
                     </div>
@@ -482,11 +517,35 @@
         </div>
     </div>
 
+    <div id="results-share-modal" class="modal">
+        <h3>Share Results</h3>
+        <p style="color: var(--text-muted); line-height: 1.5; font-size: 0.9rem; margin-bottom: 1rem;">
+            Send this link to your players so they can see the final assignments. It's read-only.
+        </p>
+        <input type="text" id="results-link-input" readonly onclick="this.select()">
+        <div class="actions right">
+            <button class="btn" onclick="closeModals()">Close</button>
+            <button class="btn primary" onclick="copyResultsLink()">Copy Link</button>
+        </div>
+    </div>
+
     <template id="template-load-item">
         <div class="load-item">
             <span class="session-name"></span>
             <span class="session-date"></span>
             <button class="btn-sm danger delete-btn" title="Delete">×</button>
+        </div>
+    </template>
+
+    <template id="template-session-card">
+        <div class="session-card">
+            <div class="session-card-head">
+                <span class="sc-name"></span>
+                <button class="sc-delete" title="Delete session">&times;</button>
+            </div>
+            <div class="sc-meta"></div>
+            <div class="sc-date"></div>
+            <button class="btn primary sc-resume">Resume</button>
         </div>
     </template>
 
