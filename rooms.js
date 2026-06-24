@@ -63,6 +63,7 @@ function mapRowToSession(row) {
         sessionName: row.session_name || row.name,
         gameTitle: row.game_title || '',
         roomCode: row.room_code || '',
+        results: row.results || null,
         date: row.updated_at || new Date().toISOString()
     };
 }
@@ -76,8 +77,16 @@ function sessionRow(name, s) {
         factions: s.factions || [],
         players: s.players || [],
         room_code: s.roomCode || null,
+        results: s.results || null,
         updated_at: new Date().toISOString()
     };
+}
+
+// Forward-looking: record the organizer (workspace key) in the users table.
+async function ensureUser() {
+    const sb = getSupabaseClient();
+    if (!sb || !hasWorkspaceKey()) return;
+    await sb.from('users').upsert({ owner_key: getWorkspaceKey() }, { onConflict: 'owner_key' });
 }
 
 async function loadSessionsFromDb() {
@@ -175,6 +184,10 @@ async function openLiveRoom() {
         showToast('error', 'Not Configured', 'Live rooms need Supabase set up in config.js.');
         return;
     }
+    if (!activeSessionName) {
+        showToast('error', 'No Session', 'Start a session first.');
+        return;
+    }
     if (state.factions.length === 0) {
         showToast('error', 'No Factions', 'Add factions before opening a room.');
         return;
@@ -190,30 +203,12 @@ async function openLiveRoom() {
         return;
     }
 
-    const roomData = {
-        session_name: (state.sessionName || '').trim(),
-        game_title: (state.gameTitle || '').trim(),
-        factions: state.factions,
-        roster: names
-    };
-
-    if (!state.roomCode) {
-        const code = generateRoomCode();
-        const { error } = await sb.from('rooms').insert({ code, ...roomData });
-        if (error) {
-            showToast('error', 'Room Error', error.message);
-            return;
-        }
-        state.roomCode = code;
-        autoSave();
-    } else {
-        // Keep the room's factions/roster in sync with the current setup.
-        const { error } = await sb.from('rooms').update(roomData).eq('code', state.roomCode);
-        if (error) {
-            showToast('error', 'Room Error', error.message);
-            return;
-        }
-    }
+    // A room is just a code on the session. Generate one if needed, then flush
+    // the session so guests can resolve it by code.
+    if (!state.roomCode) state.roomCode = generateRoomCode();
+    sessionsCache[activeSessionName] = currentSessionObject();
+    await upsertSessionToDb(activeSessionName, sessionsCache[activeSessionName]);
+    autoSave();
 
     await activateRoomSync();
     showRoomModal();
@@ -329,17 +324,24 @@ function deactivateRoomSync() {
 async function closeLiveRoom() {
     showConfirm(
         'Close Live Room?',
-        'This deletes the room and all submitted picks from the server. Your current player setup stays. Continue?',
+        'This stops sharing and deletes submitted picks from the server. Your session and player setup stay. Continue?',
         async () => {
             const sb = getSupabaseClient();
-            if (sb && state.roomCode) {
-                await sb.from('rooms').delete().eq('code', state.roomCode); // cascades to submissions
+            const code = state.roomCode;
+            if (sb && code) {
+                // Delete submissions first (they reference the session's room_code),
+                // then clear the code on the session.
+                await sb.from('submissions').delete().eq('room_code', code);
             }
             state.roomCode = '';
+            if (activeSessionName) {
+                sessionsCache[activeSessionName] = currentSessionObject();
+                await upsertSessionToDb(activeSessionName, sessionsCache[activeSessionName]);
+            }
             autoSave();
             deactivateRoomSync();
             closeModals();
-            showToast('info', 'Room Closed', 'The live room has been closed.');
+            showToast('info', 'Room Closed', 'Sharing stopped.');
         },
         'Close Room',
         'danger'
@@ -399,18 +401,20 @@ async function enterRoomGuestMode(code) {
         return;
     }
 
-    const { data: room, error } = await sb.from('rooms').select('*').eq('code', code).maybeSingle();
-    if (error || !room) {
+    const { data: rows, error } = await sb.from('sessions').select('*').eq('room_code', code).limit(1);
+    const session = rows && rows[0];
+    if (error || !session) {
         showGuestError('Room not found. Ask the organizer for a fresh link.');
         return;
     }
 
     guestSession = {
         code,
-        factions: room.factions || [],
-        roster: room.roster || [],
-        sessionName: room.session_name || '',
-        gameTitle: room.game_title || ''
+        factions: session.factions || [],
+        roster: (session.players || []).map(p => p.name),
+        sessionName: session.session_name || '',
+        gameTitle: session.game_title || '',
+        results: session.results || null
     };
     state.factions = [...guestSession.factions]; // Lets the shared list/drag helpers work unchanged.
 
@@ -426,6 +430,15 @@ async function enterRoomGuestMode(code) {
         banner.style.display = 'none';
     }
 
+    // Stay in sync: flip to results the moment the organizer optimizes.
+    subscribeGuestToSession(code);
+
+    // If results are already published, show them; otherwise the pick UI.
+    if (guestResultsReady(guestSession.results)) {
+        enterSharedResultsMode(guestSession.results);
+        return;
+    }
+
     // Name dropdown from the roster.
     const select = get('guest-name-select');
     guestSession.roster.forEach(name => {
@@ -439,6 +452,25 @@ async function enterRoomGuestMode(code) {
     setupDragAndDrop(get('guest-available'), get('guest-preference'), get('guest-banned'), guestPick);
 
     renderGuestPicks(); // nothing shown until a name is picked
+}
+
+function guestResultsReady(results) {
+    return results && Array.isArray(results.r) && results.r.length > 0;
+}
+
+// Guests watch their session row so published results appear live.
+function subscribeGuestToSession(code) {
+    const sb = getSupabaseClient();
+    if (!sb) return;
+    if (roomChannel) { sb.removeChannel(roomChannel); roomChannel = null; }
+    roomChannel = sb.channel(`guest-${code}`)
+        .on('postgres_changes',
+            { event: '*', schema: 'public', table: 'sessions', filter: `room_code=eq.${code}` },
+            payload => {
+                const results = payload.new && payload.new.results;
+                if (guestResultsReady(results)) enterSharedResultsMode(results);
+            })
+        .subscribe();
 }
 
 async function onGuestNameChange() {

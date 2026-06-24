@@ -5,6 +5,7 @@ const state = {
     sessionName: '', // Label for this game night (shown to players)
     gameTitle: '', // The game being played (shown to players)
     roomCode: '', // Live-room code (Supabase), if a room is open for this session
+    results: null, // Last optimization snapshot (published to the room)
     discord: {
         url: '',
         enabled: false
@@ -806,8 +807,15 @@ function calculateOptimization() {
     const result = findOptimalAssignment(state.players, state.factions, mode);
 
     if (result.success) {
-        displayResults(result);
+        displayResults(result); // sets lastResults
         switchView('view-results');
+
+        // Publish results to the session so the room link shows them to players.
+        state.results = lastResults;
+        if (activeSessionName) {
+            sessionsCache[activeSessionName] = currentSessionObject();
+            upsertSessionToDb(activeSessionName, sessionsCache[activeSessionName]);
+        }
 
         // Discord Webhook
         if (state.discord && state.discord.enabled && state.discord.url) {
@@ -1119,31 +1127,6 @@ function displayResults(result) {
     lastResults = { v: 1, t: sessionName, gm: gameTitle, g: goalText, pct: percent, r: shareRows };
 }
 
-function resetApp() {
-    showConfirm(
-        'Reset Application?',
-        'This will clear ALL players and factions. Saved sessions will remain.',
-        () => {
-            state.factions = [];
-            state.players = [];
-            state.sessionName = '';
-            state.gameTitle = '';
-            state.roomCode = '';
-            activeSessionName = null;
-            deactivateRoomSync();
-            autoSave();
-            get('game-select').value = 'custom';
-            renderFactions();
-            renderPlayers();
-            syncSessionMetaInputs();
-            switchView('view-factions');
-            showToast('success', 'Reset', 'Application has been reset.');
-        },
-        'Reset Everything',
-        'danger'
-    );
-}
-
 // --- Session Management ---
 // Named sessions live in Supabase (scoped by workspace key); see rooms.js.
 // AUTOSAVE_KEY is just a local cache of the *current working setup* for instant
@@ -1162,6 +1145,7 @@ function currentSessionObject() {
         sessionName: state.sessionName,
         gameTitle: state.gameTitle,
         roomCode: state.roomCode,
+        results: state.results,
         date: new Date().toISOString()
     };
 }
@@ -1179,6 +1163,7 @@ function autoSave() {
         sessionName: state.sessionName,
         gameTitle: state.gameTitle,
         roomCode: state.roomCode,
+        results: state.results,
         discord: state.discord,
         activeSessionName: activeSessionName,
         timestamp: Date.now()
@@ -1205,6 +1190,7 @@ function loadAutoSave() {
             if (data.sessionName) state.sessionName = data.sessionName;
             if (data.gameTitle) state.gameTitle = data.gameTitle;
             if (data.roomCode) state.roomCode = data.roomCode;
+            if (data.results) state.results = data.results;
             if (data.discord) state.discord = data.discord; // Restore Discord settings
             if (data.activeSessionName) activeSessionName = data.activeSessionName;
 
@@ -1270,6 +1256,7 @@ async function initWorkspaceAndSessions() {
         openWorkspaceModal();
         return;
     }
+    ensureUser();
     await loadSessionsFromDb();
     await loadPresetsFromDb();
     renderPresetOptions();
@@ -1293,6 +1280,7 @@ async function confirmWorkspaceKey() {
     setWorkspaceKey(key);
     closeModals();
     updateWorkspaceIndicator();
+    ensureUser();
     await loadSessionsFromDb();
     await loadPresetsFromDb();
     renderPresetOptions();
@@ -1314,24 +1302,35 @@ function getSessions() {
     return sessionsCache;
 }
 
-async function saveSession(name) {
-    if (!name) return showToast('error', 'Missing Name', "Please enter a name.");
+// Create a brand-new, empty session in the database and open it. Everything
+// after this auto-saves, so there's no separate "Save" step.
+async function createNewSession(name) {
+    if (!name) return showToast('error', 'Missing Name', 'Please enter a session name.');
     if (!isSupabaseConfigured()) return showToast('error', 'Not Configured', 'Sessions need Supabase set up.');
     if (!hasWorkspaceKey()) { openWorkspaceModal(); return; }
+    if (sessionsCache[name]) return showToast('error', 'Name Taken', `A session named "${name}" already exists.`);
 
-    state.sessionName = name; // The save name is the session's name.
-    activeSessionName = name; // Future edits sync into this session.
+    state.factions = [];
+    state.players = [];
+    state.sessionName = name;
+    state.gameTitle = '';
+    state.roomCode = '';
+    state.results = null;
+    activeSessionName = name;
+
     const obj = currentSessionObject();
     sessionsCache[name] = obj;
-    syncSessionMetaInputs();
-    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify({
-        factions: state.factions, players: state.players, sessionName: state.sessionName,
-        gameTitle: state.gameTitle, roomCode: state.roomCode, discord: state.discord,
-        activeSessionName: activeSessionName, timestamp: Date.now()
-    }));
     await upsertSessionToDb(name, obj);
-    showToast('success', 'Saved', `Session "${name}" saved!`);
+    autoSave();
+
+    get('game-select').value = 'custom';
+    renderFactions();
+    renderPlayers();
+    syncSessionMetaInputs();
+    deactivateRoomSync();
     closeModals();
+    switchView('view-factions');
+    showToast('success', 'Session Created', `"${name}" is ready.`);
 }
 
 function deleteSession(name, onSuccess) {
@@ -1339,11 +1338,13 @@ function deleteSession(name, onSuccess) {
         'Delete Session?',
         `Are you sure you want to delete "${name}"?`,
         async () => {
-            await deleteSessionFromDb(name);
+            await deleteSessionFromDb(name); // cascades the room's submissions in the DB
             delete sessionsCache[name];
 
             if (activeSessionName === name) {
                 activeSessionName = null;
+                state.roomCode = '';
+                deactivateRoomSync();
                 autoSave();
             }
 
@@ -1353,38 +1354,6 @@ function deleteSession(name, onSuccess) {
         'Delete',
         'danger'
     );
-}
-
-function loadSession(name) {
-    const sessions = getSessions();
-    const data = sessions[name];
-
-    if (data) {
-        showConfirm(
-            'Load Session?',
-            `Loading "${name}" will overwrite your current setup. Continue?`,
-            () => {
-                state.factions = data.factions || [];
-                state.players = data.players || [];
-                state.sessionName = data.sessionName || name;
-                state.gameTitle = data.gameTitle || '';
-                state.roomCode = data.roomCode || '';
-                activeSessionName = name;
-                renderFactions();
-                renderPlayers();
-                updateAllPlayerFactions();
-                syncSessionMetaInputs();
-                autoSave(); // Sync to autosave
-                syncRoomForCurrentSession();
-                closeModals();
-                showToast('success', 'Loaded', `Session "${name}" loaded.`);
-            },
-            'Load',
-            'accent'
-        );
-    } else {
-        showToast('error', 'Error', "Session not found.");
-    }
 }
 
 // --- Sessions Home ---
@@ -1399,23 +1368,6 @@ async function goHome() {
 
 function renderHomeSessions() {
     updateWorkspaceIndicator();
-    // "Continue" card reflects the current in-memory working setup.
-    const hasWorking = state.factions.length > 0 || state.players.length > 0;
-    const continueWrap = get('home-continue');
-    if (hasWorking) {
-        continueWrap.style.display = 'block';
-        const workingName = (state.sessionName || '').trim();
-        get('home-continue-label').textContent = workingName
-            ? `Continue "${workingName}"`
-            : 'Continue current setup';
-        const fc = state.factions.length;
-        const pc = state.players.length;
-        const game = (state.gameTitle || '').trim();
-        get('home-continue-meta').textContent =
-            `${game ? game + ' · ' : ''}${fc} faction${fc === 1 ? '' : 's'} · ${pc} player${pc === 1 ? '' : 's'}`;
-    } else {
-        continueWrap.style.display = 'none';
-    }
 
     const container = get('home-session-list');
     container.innerHTML = '';
@@ -1463,12 +1415,6 @@ function renderHomeSessions() {
     });
 }
 
-function continueCurrent() {
-    renderFactions();
-    renderPlayers();
-    switchView(state.players.length > 0 ? 'view-players' : 'view-factions');
-}
-
 function resumeSession(name) {
     const sessions = getSessions();
     const data = sessions[name];
@@ -1483,6 +1429,7 @@ function resumeSession(name) {
     state.sessionName = data.sessionName || name;
     state.gameTitle = data.gameTitle || '';
     state.roomCode = data.roomCode || '';
+    state.results = data.results || null;
     activeSessionName = name;
 
     renderFactions();
@@ -1495,111 +1442,19 @@ function resumeSession(name) {
     showToast('success', 'Resumed', `Loaded "${name}".`);
 }
 
+// New Session: prompt for a name, then create it in the database.
 function startNewSession() {
-    const proceed = () => {
-        state.factions = [];
-        state.players = [];
-        state.sessionName = '';
-        state.gameTitle = '';
-        state.roomCode = '';
-        activeSessionName = null;
-        deactivateRoomSync();
-        get('game-select').value = 'custom';
-        renderFactions();
-        renderPlayers();
-        syncSessionMetaInputs();
-        autoSave();
-        switchView('view-factions');
-        get('session-name-input').focus();
-    };
-
-    if (state.factions.length > 0 || state.players.length > 0) {
-        showConfirm(
-            'Start New Session?',
-            'This clears the current working setup. Saved sessions are kept. Continue?',
-            proceed,
-            'Start New',
-            'accent'
-        );
-    } else {
-        proceed();
-    }
-}
-
-// --- Modals ---
-
-async function openSaveModal() {
     if (!isSupabaseConfigured()) return showToast('error', 'Not Configured', 'Sessions need Supabase set up.');
     if (!hasWorkspaceKey()) { openWorkspaceModal(); return; }
-
+    get('new-session-input').value = '';
     get('modal-overlay').classList.add('active');
-    get('save-modal').classList.add('active');
-    const input = get('save-name-input');
-    input.value = (state.sessionName || '').trim();
-    await loadSessionsFromDb();
-    renderSessionList('save-list', (name) => {
-        input.value = name;
-        input.focus();
-    });
-    input.focus();
+    get('new-session-modal').classList.add('active');
+    get('new-session-input').focus();
 }
 
-function confirmSave() {
-    const name = get('save-name-input').value.trim();
-    if (name) saveSession(name);
-}
-
-async function openLoadModal() {
-    if (!isSupabaseConfigured()) return showToast('error', 'Not Configured', 'Sessions need Supabase set up.');
-    if (!hasWorkspaceKey()) { openWorkspaceModal(); return; }
-
-    get('modal-overlay').classList.add('active');
-    get('load-modal').classList.add('active');
-    await loadSessionsFromDb();
-    renderSessionList('load-list', (name) => {
-        loadSession(name);
-    });
-}
-
-function renderSessionList(containerId, onSelectCurrent) {
-    const container = get(containerId);
-    container.innerHTML = '';
-
-    const sessions = getSessions();
-    const names = Object.keys(sessions).sort((a, b) => new Date(sessions[b].date) - new Date(sessions[a].date));
-
-    if (names.length === 0) {
-        container.innerHTML = '<div class="empty-state">No saved sessions</div>';
-        return;
-    }
-
-    const template = get('template-load-item');
-
-    names.forEach(name => {
-        const data = sessions[name];
-        const clone = template.content.cloneNode(true);
-        const item = clone.querySelector('.load-item');
-
-        item.querySelector('.session-name').textContent = (data.sessionName || '').trim() || name;
-        item.querySelector('.session-date').textContent = new Date(data.date).toLocaleDateString();
-
-        // Click behavior depends on context (Save or Load)
-        item.onclick = (e) => {
-            if (!e.target.closest('.delete-btn')) {
-                onSelectCurrent(name);
-            }
-        };
-
-        // Delete click
-        item.querySelector('.delete-btn').onclick = (e) => {
-            e.stopPropagation();
-            deleteSession(name, () => {
-                renderSessionList(containerId, onSelectCurrent);
-            });
-        };
-
-        container.appendChild(clone);
-    });
+function confirmNewSession() {
+    const name = get('new-session-input').value.trim();
+    if (name) createNewSession(name);
 }
 
 // --- Preset Management ---
