@@ -4,6 +4,7 @@ const state = {
     players: [], // { id, name, preferences: [], bans: [] }
     sessionName: '', // Label for this game night (shown to players)
     gameTitle: '', // The game being played (shown to players)
+    roomCode: '', // Live-room code (Supabase), if a room is open for this session
     discord: {
         url: '',
         enabled: false
@@ -1142,11 +1143,16 @@ function resetApp() {
         () => {
             state.factions = [];
             state.players = [];
+            state.sessionName = '';
+            state.gameTitle = '';
+            state.roomCode = '';
             activeSessionName = null;
+            deactivateRoomSync();
             autoSave();
             get('game-select').value = 'custom';
             renderFactions();
             renderPlayers();
+            syncSessionMetaInputs();
             switchView('view-factions');
             showToast('success', 'Reset', 'Application has been reset.');
         },
@@ -1155,44 +1161,54 @@ function resetApp() {
     );
 }
 
-// --- Session Management (LocalStorage) ---
+// --- Session Management ---
+// Named sessions live in Supabase (scoped by workspace key); see rooms.js.
+// AUTOSAVE_KEY is just a local cache of the *current working setup* for instant
+// restore on refresh — it is not the session store.
 
-const SESSIONS_KEY = 'side_picker_sessions';
 const AUTOSAVE_KEY = 'side_picker_autosave';
 
 // Name of the saved session currently being worked on, if any. Changes are
-// persisted back into it live, so e.g. imported picks don't need a manual re-save.
+// persisted back into it live (debounced), so imported picks etc. need no manual save.
 let activeSessionName = null;
 
-// Auto-save on every change for resilience
-function autoSave() {
-    // In guest mode there is no organizer state to persist; save the guest's picks instead.
-    if (isGuestMode) {
-        saveGuestState();
-        return;
-    }
-    const data = {
+function currentSessionObject() {
+    return {
         factions: state.factions,
         players: state.players,
         sessionName: state.sessionName,
         gameTitle: state.gameTitle,
+        roomCode: state.roomCode,
+        date: new Date().toISOString()
+    };
+}
+
+// Auto-save on every change for resilience.
+let _sessionSyncTimer = null;
+function autoSave() {
+    // In guest mode there is no organizer state to persist (the room DB is the source of truth).
+    if (isGuestMode) return;
+
+    // Local cache of the working setup (fast refresh-restore only).
+    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify({
+        factions: state.factions,
+        players: state.players,
+        sessionName: state.sessionName,
+        gameTitle: state.gameTitle,
+        roomCode: state.roomCode,
         discord: state.discord,
         activeSessionName: activeSessionName,
         timestamp: Date.now()
-    };
-    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(data));
+    }));
 
-    // Keep the active named session in sync with the working state.
+    // Keep the active named session fresh: update the in-memory cache now,
+    // and push to the database on a short debounce.
     if (activeSessionName) {
-        const sessions = getSessions();
-        sessions[activeSessionName] = {
-            factions: state.factions,
-            players: state.players,
-            sessionName: state.sessionName,
-            gameTitle: state.gameTitle,
-            date: new Date().toISOString()
-        };
-        localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+        sessionsCache[activeSessionName] = currentSessionObject();
+        clearTimeout(_sessionSyncTimer);
+        _sessionSyncTimer = setTimeout(() => {
+            if (activeSessionName) upsertSessionToDb(activeSessionName, sessionsCache[activeSessionName]);
+        }, 1200);
     }
 }
 
@@ -1205,6 +1221,7 @@ function loadAutoSave() {
             if (data.players) state.players = data.players;
             if (data.sessionName) state.sessionName = data.sessionName;
             if (data.gameTitle) state.gameTitle = data.gameTitle;
+            if (data.roomCode) state.roomCode = data.roomCode;
             if (data.discord) state.discord = data.discord; // Restore Discord settings
             if (data.activeSessionName) activeSessionName = data.activeSessionName;
 
@@ -1229,10 +1246,10 @@ function loadAutoSave() {
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
-    // If opened via an invite link, run as a guest instead of the organizer app.
-    const invite = parseInviteFromUrl();
-    if (invite) {
-        enterGuestMode(invite);
+    // If opened via a room link, run as a guest instead of the organizer app.
+    const roomCode = parseRoomFromUrl();
+    if (roomCode) {
+        enterRoomGuestMode(roomCode);
         return;
     }
 
@@ -1244,7 +1261,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     renderPresetOptions();
     loadAutoSave();
-    renderHomeSessions(); // Land on the sessions home screen
+    updateWorkspaceIndicator();
+    initWorkspaceAndSessions(); // async: load sessions from DB (prompts for a workspace key if needed)
+    syncRoomForCurrentSession(); // Reconnect to a live room if this session has one
 
     // Discord Listeners
     get('discord-webhook').addEventListener('input', (e) => {
@@ -1258,29 +1277,72 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-// Named Sessions
-function getSessions() {
-    const json = localStorage.getItem(SESSIONS_KEY);
-    return json ? JSON.parse(json) : {};
+async function initWorkspaceAndSessions() {
+    if (!isSupabaseConfigured()) {
+        renderHomeSessions(); // Will show a "not configured" notice.
+        return;
+    }
+    if (!hasWorkspaceKey()) {
+        renderHomeSessions(); // Empty behind the prompt.
+        openWorkspaceModal();
+        return;
+    }
+    await loadSessionsFromDb();
+    renderHomeSessions();
 }
 
-function saveSession(name) {
+// --- Workspace key ---
+function openWorkspaceModal() {
+    get('workspace-input').value = getWorkspaceKey();
+    get('modal-overlay').classList.add('active');
+    get('workspace-modal').classList.add('active');
+    get('workspace-input').focus();
+}
+
+async function confirmWorkspaceKey() {
+    const key = get('workspace-input').value.trim();
+    if (!key) {
+        showToast('error', 'Workspace Needed', 'Enter a workspace key to load your sessions.');
+        return;
+    }
+    setWorkspaceKey(key);
+    closeModals();
+    updateWorkspaceIndicator();
+    await loadSessionsFromDb();
+    renderHomeSessions();
+    showToast('success', 'Workspace Set', `Loaded sessions for "${key}".`);
+}
+
+function updateWorkspaceIndicator() {
+    const el = get('workspace-indicator');
+    if (!el) return;
+    const key = getWorkspaceKey();
+    el.innerHTML = key
+        ? `Workspace: <strong>${escapeHtml(key)}</strong> · <button class="link-btn" onclick="openWorkspaceModal()">change</button>`
+        : `<button class="link-btn" onclick="openWorkspaceModal()">Set your workspace key</button>`;
+}
+
+// Named Sessions (DB-backed; sessionsCache lives in rooms.js)
+function getSessions() {
+    return sessionsCache;
+}
+
+async function saveSession(name) {
     if (!name) return showToast('error', 'Missing Name', "Please enter a name.");
+    if (!isSupabaseConfigured()) return showToast('error', 'Not Configured', 'Sessions need Supabase set up.');
+    if (!hasWorkspaceKey()) { openWorkspaceModal(); return; }
 
     state.sessionName = name; // The save name is the session's name.
-    const sessions = getSessions();
-    sessions[name] = {
-        factions: state.factions,
-        players: state.players,
-        sessionName: name,
-        gameTitle: state.gameTitle,
-        date: new Date().toISOString()
-    };
-
-    localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
     activeSessionName = name; // Future edits sync into this session.
+    const obj = currentSessionObject();
+    sessionsCache[name] = obj;
     syncSessionMetaInputs();
-    autoSave();
+    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify({
+        factions: state.factions, players: state.players, sessionName: state.sessionName,
+        gameTitle: state.gameTitle, roomCode: state.roomCode, discord: state.discord,
+        activeSessionName: activeSessionName, timestamp: Date.now()
+    }));
+    await upsertSessionToDb(name, obj);
     showToast('success', 'Saved', `Session "${name}" saved!`);
     closeModals();
 }
@@ -1289,10 +1351,9 @@ function deleteSession(name, onSuccess) {
     showConfirm(
         'Delete Session?',
         `Are you sure you want to delete "${name}"?`,
-        () => {
-            const sessions = getSessions();
-            delete sessions[name];
-            localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+        async () => {
+            await deleteSessionFromDb(name);
+            delete sessionsCache[name];
 
             if (activeSessionName === name) {
                 activeSessionName = null;
@@ -1320,12 +1381,14 @@ function loadSession(name) {
                 state.players = data.players || [];
                 state.sessionName = data.sessionName || name;
                 state.gameTitle = data.gameTitle || '';
+                state.roomCode = data.roomCode || '';
                 activeSessionName = name;
                 renderFactions();
                 renderPlayers();
                 updateAllPlayerFactions();
                 syncSessionMetaInputs();
                 autoSave(); // Sync to autosave
+                syncRoomForCurrentSession();
                 closeModals();
                 showToast('success', 'Loaded', `Session "${name}" loaded.`);
             },
@@ -1338,12 +1401,17 @@ function loadSession(name) {
 }
 
 // --- Sessions Home ---
-function goHome() {
-    renderHomeSessions();
+async function goHome() {
     switchView('view-home');
+    updateWorkspaceIndicator();
+    if (isSupabaseConfigured() && hasWorkspaceKey()) {
+        await loadSessionsFromDb();
+    }
+    renderHomeSessions();
 }
 
 function renderHomeSessions() {
+    updateWorkspaceIndicator();
     // "Continue" card reflects the current in-memory working setup.
     const hasWorking = state.factions.length > 0 || state.players.length > 0;
     const continueWrap = get('home-continue');
@@ -1364,6 +1432,15 @@ function renderHomeSessions() {
 
     const container = get('home-session-list');
     container.innerHTML = '';
+
+    if (!isSupabaseConfigured()) {
+        container.innerHTML = '<div class="empty-state">Cloud sessions need Supabase configured in config.js.</div>';
+        return;
+    }
+    if (!hasWorkspaceKey()) {
+        container.innerHTML = '<div class="empty-state">Set a workspace key to load your sessions.</div>';
+        return;
+    }
 
     const sessions = getSessions();
     const names = Object.keys(sessions).sort((a, b) => new Date(sessions[b].date) - new Date(sessions[a].date));
@@ -1418,12 +1495,14 @@ function resumeSession(name) {
     state.players = data.players || [];
     state.sessionName = data.sessionName || name;
     state.gameTitle = data.gameTitle || '';
+    state.roomCode = data.roomCode || '';
     activeSessionName = name;
 
     renderFactions();
     updateAllPlayerFactions(); // Cleans stale faction refs and re-renders player cards.
     syncSessionMetaInputs();
     autoSave();
+    syncRoomForCurrentSession();
 
     switchView('view-players');
     showToast('success', 'Resumed', `Loaded "${name}".`);
@@ -1435,7 +1514,9 @@ function startNewSession() {
         state.players = [];
         state.sessionName = '';
         state.gameTitle = '';
+        state.roomCode = '';
         activeSessionName = null;
+        deactivateRoomSync();
         get('game-select').value = 'custom';
         renderFactions();
         renderPlayers();
@@ -1460,11 +1541,15 @@ function startNewSession() {
 
 // --- Modals ---
 
-function openSaveModal() {
+async function openSaveModal() {
+    if (!isSupabaseConfigured()) return showToast('error', 'Not Configured', 'Sessions need Supabase set up.');
+    if (!hasWorkspaceKey()) { openWorkspaceModal(); return; }
+
     get('modal-overlay').classList.add('active');
     get('save-modal').classList.add('active');
     const input = get('save-name-input');
     input.value = (state.sessionName || '').trim();
+    await loadSessionsFromDb();
     renderSessionList('save-list', (name) => {
         input.value = name;
         input.focus();
@@ -1477,9 +1562,13 @@ function confirmSave() {
     if (name) saveSession(name);
 }
 
-function openLoadModal() {
+async function openLoadModal() {
+    if (!isSupabaseConfigured()) return showToast('error', 'Not Configured', 'Sessions need Supabase set up.');
+    if (!hasWorkspaceKey()) { openWorkspaceModal(); return; }
+
     get('modal-overlay').classList.add('active');
     get('load-modal').classList.add('active');
+    await loadSessionsFromDb();
     renderSessionList('load-list', (name) => {
         loadSession(name);
     });
@@ -1504,7 +1593,7 @@ function renderSessionList(containerId, onSelectCurrent) {
         const clone = template.content.cloneNode(true);
         const item = clone.querySelector('.load-item');
 
-        item.querySelector('.session-name').textContent = name;
+        item.querySelector('.session-name').textContent = (data.sessionName || '').trim() || name;
         item.querySelector('.session-date').textContent = new Date(data.date).toLocaleDateString();
 
         // Click behavior depends on context (Save or Load)
@@ -1712,15 +1801,12 @@ function deletePreset(name) {
     );
 }
 
-// --- Share / Collect Picks (serverless) ---
-const GUEST_STATE_KEY = 'side_picker_guest';
+// --- Shared helpers for guest / results modes ---
+// (Live-room logic lives in rooms.js; guestPick/guestSession are declared there.)
 let isGuestMode = false;
 let isSharedMode = false;
-let guestSession = null; // { factions: [], roster: [] }
-let guestRosterPicks = {}; // name -> { p: [...], b: [...], u: bool } as of invite generation
-let guestPick = { id: 'guest', name: '', preferences: [], bans: [], noPreference: false };
 
-// UTF-8 safe, URL-safe base64 encoding of a JSON payload.
+// UTF-8 safe, URL-safe base64 encoding of a JSON payload (used by results links).
 function encodeData(obj) {
     const bytes = new TextEncoder().encode(JSON.stringify(obj));
     let bin = '';
@@ -1742,261 +1828,6 @@ async function copyToClipboard(text) {
         return true;
     } catch (e) {
         return false; // Clipboard API blocked (insecure context, etc.) — caller shows a fallback.
-    }
-}
-
-// --- Organizer: invite link ---
-function openInviteModal() {
-    if (state.factions.length === 0) {
-        showToast('error', 'No Factions', 'Add factions before inviting players.');
-        return;
-    }
-    if (state.players.length === 0) {
-        showToast('error', 'No Players', 'Add the player names first so guests can pick theirs.');
-        return;
-    }
-
-    const names = state.players.map(p => p.name);
-    const dupes = names.filter((n, i) => names.indexOf(n) !== i);
-    if (dupes.length > 0) {
-        showToast('error', 'Duplicate Names', `Rename players so each name is unique (e.g. "${dupes[0]}").`);
-        return;
-    }
-
-    // Roster carries each player's current picks so a returning guest sees what
-    // the session currently has for them, not a blank slate.
-    const roster = state.players.map(p => ({
-        n: p.name,
-        p: p.preferences || [],
-        b: p.bans || [],
-        u: !!p.noPreference
-    }));
-
-    const payload = {
-        v: 1,
-        f: state.factions,
-        r: roster,
-        s: (state.sessionName || '').trim(),
-        gm: (state.gameTitle || '').trim()
-    };
-    const base = location.origin + location.pathname;
-    const link = `${base}#invite=${encodeData(payload)}`;
-
-    get('invite-link-input').value = link;
-    get('modal-overlay').classList.add('active');
-    get('invite-modal').classList.add('active');
-    get('invite-link-input').focus();
-    get('invite-link-input').select();
-}
-
-async function copyInviteLink() {
-    const link = get('invite-link-input').value;
-    const ok = await copyToClipboard(link);
-    if (ok) {
-        showToast('success', 'Link Copied', 'Share it with your players.');
-    } else {
-        get('invite-link-input').select();
-        showToast('info', 'Copy Manually', 'Press Ctrl/Cmd+C to copy the selected link.');
-    }
-}
-
-// --- Organizer: import picks ---
-function openImportModal() {
-    get('import-code-input').value = '';
-    get('modal-overlay').classList.add('active');
-    get('import-modal').classList.add('active');
-    get('import-code-input').focus();
-}
-
-function confirmImport() {
-    const raw = get('import-code-input').value.trim();
-    if (!raw) {
-        showToast('error', 'Nothing to Import', 'Paste at least one code.');
-        return;
-    }
-
-    const codes = raw.split('\n').map(s => s.trim()).filter(Boolean);
-    let imported = 0;
-    const failures = [];
-
-    codes.forEach(code => {
-        let pick;
-        try {
-            pick = decodeData(code);
-        } catch (e) {
-            failures.push('an unreadable code');
-            return;
-        }
-
-        if (!pick || !pick.n) {
-            failures.push('a code with no name');
-            return;
-        }
-
-        const player = state.players.find(p => p.name === pick.n);
-        if (!player) {
-            failures.push(`"${pick.n}" (no matching player)`);
-            return;
-        }
-
-        // Only accept factions that still exist in the current setup.
-        player.preferences = (pick.p || []).filter(f => state.factions.includes(f));
-        player.bans = (pick.b || []).filter(f => state.factions.includes(f));
-        player.noPreference = !!pick.u;
-        imported++;
-    });
-
-    if (imported > 0) {
-        autoSave();
-        renderPlayers();
-    }
-
-    closeModals();
-
-    if (imported > 0) {
-        showToast('success', 'Picks Imported', `Updated ${imported} player${imported === 1 ? '' : 's'}.`);
-    }
-    if (failures.length > 0) {
-        showToast('error', 'Some Codes Skipped', `Could not import: ${failures.join('; ')}.`);
-    }
-}
-
-// --- Guest mode ---
-function parseInviteFromUrl() {
-    const match = location.hash.match(/invite=([^&]+)/);
-    if (!match) return null;
-    try {
-        const data = decodeData(match[1]);
-        if (data && Array.isArray(data.f) && Array.isArray(data.r)) return data;
-    } catch (e) {
-        console.error('Invalid invite link', e);
-    }
-    return null;
-}
-
-function saveGuestState() {
-    localStorage.setItem(GUEST_STATE_KEY, JSON.stringify(guestPick));
-}
-
-function enterGuestMode(invite) {
-    isGuestMode = true;
-    document.body.classList.add('guest-mode');
-
-    // Normalize the roster (supports legacy name-only arrays) and index picks by name.
-    const roster = invite.r.map(entry =>
-        typeof entry === 'string'
-            ? { n: entry, p: [], b: [], u: false }
-            : { n: entry.n, p: entry.p || [], b: entry.b || [], u: !!entry.u }
-    );
-    guestSession = { factions: invite.f, roster };
-    guestRosterPicks = {};
-    roster.forEach(r => { guestRosterPicks[r.n] = r; });
-
-    state.factions = [...invite.f]; // Lets the shared list/drag helpers work unchanged.
-
-    // Show the session name and game so players know what they're picking for.
-    const banner = get('guest-banner');
-    const sessionName = (invite.s || '').trim();
-    const gameTitle = (invite.gm || '').trim();
-    if (sessionName || gameTitle) {
-        get('guest-session-name').textContent = sessionName;
-        get('guest-game-title').textContent = gameTitle ? `🎲 ${gameTitle}` : '';
-        banner.style.display = 'block';
-    } else {
-        banner.style.display = 'none';
-    }
-
-    // Populate the name dropdown from the roster.
-    const select = get('guest-name-select');
-    roster.forEach(r => {
-        const opt = document.createElement('option');
-        opt.value = r.n;
-        opt.textContent = r.n;
-        select.appendChild(opt);
-    });
-
-    // Wire drag-and-drop once; the <ul>s are static and items are added dynamically.
-    const available = get('guest-available');
-    const pref = get('guest-preference');
-    const banned = get('guest-banned');
-    setupDragAndDrop(available, pref, banned, guestPick);
-
-    // Start with no name selected: nothing below the dropdown is shown until they pick.
-    switchView('view-guest');
-    renderGuestPicks();
-}
-
-function onGuestNameChange() {
-    const name = get('guest-name-select').value;
-    guestPick.name = name;
-    get('guest-code-output').style.display = 'none';
-
-    if (!name) {
-        guestPick.preferences = [];
-        guestPick.bans = [];
-        guestPick.noPreference = false;
-    } else {
-        // Reset to what the session currently has for this player (per the invite),
-        // keeping only factions that still exist.
-        const saved = guestRosterPicks[name] || { p: [], b: [], u: false };
-        const isValid = f => guestSession.factions.includes(f);
-        guestPick.preferences = (saved.p || []).filter(isValid);
-        guestPick.bans = (saved.b || []).filter(isValid);
-        guestPick.noPreference = !!saved.u;
-    }
-
-    get('guest-no-preference').checked = !!guestPick.noPreference;
-    saveGuestState();
-    renderGuestPicks();
-}
-
-function onGuestNoPreferenceChange() {
-    guestPick.noPreference = get('guest-no-preference').checked;
-    saveGuestState();
-}
-
-function renderGuestPicks() {
-    const area = get('guest-pick-area');
-    if (!guestPick.name) {
-        area.style.display = 'none';
-        return;
-    }
-    area.style.display = 'block';
-    get('guest-no-preference').checked = !!guestPick.noPreference;
-
-    const available = get('guest-available');
-    const pref = get('guest-preference');
-    const banned = get('guest-banned');
-    refreshListsForCard(guestPick, available, pref, banned);
-}
-
-async function copyMyPicks() {
-    if (!guestPick.name) {
-        showToast('error', 'Pick Your Name', 'Select your name first.');
-        return;
-    }
-
-    const payload = {
-        v: 1,
-        n: guestPick.name,
-        p: guestPick.preferences,
-        b: guestPick.bans,
-        u: guestPick.noPreference
-    };
-    const code = encodeData(payload);
-
-    const output = get('guest-code-output');
-    const textArea = get('guest-code-text');
-    textArea.value = code;
-    output.style.display = 'block';
-
-    const ok = await copyToClipboard(code);
-    if (ok) {
-        showToast('success', 'Picks Copied', 'Paste the code back to your organizer.');
-    } else {
-        textArea.focus();
-        textArea.select();
-        showToast('info', 'Copy Manually', 'Press Ctrl/Cmd+C to copy the selected code.');
     }
 }
 

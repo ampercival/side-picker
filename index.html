@@ -91,7 +91,9 @@
             <section id="view-home" class="view active">
                 <div class="card">
                     <h2>Your Sessions</h2>
-                    <p class="subtitle">Resume a game night to import picks and optimize, or start a new one.</p>
+                    <p class="subtitle">Resume a game night to collect picks and optimize, or start a new one.</p>
+
+                    <div id="workspace-indicator" class="workspace-indicator"></div>
 
                     <div class="actions" style="margin-bottom: 1.5rem;">
                         <button class="btn primary" onclick="startNewSession()">+ New Session</button>
@@ -180,27 +182,17 @@
 
                     <div class="toolbar"
                         style="margin-bottom: 1rem; display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap;">
-                        <button class="btn secondary" onclick="openInviteModal()"
-                            title="Create a shareable link for players to submit their picks">
+                        <button class="btn secondary" onclick="openLiveRoom()"
+                            title="Open a live room players join to submit their picks">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
                                 fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                                 stroke-linejoin="round" style="margin-right: 6px;">
-                                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z">
-                                </path>
-                                <polyline points="22,6 12,13 2,6"></polyline>
+                                <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+                                <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
+                                <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+                                <line x1="12" y1="20" x2="12.01" y2="20"></line>
                             </svg>
-                            Invite Players
-                        </button>
-                        <button class="btn secondary" onclick="openImportModal()"
-                            title="Paste codes that players sent back to you">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
-                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                stroke-linejoin="round" style="margin-right: 6px;">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                <polyline points="7 10 12 15 17 10"></polyline>
-                                <line x1="12" y1="15" x2="12" y2="3"></line>
-                            </svg>
-                            Import Picks
+                            Live Room
                         </button>
                         <button class="btn secondary" onclick="randomizeAllPreferences()"
                             title="Randomize choices for all players">
@@ -216,6 +208,12 @@
                             </svg>
                             Randomize Choices
                         </button>
+                    </div>
+
+                    <div id="room-banner" class="room-banner" style="display: none;">
+                        <span class="rb-text">🟢 Live room <strong id="room-banner-code"></strong> —
+                            <span id="room-banner-count"></span></span>
+                        <button class="btn-sm" onclick="showRoomModal()">Manage</button>
                     </div>
 
                     <div id="players-container" class="accordion-container">
@@ -287,7 +285,7 @@
                 </div>
             </section>
 
-            <!-- Guest View: shown only when opened via an invite link -->
+            <!-- Guest View: shown only when opened via a room link -->
             <section id="view-guest" class="view">
                 <div class="card">
                     <div id="guest-banner" class="guest-banner" style="display: none;">
@@ -296,10 +294,11 @@
                     </div>
 
                     <h2>Make Your Picks</h2>
-                    <p class="subtitle">Pick your name, rank the factions, then copy your picks and send them back to
-                        the organizer.</p>
+                    <p class="subtitle">Pick your name, rank the factions, then submit them to the organizer.</p>
 
-                    <div style="margin-bottom: 1.5rem;">
+                    <div id="guest-error" class="guest-error" style="display: none;"></div>
+
+                    <div id="guest-name-wrap" style="margin-bottom: 1.5rem;">
                         <label for="guest-name-select"
                             style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.9rem;">Who
                             are you?</label>
@@ -334,15 +333,11 @@
                         </div>
 
                         <div class="actions center">
-                            <button class="btn accent" onclick="copyMyPicks()">Copy My Picks</button>
+                            <button class="btn accent" onclick="submitMyPicks()">Submit My Picks</button>
                         </div>
 
-                        <div id="guest-code-output" style="display: none; margin-top: 1.5rem;">
-                            <p class="subtitle" style="margin-bottom: 0.5rem;">Send this code back to the organizer:</p>
-                            <textarea id="guest-code-text" class="code-area" readonly></textarea>
-                            <div class="actions center">
-                                <button class="btn secondary" onclick="copyMyPicks()">Copy Again</button>
-                            </div>
+                        <div id="guest-submitted" class="guest-submitted" style="display: none;">
+                            ✓ Submitted! You can change your picks above and submit again anytime.
                         </div>
                     </div>
                 </div>
@@ -515,27 +510,33 @@
         </div>
     </div>
 
-    <div id="invite-modal" class="modal">
-        <h3>Invite Players</h3>
+    <div id="workspace-modal" class="modal">
+        <h3>Your Workspace Key</h3>
         <p style="color: var(--text-muted); line-height: 1.5; font-size: 0.9rem; margin-bottom: 1rem;">
-            Share this link. Each player picks their name, makes their choices, and sends you back a code to import.
+            Enter a key to load your saved sessions. Use the same key on any device to see the same sessions
+            (e.g. <em>aaron-gamenight</em>). It's a shared label, not a password.
         </p>
-        <input type="text" id="invite-link-input" readonly onclick="this.select()">
+        <input type="text" id="workspace-input" placeholder="e.g. aaron-gamenight"
+            onkeypress="handleEnter(event, confirmWorkspaceKey)">
         <div class="actions right">
-            <button class="btn" onclick="closeModals()">Close</button>
-            <button class="btn primary" onclick="copyInviteLink()">Copy Link</button>
+            <button class="btn" onclick="closeModals()">Cancel</button>
+            <button class="btn primary" onclick="confirmWorkspaceKey()">Use Workspace</button>
         </div>
     </div>
 
-    <div id="import-modal" class="modal">
-        <h3>Import Picks</h3>
+    <div id="room-modal" class="modal">
+        <h3>Live Room <span id="room-code-label" class="room-code-pill"></span></h3>
         <p style="color: var(--text-muted); line-height: 1.5; font-size: 0.9rem; margin-bottom: 1rem;">
-            Paste one or more codes from players (one per line). Each is matched to a player by name.
+            Share this link. Players pick their name and submit — their picks fill in here live.
         </p>
-        <textarea id="import-code-input" class="code-area" placeholder="Paste codes here..."></textarea>
-        <div class="actions right">
-            <button class="btn" onclick="closeModals()">Cancel</button>
-            <button class="btn primary" onclick="confirmImport()">Import</button>
+        <input type="text" id="room-link-input" readonly onclick="this.select()">
+        <div id="room-status-list" class="room-status" style="margin-bottom: 1.5rem;"></div>
+        <div class="actions space-between">
+            <button class="btn danger" onclick="closeLiveRoom()">Close Room</button>
+            <div style="display: flex; gap: 0.5rem;">
+                <button class="btn" onclick="closeModals()">Done</button>
+                <button class="btn primary" onclick="copyRoomLink()">Copy Link</button>
+            </div>
         </div>
     </div>
 
@@ -571,7 +572,10 @@
         </div>
     </template>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
     <script src="script.js"></script>
+    <script src="rooms.js"></script>
 </body>
 
 </html>
