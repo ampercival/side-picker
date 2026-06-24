@@ -826,6 +826,19 @@ function calculateOptimization() {
     }
 }
 
+// Go back to the players view and reopen the room for changes: clearing the
+// published results flips any guests back from the results view to the picker.
+function reopenForChanges() {
+    if (state.results) {
+        state.results = null;
+        if (activeSessionName) {
+            sessionsCache[activeSessionName] = currentSessionObject();
+            upsertSessionToDb(activeSessionName, sessionsCache[activeSessionName]);
+        }
+    }
+    switchView('view-players');
+}
+
 const delay = ms => new Promise(res => setTimeout(res, ms));
 
 async function postToDiscord(url, payload) {

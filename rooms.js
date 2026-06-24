@@ -160,6 +160,7 @@ async function deletePresetFromDb(name) {
 // ---------------------------------------------------------------------------
 let guestPick = { id: 'guest', name: '', preferences: [], bans: [], noPreference: false };
 let guestSession = null; // { code, factions, roster, sessionName, gameTitle }
+let guestShowingResults = false; // tracks whether the guest is on the results view
 
 // ---------------------------------------------------------------------------
 // Organizer: live room
@@ -321,33 +322,6 @@ function deactivateRoomSync() {
     updateRoomBanner();
 }
 
-async function closeLiveRoom() {
-    showConfirm(
-        'Close Live Room?',
-        'This stops sharing and deletes submitted picks from the server. Your session and player setup stay. Continue?',
-        async () => {
-            const sb = getSupabaseClient();
-            const code = state.roomCode;
-            if (sb && code) {
-                // Delete submissions first (they reference the session's room_code),
-                // then clear the code on the session.
-                await sb.from('submissions').delete().eq('room_code', code);
-            }
-            state.roomCode = '';
-            if (activeSessionName) {
-                sessionsCache[activeSessionName] = currentSessionObject();
-                await upsertSessionToDb(activeSessionName, sessionsCache[activeSessionName]);
-            }
-            autoSave();
-            deactivateRoomSync();
-            closeModals();
-            showToast('info', 'Room Closed', 'Sharing stopped.');
-        },
-        'Close Room',
-        'danger'
-    );
-}
-
 // Show/hide the "live room active" banner on the players view.
 function updateRoomBanner() {
     const banner = get('room-banner');
@@ -430,16 +404,8 @@ async function enterRoomGuestMode(code) {
         banner.style.display = 'none';
     }
 
-    // Stay in sync: flip to results the moment the organizer optimizes.
-    subscribeGuestToSession(code);
-
-    // If results are already published, show them; otherwise the pick UI.
-    if (guestResultsReady(guestSession.results)) {
-        enterSharedResultsMode(guestSession.results);
-        return;
-    }
-
-    // Name dropdown from the roster.
+    // Name dropdown from the roster + drag wiring — always set up so we can
+    // toggle between picks and results live as the organizer optimizes/reopens.
     const select = get('guest-name-select');
     guestSession.roster.forEach(name => {
         const opt = document.createElement('option');
@@ -447,18 +413,33 @@ async function enterRoomGuestMode(code) {
         opt.textContent = name;
         select.appendChild(opt);
     });
-
-    // Wire drag-and-drop once; <ul>s are static, items added dynamically.
     setupDragAndDrop(get('guest-available'), get('guest-preference'), get('guest-banned'), guestPick);
 
-    renderGuestPicks(); // nothing shown until a name is picked
+    // Stay in sync: flip between picks and results as the organizer optimizes/reopens.
+    subscribeGuestToSession(code);
+
+    if (guestResultsReady(guestSession.results)) {
+        guestShowingResults = true;
+        enterSharedResultsMode(guestSession.results);
+    } else {
+        guestShowingResults = false;
+        renderGuestPicks(); // nothing shown until a name is picked
+    }
 }
 
 function guestResultsReady(results) {
     return results && Array.isArray(results.r) && results.r.length > 0;
 }
 
-// Guests watch their session row so published results appear live.
+// Switch the guest back to the pick UI (e.g. when the organizer reopens the room).
+function showGuestPicks() {
+    isSharedMode = false;
+    document.body.classList.remove('shared-mode');
+    switchView('view-guest');
+    renderGuestPicks();
+}
+
+// Guests watch their session row so results appear/clear live.
 function subscribeGuestToSession(code) {
     const sb = getSupabaseClient();
     if (!sb) return;
@@ -468,7 +449,13 @@ function subscribeGuestToSession(code) {
             { event: '*', schema: 'public', table: 'sessions', filter: `room_code=eq.${code}` },
             payload => {
                 const results = payload.new && payload.new.results;
-                if (guestResultsReady(results)) enterSharedResultsMode(results);
+                if (guestResultsReady(results)) {
+                    guestShowingResults = true;
+                    enterSharedResultsMode(results); // show/refresh results
+                } else if (guestShowingResults) {
+                    guestShowingResults = false;
+                    showGuestPicks(); // organizer reopened the room for changes
+                }
             })
         .subscribe();
 }

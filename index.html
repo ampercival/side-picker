@@ -247,7 +247,7 @@
                     <div class="actions center">
                         <button class="btn primary" onclick="openResultsShareModal()">Share Results Link</button>
                         <button class="btn secondary" onclick="goHome()">Sessions</button>
-                        <button class="btn text" onclick="prevStep('view-players')">Back to Players</button>
+                        <button class="btn text" onclick="reopenForChanges()">Back to Players</button>
                     </div>
                 </div>
             </section>
@@ -488,12 +488,9 @@
         </p>
         <input type="text" id="room-link-input" readonly onclick="this.select()">
         <div id="room-status-list" class="room-status" style="margin-bottom: 1.5rem;"></div>
-        <div class="actions space-between">
-            <button class="btn danger" onclick="closeLiveRoom()">Close Room</button>
-            <div style="display: flex; gap: 0.5rem;">
-                <button class="btn" onclick="closeModals()">Done</button>
-                <button class="btn primary" onclick="copyRoomLink()">Copy Link</button>
-            </div>
+        <div class="actions right">
+            <button class="btn" onclick="closeModals()">Done</button>
+            <button class="btn primary" onclick="copyRoomLink()">Copy Link</button>
         </div>
     </div>
 
