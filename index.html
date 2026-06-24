@@ -117,7 +117,24 @@
             <section id="view-factions" class="view">
                 <div class="card">
                     <h2>Step 1: Setup Factions</h2>
-                    <p class="subtitle">Choose a game or enter factions manually.</p>
+                    <p class="subtitle">Name your session, pick a game, then choose factions.</p>
+
+                    <div class="session-meta"
+                        style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 1.5rem;">
+                        <div style="flex: 1; min-width: 180px;">
+                            <label for="session-name-input"
+                                style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.9rem;">Session
+                                Name</label>
+                            <input type="text" id="session-name-input" placeholder="e.g. Friday Game Night"
+                                oninput="onSessionMetaInput()">
+                        </div>
+                        <div style="flex: 1; min-width: 180px;">
+                            <label for="game-title-input"
+                                style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.9rem;">Game</label>
+                            <input type="text" id="game-title-input" placeholder="e.g. Here I Stand"
+                                oninput="onSessionMetaInput()">
+                        </div>
+                    </div>
 
                     <div class="preset-selector" style="margin-bottom: 1.5rem;">
                         <label for="game-select"
@@ -273,6 +290,11 @@
             <!-- Guest View: shown only when opened via an invite link -->
             <section id="view-guest" class="view">
                 <div class="card">
+                    <div id="guest-banner" class="guest-banner" style="display: none;">
+                        <div class="gb-session" id="guest-session-name"></div>
+                        <div class="gb-game" id="guest-game-title"></div>
+                    </div>
+
                     <h2>Make Your Picks</h2>
                     <p class="subtitle">Pick your name, rank the factions, then copy your picks and send them back to
                         the organizer.</p>

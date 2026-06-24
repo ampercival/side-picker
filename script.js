@@ -2,6 +2,8 @@
 const state = {
     factions: [],
     players: [], // { id, name, preferences: [], bans: [] }
+    sessionName: '', // Label for this game night (shown to players)
+    gameTitle: '', // The game being played (shown to players)
     discord: {
         url: '',
         enabled: false
@@ -244,6 +246,8 @@ function loadPreset() {
 
     const applyPreset = () => {
         state.factions = [...factions];
+        state.gameTitle = name; // Preset name doubles as the game title.
+        syncSessionMetaInputs();
         autoSave();
         renderFactions();
         updateAllPlayerFactions();
@@ -262,6 +266,20 @@ function loadPreset() {
     } else {
         applyPreset();
     }
+}
+
+// --- Session Metadata (name + game) ---
+function onSessionMetaInput() {
+    state.sessionName = get('session-name-input').value;
+    state.gameTitle = get('game-title-input').value;
+    autoSave();
+}
+
+function syncSessionMetaInputs() {
+    const nameInput = get('session-name-input');
+    const gameInput = get('game-title-input');
+    if (nameInput) nameInput.value = state.sessionName || '';
+    if (gameInput) gameInput.value = state.gameTitle || '';
 }
 
 function addFaction() {
@@ -1088,6 +1106,12 @@ function displayResults(result) {
 
     get('total-score').textContent = `${percent}%`;
 
+    const sessionName = (state.sessionName || '').trim();
+    const gameTitle = (state.gameTitle || '').trim();
+    const subtitleParts = [sessionName, gameTitle].filter(Boolean);
+    get('results-subtitle').textContent =
+        subtitleParts.length ? subtitleParts.join(' · ') : 'The happiness algorithm has spoken.';
+
     const goalEl = document.querySelector('input[name="opt-mode"]:checked');
     const goalText = goalEl ? goalEl.parentElement.querySelector('strong').textContent : '';
 
@@ -1108,7 +1132,7 @@ function displayResults(result) {
         shareRows.push({ n: p.name, f: assignedFaction, note: note, s: score });
     });
 
-    lastResults = { v: 1, t: activeSessionName || '', g: goalText, pct: percent, r: shareRows };
+    lastResults = { v: 1, t: sessionName, gm: gameTitle, g: goalText, pct: percent, r: shareRows };
 }
 
 function resetApp() {
@@ -1150,6 +1174,8 @@ function autoSave() {
     const data = {
         factions: state.factions,
         players: state.players,
+        sessionName: state.sessionName,
+        gameTitle: state.gameTitle,
         discord: state.discord,
         activeSessionName: activeSessionName,
         timestamp: Date.now()
@@ -1162,6 +1188,8 @@ function autoSave() {
         sessions[activeSessionName] = {
             factions: state.factions,
             players: state.players,
+            sessionName: state.sessionName,
+            gameTitle: state.gameTitle,
             date: new Date().toISOString()
         };
         localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
@@ -1175,11 +1203,14 @@ function loadAutoSave() {
             const data = JSON.parse(json);
             if (data.factions) state.factions = data.factions;
             if (data.players) state.players = data.players;
+            if (data.sessionName) state.sessionName = data.sessionName;
+            if (data.gameTitle) state.gameTitle = data.gameTitle;
             if (data.discord) state.discord = data.discord; // Restore Discord settings
             if (data.activeSessionName) activeSessionName = data.activeSessionName;
 
             renderFactions();
             renderPlayers();
+            syncSessionMetaInputs();
 
             // Restore Discord UI inputs
             if (state.discord) {
@@ -1236,15 +1267,19 @@ function getSessions() {
 function saveSession(name) {
     if (!name) return showToast('error', 'Missing Name', "Please enter a name.");
 
+    state.sessionName = name; // The save name is the session's name.
     const sessions = getSessions();
     sessions[name] = {
         factions: state.factions,
         players: state.players,
+        sessionName: name,
+        gameTitle: state.gameTitle,
         date: new Date().toISOString()
     };
 
     localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
     activeSessionName = name; // Future edits sync into this session.
+    syncSessionMetaInputs();
     autoSave();
     showToast('success', 'Saved', `Session "${name}" saved!`);
     closeModals();
@@ -1283,10 +1318,13 @@ function loadSession(name) {
             () => {
                 state.factions = data.factions || [];
                 state.players = data.players || [];
+                state.sessionName = data.sessionName || name;
+                state.gameTitle = data.gameTitle || '';
                 activeSessionName = name;
                 renderFactions();
                 renderPlayers();
                 updateAllPlayerFactions();
+                syncSessionMetaInputs();
                 autoSave(); // Sync to autosave
                 closeModals();
                 showToast('success', 'Loaded', `Session "${name}" loaded.`);
@@ -1311,13 +1349,15 @@ function renderHomeSessions() {
     const continueWrap = get('home-continue');
     if (hasWorking) {
         continueWrap.style.display = 'block';
-        get('home-continue-label').textContent = activeSessionName
-            ? `Continue "${activeSessionName}"`
+        const workingName = (state.sessionName || '').trim();
+        get('home-continue-label').textContent = workingName
+            ? `Continue "${workingName}"`
             : 'Continue current setup';
         const fc = state.factions.length;
         const pc = state.players.length;
+        const game = (state.gameTitle || '').trim();
         get('home-continue-meta').textContent =
-            `${fc} faction${fc === 1 ? '' : 's'} · ${pc} player${pc === 1 ? '' : 's'}`;
+            `${game ? game + ' · ' : ''}${fc} faction${fc === 1 ? '' : 's'} · ${pc} player${pc === 1 ? '' : 's'}`;
     } else {
         continueWrap.style.display = 'none';
     }
@@ -1339,11 +1379,12 @@ function renderHomeSessions() {
         const clone = template.content.cloneNode(true);
         const card = clone.querySelector('.session-card');
 
-        clone.querySelector('.sc-name').textContent = name;
+        clone.querySelector('.sc-name').textContent = (data.sessionName || '').trim() || name;
         const fc = (data.factions || []).length;
         const pc = (data.players || []).length;
+        const game = (data.gameTitle || '').trim();
         clone.querySelector('.sc-meta').textContent =
-            `${fc} faction${fc === 1 ? '' : 's'} · ${pc} player${pc === 1 ? '' : 's'}`;
+            `${game ? game + ' · ' : ''}${fc} faction${fc === 1 ? '' : 's'} · ${pc} player${pc === 1 ? '' : 's'}`;
         clone.querySelector('.sc-date').textContent = new Date(data.date).toLocaleString();
 
         if (name === activeSessionName) card.classList.add('active-session');
@@ -1375,10 +1416,13 @@ function resumeSession(name) {
 
     state.factions = data.factions || [];
     state.players = data.players || [];
+    state.sessionName = data.sessionName || name;
+    state.gameTitle = data.gameTitle || '';
     activeSessionName = name;
 
     renderFactions();
     updateAllPlayerFactions(); // Cleans stale faction refs and re-renders player cards.
+    syncSessionMetaInputs();
     autoSave();
 
     switchView('view-players');
@@ -1389,12 +1433,16 @@ function startNewSession() {
     const proceed = () => {
         state.factions = [];
         state.players = [];
+        state.sessionName = '';
+        state.gameTitle = '';
         activeSessionName = null;
         get('game-select').value = 'custom';
         renderFactions();
         renderPlayers();
+        syncSessionMetaInputs();
         autoSave();
         switchView('view-factions');
+        get('session-name-input').focus();
     };
 
     if (state.factions.length > 0 || state.players.length > 0) {
@@ -1416,7 +1464,7 @@ function openSaveModal() {
     get('modal-overlay').classList.add('active');
     get('save-modal').classList.add('active');
     const input = get('save-name-input');
-    input.value = '';
+    input.value = (state.sessionName || '').trim();
     renderSessionList('save-list', (name) => {
         input.value = name;
         input.focus();
@@ -1714,7 +1762,13 @@ function openInviteModal() {
         return;
     }
 
-    const payload = { v: 1, f: state.factions, r: names };
+    const payload = {
+        v: 1,
+        f: state.factions,
+        r: names,
+        s: (state.sessionName || '').trim(),
+        gm: (state.gameTitle || '').trim()
+    };
     const base = location.origin + location.pathname;
     const link = `${base}#invite=${encodeData(payload)}`;
 
@@ -1820,6 +1874,18 @@ function enterGuestMode(invite) {
 
     guestSession = { factions: invite.f, roster: invite.r };
     state.factions = [...invite.f]; // Lets the shared list/drag helpers work unchanged.
+
+    // Show the session name and game so players know what they're picking for.
+    const banner = get('guest-banner');
+    const sessionName = (invite.s || '').trim();
+    const gameTitle = (invite.gm || '').trim();
+    if (sessionName || gameTitle) {
+        get('guest-session-name').textContent = sessionName;
+        get('guest-game-title').textContent = gameTitle ? `🎲 ${gameTitle}` : '';
+        banner.style.display = 'block';
+    } else {
+        banner.style.display = 'none';
+    }
 
     // Populate the name dropdown from the roster.
     const select = get('guest-name-select');
@@ -1966,9 +2032,10 @@ function enterSharedResultsMode(payload) {
     container.innerHTML = '';
     get('total-score').textContent = `${payload.pct != null ? payload.pct : 0}%`;
 
-    // Show the session name / goal as context, if present.
+    // Show the session name / game / goal as context, if present.
     const parts = [];
     if (payload.t) parts.push(payload.t);
+    if (payload.gm) parts.push(payload.gm);
     if (payload.g) parts.push(`Goal: ${payload.g}`);
     get('results-subtitle').textContent = parts.length ? parts.join(' · ') : 'Final assignments';
 
