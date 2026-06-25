@@ -5,11 +5,7 @@ const state = {
     sessionName: '', // Label for this game night (shown to players)
     gameTitle: '', // The game being played (shown to players)
     roomCode: '', // Live-room code (Supabase), if a room is open for this session
-    results: null, // Last optimization snapshot (published to the room)
-    discord: {
-        url: '',
-        enabled: false
-    }
+    results: null // Last optimization snapshot (published to the room)
 };
 
 
@@ -1032,14 +1028,11 @@ async function calculateOptimization() {
 
             // Publish results to the session so the room link shows them to players.
             state.results = lastResults;
+            autoSave(); // keep the localStorage blob in sync so a refresh can't clobber results
             if (activeSessionName) {
+                // Push immediately so the room flips to results without waiting for the debounce.
                 sessionsCache[activeSessionName] = currentSessionObject();
                 upsertSessionToDb(activeSessionName, sessionsCache[activeSessionName]);
-            }
-
-            // Discord Webhook
-            if (state.discord && state.discord.enabled && state.discord.url) {
-                sendToDiscord(state.discord.url, result, state.players);
             }
         } else {
             showToast('error', 'Optimization Failed', "Could not find a valid assignment! Try removing some bans.");
@@ -1054,101 +1047,14 @@ async function calculateOptimization() {
 function reopenForChanges() {
     if (state.results) {
         state.results = null;
+        autoSave(); // keep the localStorage blob in sync so a refresh can't re-publish results
         if (activeSessionName) {
+            // Push immediately so the room flips back to the picker without waiting for the debounce.
             sessionsCache[activeSessionName] = currentSessionObject();
             upsertSessionToDb(activeSessionName, sessionsCache[activeSessionName]);
         }
     }
     switchView('view-players');
-}
-
-const delay = ms => new Promise(res => setTimeout(res, ms));
-
-async function postToDiscord(url, payload) {
-    try {
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        if (!response.ok) console.error("Discord Error:", response.status);
-    } catch (e) {
-        console.error("Discord Network Error:", e);
-    }
-}
-
-async function sendToDiscord(url, result, players) {
-    // 1. Intro Message
-    const goalText = document.querySelector('input[name="opt-mode"]:checked').parentElement.querySelector('strong').textContent;
-    await postToDiscord(url, {
-        content: `🎲 **Side Picker Optimization Initiated**\n**Goal:** ${goalText}`
-    });
-
-    // 2. Player Details (Sequence)
-    // Sort players for consistent order
-    const sortedPlayers = [...players].sort((a, b) => a.name.localeCompare(b.name));
-
-    for (const p of sortedPlayers) {
-        await delay(300); // Slight delay for ordering
-
-        let prefs;
-        if (p.noPreference) {
-            prefs = p.preferences.length > 0
-                ? "• " + p.preferences.join('\n• ')
-                : "*No preferences selected*";
-        } else {
-            prefs = p.preferences.length > 0
-                ? p.preferences.map((f, i) => `${i + 1}. ${f}`).join('\n')
-                : "*No strict preferences*";
-        }
-
-        const bans = p.bans.length > 0
-            ? p.bans.join(', ')
-            : "*No bans*";
-
-        await postToDiscord(url, {
-            embeds: [{
-                author: { name: p.name },
-                color: 10181046, // Purple-ish
-                fields: [
-                    { name: "💚 Preferences", value: prefs, inline: true },
-                    { name: "❌ Bans", value: bans, inline: true }
-                ]
-            }]
-        });
-    }
-
-    // 3. Final Results
-    await delay(500);
-
-    const fields = [];
-    sortedPlayers.forEach(p => {
-        const faction = result.assignment[p.id];
-        const score = getScore(p, faction);
-        let icon = "😐";
-        if (score > 5) icon = "🤩";
-        else if (score > 0) icon = "🙂";
-        else if (score < 0) icon = "🤬";
-
-        fields.push({
-            name: `${icon} ${p.name}`,
-            value: `**${faction}**`,
-            inline: true
-        });
-    });
-
-    await postToDiscord(url, {
-        embeds: [{
-            title: "🏆 Final Assignments",
-            description: `**Group Happiness:** ${get('total-score').textContent}`,
-            color: 3900382, // #3b82f6 (Primary Blueish)
-            fields: fields,
-            footer: {
-                text: "Side Picker • Game Night Optimized"
-            },
-            timestamp: new Date().toISOString()
-        }]
-    });
 }
 
 // Scores
@@ -1365,10 +1271,9 @@ function displayResults(result) {
 
 // --- Session Management ---
 // Named sessions live in Supabase (scoped by workspace key); see rooms.js.
-// AUTOSAVE_KEY is just a local cache of the *current working setup* for instant
-// restore on refresh — it is not the session store.
-
-const AUTOSAVE_KEY = 'side_picker_autosave';
+// Supabase is the single source of truth — there is no localStorage copy of the
+// working state. The home screen lists sessions from the DB and resuming loads
+// the full session from the DB.
 
 // Name of the saved session currently being worked on, if any. Changes are
 // persisted back into it live (debounced), so imported picks etc. need no manual save.
@@ -1386,27 +1291,13 @@ function currentSessionObject() {
     };
 }
 
-// Auto-save on every change for resilience.
+// Auto-save on every change: update the in-memory cache now and push to the
+// database on a short debounce. Supabase is the source of truth.
 let _sessionSyncTimer = null;
 function autoSave() {
     // In guest mode there is no organizer state to persist (the room DB is the source of truth).
     if (isGuestMode) return;
 
-    // Local cache of the working setup (fast refresh-restore only).
-    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify({
-        factions: state.factions,
-        players: state.players,
-        sessionName: state.sessionName,
-        gameTitle: state.gameTitle,
-        roomCode: state.roomCode,
-        results: state.results,
-        discord: state.discord,
-        activeSessionName: activeSessionName,
-        timestamp: Date.now()
-    }));
-
-    // Keep the active named session fresh: update the in-memory cache now,
-    // and push to the database on a short debounce.
     if (activeSessionName) {
         sessionsCache[activeSessionName] = currentSessionObject();
         clearTimeout(_sessionSyncTimer);
@@ -1420,34 +1311,16 @@ function autoSave() {
     if (state.roomCode && typeof renderRoomStatus === 'function') renderRoomStatus();
 }
 
-function loadAutoSave() {
-    const json = localStorage.getItem(AUTOSAVE_KEY);
-    if (json) {
-        try {
-            const data = JSON.parse(json);
-            if (data.factions) state.factions = data.factions;
-            if (data.players) state.players = data.players;
-            if (data.sessionName) state.sessionName = data.sessionName;
-            if (data.gameTitle) state.gameTitle = data.gameTitle;
-            if (data.roomCode) state.roomCode = data.roomCode;
-            if (data.results) state.results = data.results;
-            if (data.discord) state.discord = data.discord; // Restore Discord settings
-            if (data.activeSessionName) activeSessionName = data.activeSessionName;
-
-            renderFactions();
-            renderPlayers();
-            syncSessionMetaInputs();
-
-            // Restore Discord UI inputs
-            if (state.discord) {
-                get('discord-webhook').value = state.discord.url || '';
-                get('send-to-discord').checked = state.discord.enabled || false;
-            }
-
-            // Don't auto-switch view, let user start fresh but with data loaded
-        } catch (e) {
-            console.error("Failed to load autosave", e);
-        }
+// Flush any pending debounced save immediately (e.g. before the page unloads)
+// so an edit made within the debounce window isn't lost.
+function flushSession() {
+    if (_sessionSyncTimer) {
+        clearTimeout(_sessionSyncTimer);
+        _sessionSyncTimer = null;
+    }
+    if (activeSessionName && !isGuestMode) {
+        sessionsCache[activeSessionName] = currentSessionObject();
+        upsertSessionToDb(activeSessionName, sessionsCache[activeSessionName]);
     }
 }
 
@@ -1467,21 +1340,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     renderPresetOptions();
-    loadAutoSave();
     updateWorkspaceIndicator();
     initWorkspaceAndSessions(); // async: load sessions from DB (prompts for a workspace key if needed)
-    syncRoomForCurrentSession(); // Reconnect to a live room if this session has one
 
-    // Discord Listeners
-    get('discord-webhook').addEventListener('input', (e) => {
-        state.discord.url = e.target.value.trim();
-        autoSave();
-    });
-
-    get('send-to-discord').addEventListener('change', (e) => {
-        state.discord.enabled = e.target.checked;
-        autoSave();
-    });
+    // Don't lose an edit made within the debounce window if the page is closed.
+    window.addEventListener('beforeunload', flushSession);
 });
 
 async function initWorkspaceAndSessions() {
@@ -1676,8 +1539,34 @@ function resumeSession(name) {
     autoSave();
     syncRoomForCurrentSession();
 
-    switchView('view-players');
+    // Invariant: results present -> show results; otherwise the picker.
+    if (guestResultsReady(state.results)) {
+        showHostResults(state.results);
+    } else {
+        switchView('view-players');
+    }
     showToast('success', 'Resumed', `Loaded "${name}".`);
+}
+
+// Render the results view from a stored snapshot (e.g. on resume), keeping the
+// host's action buttons available — unlike the read-only shared/guest view.
+function showHostResults(payload) {
+    const container = get('results-container');
+    container.innerHTML = '';
+    get('total-score').textContent = `${payload.pct != null ? payload.pct : 0}%`;
+
+    const parts = [payload.t, payload.gm].filter(Boolean);
+    get('results-subtitle').textContent =
+        parts.length ? parts.join(' · ') : 'The happiness algorithm has spoken.';
+
+    (payload.r || []).forEach((row, index) => {
+        container.appendChild(buildResultCard({ name: row.n, faction: row.f, note: row.note, score: row.s, index }));
+    });
+
+    lastResults = payload; // keep Share Results Link working after a resume
+    isSharedMode = false;
+    document.body.classList.remove('shared-mode');
+    switchView('view-results');
 }
 
 // New Session: prompt for a name, then create it in the database.
