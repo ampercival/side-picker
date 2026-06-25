@@ -871,9 +871,26 @@ function estimateSearchCost(playerCount, factionCount) {
 }
 
 // Promise wrapper around showConfirm so we can `await` the user's choice.
+// Resolves true on confirm, false on cancel OR any other dismissal (e.g.
+// clicking the overlay backdrop) so the awaiting caller can never hang.
 function confirmAsync(title, message, btnText, btnClass) {
     return new Promise(resolve => {
-        showConfirm(title, message, () => resolve(true), btnText, btnClass, () => resolve(false));
+        const modal = get('confirm-modal');
+        let settled = false;
+        const finish = (val) => {
+            if (settled) return;
+            settled = true;
+            observer.disconnect();
+            resolve(val);
+        };
+        // Treat closing the modal by any means as cancel. The button handlers
+        // run synchronously (setting `settled`) before this observer's microtask
+        // fires, so an explicit confirm/cancel still wins over this fallback.
+        const observer = new MutationObserver(() => {
+            if (!modal.classList.contains('active')) finish(false);
+        });
+        observer.observe(modal, { attributes: true, attributeFilter: ['class'] });
+        showConfirm(title, message, () => finish(true), btnText, btnClass, () => finish(false));
     });
 }
 
@@ -898,7 +915,10 @@ function buildOptimizerWorker() {
         };
     `;
     const blob = new Blob([src], { type: 'application/javascript' });
-    return new Worker(URL.createObjectURL(blob));
+    const url = URL.createObjectURL(blob);
+    const worker = new Worker(url);
+    URL.revokeObjectURL(url); // Worker is already initialized; free the URL so it doesn't leak.
+    return worker;
 }
 
 // Run the solver off the main thread. Falls back to a synchronous run if Workers
@@ -960,6 +980,10 @@ function hideOptimizerSpinner() {
     if (el) el.style.display = 'none';
 }
 
+// Single-flight guard: a run owns the optimizer globals (worker/reject) for its
+// whole async span, so re-entry is ignored rather than orphaning a worker.
+let _optimizing = false;
+
 async function calculateOptimization() {
     if (state.players.length === 0) {
         showToast('error', 'No Players', "Add players first!");
@@ -971,50 +995,57 @@ async function calculateOptimization() {
         return;
     }
 
+    if (_optimizing) return; // a run is already in progress
+
     // Get Mode
     const mode = document.querySelector('input[name="opt-mode"]:checked').value; // 'total' or 'fairness'
 
-    // Heads-up before a potentially long search.
-    if (estimateSearchCost(state.players.length, state.factions.length) > OPT_WARN_THRESHOLD) {
-        const proceed = await confirmAsync(
-            'Large Optimization',
-            'This many players and factions could take a while to solve. It runs in the background and you can cancel — run it anyway?',
-            'Run Anyway',
-            'accent'
-        );
-        if (!proceed) return;
-    }
-
-    showOptimizerSpinner();
-    let result;
+    _optimizing = true;
     try {
-        result = await runOptimization(state.players, state.factions, mode);
-    } catch (e) {
+        // Heads-up before a potentially long search.
+        if (estimateSearchCost(state.players.length, state.factions.length) > OPT_WARN_THRESHOLD) {
+            const proceed = await confirmAsync(
+                'Large Optimization',
+                'This many players and factions could take a while to solve. It runs in the background and you can cancel — run it anyway?',
+                'Run Anyway',
+                'accent'
+            );
+            if (!proceed) return;
+        }
+
+        showOptimizerSpinner();
+        let result;
+        try {
+            result = await runOptimization(state.players, state.factions, mode);
+        } catch (e) {
+            hideOptimizerSpinner();
+            if (e && e.message !== 'cancelled') {
+                showToast('error', 'Optimization Failed', e.message || 'Something went wrong.');
+            }
+            return;
+        }
         hideOptimizerSpinner();
-        if (e && e.message !== 'cancelled') {
-            showToast('error', 'Optimization Failed', e.message || 'Something went wrong.');
-        }
-        return;
-    }
-    hideOptimizerSpinner();
 
-    if (result.success) {
-        displayResults(result); // sets lastResults
-        switchView('view-results');
+        if (result.success) {
+            displayResults(result); // sets lastResults
+            switchView('view-results');
 
-        // Publish results to the session so the room link shows them to players.
-        state.results = lastResults;
-        if (activeSessionName) {
-            sessionsCache[activeSessionName] = currentSessionObject();
-            upsertSessionToDb(activeSessionName, sessionsCache[activeSessionName]);
-        }
+            // Publish results to the session so the room link shows them to players.
+            state.results = lastResults;
+            if (activeSessionName) {
+                sessionsCache[activeSessionName] = currentSessionObject();
+                upsertSessionToDb(activeSessionName, sessionsCache[activeSessionName]);
+            }
 
-        // Discord Webhook
-        if (state.discord && state.discord.enabled && state.discord.url) {
-            sendToDiscord(state.discord.url, result, state.players);
+            // Discord Webhook
+            if (state.discord && state.discord.enabled && state.discord.url) {
+                sendToDiscord(state.discord.url, result, state.players);
+            }
+        } else {
+            showToast('error', 'Optimization Failed', "Could not find a valid assignment! Try removing some bans.");
         }
-    } else {
-        showToast('error', 'Optimization Failed', "Could not find a valid assignment! Try removing some bans.");
+    } finally {
+        _optimizing = false;
     }
 }
 
@@ -1383,6 +1414,10 @@ function autoSave() {
             if (activeSessionName) upsertSessionToDb(activeSessionName, sessionsCache[activeSessionName]);
         }, 1200);
     }
+
+    // If a live room is open, host-side pick changes affect who counts as
+    // "submitted" (Available box empty), so refresh the room status display.
+    if (state.roomCode && typeof renderRoomStatus === 'function') renderRoomStatus();
 }
 
 function loadAutoSave() {

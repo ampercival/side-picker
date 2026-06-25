@@ -153,7 +153,6 @@ let guestShowingResults = false; // tracks whether the guest is on the results v
 // Organizer: live room
 // ---------------------------------------------------------------------------
 let roomChannel = null;     // Realtime subscription
-let roomStatus = {};        // player name -> true once they've submitted
 
 function generateRoomCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no ambiguous 0/O/1/I
@@ -225,21 +224,32 @@ async function copyRoomLink() {
     }
 }
 
+// A player counts as "submitted" once every faction is sorted into Preferences
+// or Banned (nothing left in Available). Derived from the player's data, so it
+// reflects both their own submitted picks and any the host fills in for them.
+function playerHasSubmitted(player, factions) {
+    if (!player || !factions || factions.length === 0) return false;
+    const prefs = player.preferences || [];
+    const bans = player.bans || [];
+    return factions.every(f => prefs.includes(f) || bans.includes(f));
+}
+
 function renderRoomStatus() {
     const container = get('room-status-list');
     if (!container) return;
     container.innerHTML = '';
 
-    const names = state.players.map(p => p.name);
-    const submitted = names.filter(n => roomStatus[n]).length;
-    get('room-banner-count').textContent = `${submitted}/${names.length} submitted`;
+    const players = state.players || [];
+    const submitted = players.filter(p => playerHasSubmitted(p, state.factions)).length;
+    const countEl = get('room-banner-count');
+    if (countEl) countEl.textContent = `${submitted}/${players.length} submitted`;
 
-    names.forEach(name => {
+    players.forEach(p => {
         const row = document.createElement('div');
         row.className = 'room-status-row';
-        const done = !!roomStatus[name];
+        const done = playerHasSubmitted(p, state.factions);
         row.innerHTML = `
-            <span class="rs-name">${escapeHtml(name)}</span>
+            <span class="rs-name">${escapeHtml(p.name)}</span>
             <span class="rs-state ${done ? 'done' : 'waiting'}">${done ? '✓ submitted' : 'waiting…'}</span>
         `;
         container.appendChild(row);
@@ -253,7 +263,6 @@ function applySubmissionToPlayer(row, { render = true } = {}) {
     player.preferences = (row.preferences || []).filter(isValid);
     player.bans = (row.bans || []).filter(isValid);
     player.noPreference = !!row.no_preference;
-    roomStatus[row.player_name] = true;
     if (render) {
         autoSave();
         renderPlayers();
@@ -268,7 +277,6 @@ async function refreshRoomSubmissions() {
         showToast('error', 'Room Error', error.message);
         return;
     }
-    roomStatus = {};
     (data || []).forEach(row => applySubmissionToPlayer(row, { render: false }));
     autoSave();
     renderPlayers();
@@ -294,7 +302,6 @@ async function activateRoomSync() {
                     renderRoomStatus();
                     showToast('info', 'Pick Received', `${payload.new.player_name} submitted.`);
                 } else if (payload.old) {
-                    roomStatus[payload.old.player_name] = false;
                     renderRoomStatus();
                 }
             })
@@ -309,7 +316,6 @@ function deactivateRoomSync() {
         sb.removeChannel(roomChannel);
     }
     roomChannel = null;
-    roomStatus = {};
     updateRoomBanner();
 }
 
@@ -376,12 +382,15 @@ async function enterRoomGuestMode(code) {
     guestSession = {
         code,
         factions: session.factions || [],
+        players: session.players || [],
         roster: (session.players || []).map(p => p.name),
         sessionName: session.session_name || '',
         gameTitle: session.game_title || '',
         results: session.results || null
     };
     state.factions = [...guestSession.factions]; // Lets the shared list/drag helpers work unchanged.
+
+    renderGuestRoster(); // who's submitted so far (nudges stragglers)
 
     // Banner with session name + game.
     const banner = get('guest-banner');
@@ -422,6 +431,30 @@ function guestResultsReady(results) {
     return results && Array.isArray(results.r) && results.r.length > 0;
 }
 
+// Show players a live "who's submitted" list so stragglers know to send picks.
+// Derived from the session's players (same source the host uses), so it counts
+// both self-submitted picks and any the host fills in.
+function renderGuestRoster() {
+    const el = get('guest-roster');
+    if (!el || !guestSession) return;
+
+    const players = guestSession.players || [];
+    const factions = guestSession.factions || [];
+    if (players.length === 0) {
+        el.style.display = 'none';
+        return;
+    }
+
+    const done = players.filter(p => playerHasSubmitted(p, factions)).length;
+    const chips = players.map(p => {
+        const ok = playerHasSubmitted(p, factions);
+        return `<span class="gr-chip ${ok ? 'done' : ''}">${ok ? '✓ ' : ''}${escapeHtml(p.name)}</span>`;
+    }).join('');
+
+    el.innerHTML = `<div class="gr-head">${done}/${players.length} submitted</div><div class="gr-chips">${chips}</div>`;
+    el.style.display = 'block';
+}
+
 // Switch the guest back to the pick UI (e.g. when the organizer reopens the room).
 function showGuestPicks() {
     isSharedMode = false;
@@ -439,6 +472,13 @@ function subscribeGuestToSession(code) {
         .on('postgres_changes',
             { event: '*', schema: 'public', table: 'sessions', filter: `room_code=eq.${code}` },
             payload => {
+                // Keep the "who's submitted" roster current as picks land.
+                if (payload.new && guestSession) {
+                    if (payload.new.players) guestSession.players = payload.new.players;
+                    if (payload.new.factions) guestSession.factions = payload.new.factions;
+                    renderGuestRoster();
+                }
+
                 const results = payload.new && payload.new.results;
                 if (guestResultsReady(results)) {
                     guestShowingResults = true;

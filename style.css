@@ -1160,6 +1160,46 @@ body.shared-mode #view-results .actions {
     font-weight: 500;
 }
 
+/* Guest "who's submitted" roster */
+.guest-roster {
+    margin-bottom: 1.5rem;
+    padding: 0.85rem 1rem;
+    background: var(--surface-dim);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.guest-roster .gr-head {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.6rem;
+}
+
+.guest-roster .gr-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.guest-roster .gr-chip {
+    font-size: 0.85rem;
+    padding: 3px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+    color: var(--text-muted);
+}
+
+.guest-roster .gr-chip.done {
+    border-color: rgba(16, 185, 129, 0.4);
+    background: rgba(16, 185, 129, 0.12);
+    color: var(--success);
+    font-weight: 500;
+}
+
 .code-area {
     width: 100%;
     min-height: 90px;
