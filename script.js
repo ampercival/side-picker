@@ -516,31 +516,88 @@ function refreshListsForCard(player, availableList, prefList, banList) {
     prefList.innerHTML = '';
     banList.innerHTML = '';
 
-    const createLi = (name) => {
+    // Re-render after a button action (autoSave is a no-op in guest mode).
+    const rerender = () => {
+        refreshListsForCard(player, availableList, prefList, banList);
+        autoSave();
+    };
+
+    // Move a faction between lists (drag-free, keyboard/tap accessible).
+    const moveTo = (faction, dest) => {
+        player.preferences = player.preferences.filter(f => f !== faction);
+        player.bans = player.bans.filter(f => f !== faction);
+        if (dest === 'pref') player.preferences.push(faction);
+        else if (dest === 'ban') player.bans.push(faction);
+        rerender();
+    };
+
+    // Reorder within the ranked preference list (dir: -1 up, +1 down).
+    const reorder = (faction, dir) => {
+        const i = player.preferences.indexOf(faction);
+        const j = i + dir;
+        if (i < 0 || j < 0 || j >= player.preferences.length) return;
+        [player.preferences[i], player.preferences[j]] = [player.preferences[j], player.preferences[i]];
+        rerender();
+    };
+
+    const makeBtn = (label, title, onClick) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'li-action';
+        b.innerHTML = label;
+        b.title = title;
+        b.setAttribute('aria-label', title);
+        b.draggable = false;
+        b.onclick = (e) => { e.stopPropagation(); onClick(); };
+        return b;
+    };
+
+    const createLi = (name, listType) => {
         const li = document.createElement('li');
-        li.textContent = name;
         li.draggable = true;
+        li.dataset.faction = name; // Read by drag commit instead of textContent.
+
+        const label = document.createElement('span');
+        label.className = 'li-label';
+        label.textContent = name;
+        li.appendChild(label);
+
+        const actions = document.createElement('span');
+        actions.className = 'li-actions';
+
+        if (listType === 'available') {
+            actions.appendChild(makeBtn('♥', `Prefer ${name}`, () => moveTo(name, 'pref')));
+            actions.appendChild(makeBtn('⊘', `Ban ${name}`, () => moveTo(name, 'ban')));
+        } else if (listType === 'pref') {
+            actions.appendChild(makeBtn('↑', `Move ${name} up`, () => reorder(name, -1)));
+            actions.appendChild(makeBtn('↓', `Move ${name} down`, () => reorder(name, 1)));
+            actions.appendChild(makeBtn('✕', `Remove ${name} from preferences`, () => moveTo(name, 'available')));
+        } else { // banned
+            actions.appendChild(makeBtn('✕', `Unban ${name}`, () => moveTo(name, 'available')));
+        }
+
+        li.appendChild(actions);
         return li;
     };
 
     // 1. Preferences
     player.preferences.forEach(f => {
         if (state.factions.includes(f)) {
-            prefList.appendChild(createLi(f));
+            prefList.appendChild(createLi(f, 'pref'));
         }
     });
 
     // 2. Bans
     player.bans.forEach(f => {
         if (state.factions.includes(f)) {
-            banList.appendChild(createLi(f));
+            banList.appendChild(createLi(f, 'ban'));
         }
     });
 
     // 3. Available (Rest)
     state.factions.forEach(f => {
         if (!player.preferences.includes(f) && !player.bans.includes(f)) {
-            availableList.appendChild(createLi(f));
+            availableList.appendChild(createLi(f, 'available'));
         }
     });
 }
@@ -612,12 +669,14 @@ function setupDragAndDrop(list1, list2, list3, playerObj) {
     lists.forEach(list => {
         // Desktop Drag
         list.addEventListener('dragstart', e => {
-            e.target.classList.add('dragging');
+            const li = e.target.closest('li');
+            if (li) li.classList.add('dragging');
             e.dataTransfer.effectAllowed = 'move';
         });
 
         list.addEventListener('dragend', e => {
-            e.target.classList.remove('dragging');
+            const li = e.target.closest('li');
+            if (li) li.classList.remove('dragging');
             updatePlayerStateFromDOM(playerObj, list1, list2, list3);
         });
 
@@ -639,6 +698,9 @@ function setupDragAndDrop(list1, list2, list3, playerObj) {
 
 function setupTouchDrag(list, allLists, playerObj) {
     list.addEventListener('touchstart', e => {
+        // Let taps on the action buttons through (accessible, no-drag path).
+        if (e.target.closest('button')) return;
+
         const li = e.target.closest('li');
         if (!li) return;
 
@@ -783,15 +845,122 @@ function getDragAfterElement(container, y) {
 }
 
 function updatePlayerStateFromDOM(player, availableList, prefList, banList) {
-    // Read names from DOM lists and update state object
-    player.preferences = [...prefList.querySelectorAll('li')].map(li => li.textContent);
-    player.bans = [...banList.querySelectorAll('li')].map(li => li.textContent);
+    // Read names from DOM lists and update state object. Use the data attribute
+    // (not textContent) since each item now also contains action buttons.
+    player.preferences = [...prefList.querySelectorAll('li')].map(li => li.dataset.faction);
+    player.bans = [...banList.querySelectorAll('li')].map(li => li.dataset.faction);
     autoSave();
 }
 
 // --- Optimization Engine ---
 
-function calculateOptimization() {
+// The solver is an exhaustive search whose worst case grows like F!/(F-P)!.
+// Above this estimated node count we warn before running (the search still
+// runs off the main thread in a Worker, so this is about time, not freezing).
+const OPT_WARN_THRESHOLD = 1e8;
+
+// Rough upper bound on the search size (ignores pruning, so it over-estimates —
+// which is what we want for a "this might be slow" heads-up).
+function estimateSearchCost(playerCount, factionCount) {
+    let cost = 1;
+    for (let i = 0; i < playerCount; i++) {
+        cost *= (factionCount - i);
+        if (cost > 1e15) return Infinity;
+    }
+    return cost;
+}
+
+// Promise wrapper around showConfirm so we can `await` the user's choice.
+function confirmAsync(title, message, btnText, btnClass) {
+    return new Promise(resolve => {
+        showConfirm(title, message, () => resolve(true), btnText, btnClass, () => resolve(false));
+    });
+}
+
+// --- Solver runner (Web Worker) ---
+// The solver is pure (depends only on SCORES + getScore), so we build a Worker
+// from the existing functions via .toString() — no duplicated logic to drift.
+let _optimizerWorker = null;
+let _optimizerReject = null;
+
+function buildOptimizerWorker() {
+    const src = `
+        const SCORES = ${JSON.stringify(SCORES)};
+        ${getScore.toString()}
+        ${findOptimalAssignment.toString()}
+        self.onmessage = function (e) {
+            try {
+                const { players, factions, mode } = e.data;
+                self.postMessage({ ok: true, result: findOptimalAssignment(players, factions, mode) });
+            } catch (err) {
+                self.postMessage({ ok: false, error: String(err) });
+            }
+        };
+    `;
+    const blob = new Blob([src], { type: 'application/javascript' });
+    return new Worker(URL.createObjectURL(blob));
+}
+
+// Run the solver off the main thread. Falls back to a synchronous run if Workers
+// (or blob URLs) aren't available, so the feature degrades rather than breaking.
+function runOptimization(players, factions, mode) {
+    return new Promise((resolve, reject) => {
+        let worker;
+        try {
+            worker = buildOptimizerWorker();
+        } catch (e) {
+            try { resolve(findOptimalAssignment(players, factions, mode)); }
+            catch (err) { reject(err); }
+            return;
+        }
+
+        _optimizerWorker = worker;
+        _optimizerReject = reject;
+
+        const teardown = () => {
+            if (_optimizerWorker === worker) _optimizerWorker = null;
+            _optimizerReject = null;
+            worker.terminate();
+        };
+
+        worker.onmessage = (e) => {
+            teardown();
+            if (e.data && e.data.ok) resolve(e.data.result);
+            else reject(new Error((e.data && e.data.error) || 'Optimization failed'));
+        };
+        worker.onerror = () => {
+            // Worker couldn't run — fall back to a synchronous solve.
+            teardown();
+            try { resolve(findOptimalAssignment(players, factions, mode)); }
+            catch (err) { reject(err); }
+        };
+
+        worker.postMessage({ players, factions, mode });
+    });
+}
+
+// Cancel button on the spinner: kill the worker and reject the pending promise.
+function cancelOptimization() {
+    if (_optimizerWorker) { _optimizerWorker.terminate(); _optimizerWorker = null; }
+    hideOptimizerSpinner();
+    if (_optimizerReject) {
+        const reject = _optimizerReject;
+        _optimizerReject = null;
+        reject(new Error('cancelled'));
+    }
+}
+
+function showOptimizerSpinner() {
+    const el = get('opt-spinner');
+    if (el) el.style.display = 'flex';
+}
+
+function hideOptimizerSpinner() {
+    const el = get('opt-spinner');
+    if (el) el.style.display = 'none';
+}
+
+async function calculateOptimization() {
     if (state.players.length === 0) {
         showToast('error', 'No Players', "Add players first!");
         return;
@@ -804,7 +973,30 @@ function calculateOptimization() {
 
     // Get Mode
     const mode = document.querySelector('input[name="opt-mode"]:checked').value; // 'total' or 'fairness'
-    const result = findOptimalAssignment(state.players, state.factions, mode);
+
+    // Heads-up before a potentially long search.
+    if (estimateSearchCost(state.players.length, state.factions.length) > OPT_WARN_THRESHOLD) {
+        const proceed = await confirmAsync(
+            'Large Optimization',
+            'This many players and factions could take a while to solve. It runs in the background and you can cancel — run it anyway?',
+            'Run Anyway',
+            'accent'
+        );
+        if (!proceed) return;
+    }
+
+    showOptimizerSpinner();
+    let result;
+    try {
+        result = await runOptimization(state.players, state.factions, mode);
+    } catch (e) {
+        hideOptimizerSpinner();
+        if (e && e.message !== 'cancelled') {
+            showToast('error', 'Optimization Failed', e.message || 'Something went wrong.');
+        }
+        return;
+    }
+    hideOptimizerSpinner();
 
     if (result.success) {
         displayResults(result); // sets lastResults
@@ -917,7 +1109,7 @@ async function sendToDiscord(url, result, players) {
     await postToDiscord(url, {
         embeds: [{
             title: "🏆 Final Assignments",
-            description: `**Total Happiness:** ${get('total-score').textContent}`,
+            description: `**Group Happiness:** ${get('total-score').textContent}`,
             color: 3900382, // #3b82f6 (Primary Blueish)
             fields: fields,
             footer: {
@@ -1223,8 +1415,6 @@ function loadAutoSave() {
         }
     }
 }
-
-// ... (Rest of Session Management) ...
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {

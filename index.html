@@ -82,8 +82,9 @@
             <!-- View 1: Faction Setup -->
             <section id="view-factions" class="view">
                 <div class="card">
-                    <h2>Step 1: Setup Factions</h2>
-                    <p class="subtitle">Name your session, pick a game, then choose factions.</p>
+                    <h2>Step 1: Game &amp; Factions</h2>
+                    <p class="subtitle">Name the night, pick the game, and choose its factions. Players see the name and
+                        game when they join.</p>
 
                     <div class="session-meta"
                         style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 1.5rem;">
@@ -119,7 +120,7 @@
                     </div>
 
                     <div class="input-group">
-                        <input type="text" id="faction-input" placeholder="e.g., The Empire, Rebels, Scum..."
+                        <input type="text" id="faction-input" placeholder="Add a faction (e.g. The Empire)"
                             onkeypress="handleEnter(event, addFaction)">
                         <button class="btn primary" onclick="addFaction()">Add</button>
                     </div>
@@ -130,7 +131,7 @@
                     </div>
 
                     <div class="actions right">
-                        <button class="btn secondary" onclick="nextStep('view-players')">Next: Setup Players</button>
+                        <button class="btn secondary" onclick="nextStep('view-players')">Next: Add Players</button>
                     </div>
                 </div>
             </section>
@@ -138,8 +139,8 @@
             <!-- View 2: Player Setup -->
             <section id="view-players" class="view">
                 <div class="card">
-                    <h2>Step 2: Setup Players</h2>
-                    <p class="subtitle">Add players and drag to rank their preferences.</p>
+                    <h2>Step 2: Add Players</h2>
+                    <p class="subtitle">Add everyone, then rank each player's factions — drag them or use the buttons.</p>
 
                     <div class="input-group">
                         <input type="text" id="player-input" placeholder="Player Name"
@@ -195,14 +196,16 @@
                                 <input type="radio" name="opt-mode" value="total" checked>
                                 <div>
                                     <strong>Highest Group Score</strong>
-                                    <p>Finds the combination that gives the group the most total happines points.</p>
+                                    <p>Adds up everyone's happiness and picks the biggest total. Best on average — but
+                                        one player may get stuck with a low choice if it lifts the group.</p>
                                 </div>
                             </label>
                             <label class="opt-choice">
                                 <input type="radio" name="opt-mode" value="fairness">
                                 <div>
-                                    <strong>Minimize Player Unhappiness</strong>
-                                    <p>Finds the combination that gives the lowest unhappiness to each player</p>
+                                    <strong>Fairest for Everyone</strong>
+                                    <p>Makes the least-happy player as happy as possible first, then breaks ties by total
+                                        score. No one is left with a bad pick if it can be avoided.</p>
                                 </div>
                             </label>
                         </div>
@@ -239,7 +242,7 @@
 
                     <div class="stats-panel">
                         <div class="stat-item">
-                            <span class="label">Total Happiness</span>
+                            <span class="label">Group Happiness</span>
                             <span class="value" id="total-score">0</span>
                         </div>
                     </div>
@@ -312,7 +315,7 @@
         </main>
 
         <footer>
-            <p>Side Picker &copy; 2025</p>
+            <p>Side Picker &copy; 2026</p>
         </footer>
     </div>
 
@@ -352,7 +355,7 @@
                 <div class="player-toolbar"
                     style="grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; padding: 4px 0;">
 
-                    <label class="toggle-switch" title="Treat all preferences equally (10pts)">
+                    <label class="toggle-switch" title="Treat all preferences equally — no ranking">
                         <input type="checkbox" class="no-preference-check">
                         <span class="slider"></span>
                         <span class="label-text">Unranked Preferences</span>
@@ -388,25 +391,40 @@
     <!-- Notifications -->
     <div class="toast-container" id="toast-container"></div>
 
+    <!-- Optimizer working overlay -->
+    <div id="opt-spinner" class="opt-spinner" style="display: none;" role="alertdialog" aria-busy="true"
+        aria-label="Optimizing">
+        <div class="opt-spinner-box">
+            <div class="opt-spinner-ring" aria-hidden="true"></div>
+            <div class="opt-spinner-text">Optimizing…</div>
+            <button class="btn text" onclick="cancelOptimization()">Cancel</button>
+        </div>
+    </div>
+
     <!-- Modals -->
     <div id="modal-overlay" class="modal-overlay" onclick="closeModals()"></div>
 
     <div id="info-modal" class="modal">
         <h3>How it Works</h3>
         <div style="color: var(--text-muted); line-height: 1.6; font-size: 0.95rem;">
-            <p style="margin-bottom: 1rem;"><strong>1. Setup Factions:</strong> Choose a preset game or enter faction
-                names manually.</p>
-            <p style="margin-bottom: 1rem;"><strong>2. Add Players:</strong> Enter player names. Each player gets a
+            <p style="margin-bottom: 1rem;"><strong>1. Game &amp; factions:</strong> Pick a saved game or type the
+                faction names yourself.</p>
+            <p style="margin-bottom: 1rem;"><strong>2. Add players:</strong> Enter everyone's name. Each one gets a
                 card.</p>
-            <p style="margin-bottom: 1rem;"><strong>3. Rank Choices:</strong>
-                <br>• Drag specific factions to <strong>Preferences</strong> (Green) for high points.
-                <br>• Drag disliked factions to <strong>Banned</strong> (Red) to block them.
-                <br>• Leave others in <strong>Available</strong>.
+            <p style="margin-bottom: 1rem;"><strong>3. Rank each player's factions</strong> — drag them or use the
+                buttons:
+                <br>• Move factions a player wants into <strong>Preferences</strong> (green); the top one counts most.
+                <br>• Move factions they don't want into <strong>Banned</strong> (red).
+                <br>• Leave the rest in <strong>Available</strong>.
             </p>
-            <p style="margin-bottom: 1rem;"><strong>4. Optimize:</strong> Click 'Optimize & Assign'. The algorithm
-                maximizes total group happiness score.</p>
-            <p style="font-size: 0.85rem; opacity: 0.7;"><em>Pro-Tip: Use "Lock" on a player to exclude them from the
-                    Randomize button.</em></p>
+            <p style="margin-bottom: 1rem;"><strong>4. Collect picks live (optional):</strong> Click <strong>Live
+                    Room</strong> and share the link. Players rank their own factions on their phones and submit — their
+                picks appear here in real time.</p>
+            <p style="margin-bottom: 1rem;"><strong>5. Optimize:</strong> Click <strong>Optimize &amp; Assign</strong>
+                and choose a goal — <em>Highest Group Score</em> (best total) or <em>Fairest for Everyone</em> (lifts the
+                unluckiest player). Use <strong>Share Results Link</strong> to send everyone the final assignments.</p>
+            <p style="font-size: 0.85rem; opacity: 0.7;"><em>Everything saves to your Sessions automatically — reopen a
+                    game night anytime. Tip: "Lock" a player to keep their picks safe when you hit Randomize.</em></p>
         </div>
         <div class="actions right">
             <button class="btn primary" onclick="closeModals()">Got it</button>

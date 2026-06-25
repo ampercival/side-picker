@@ -21,19 +21,6 @@ function isSupabaseConfigured() {
     return getSupabaseClient() !== null;
 }
 
-// Quick connectivity check used during setup/verification.
-async function testSupabaseConnection() {
-    const sb = getSupabaseClient();
-    if (!sb) return { ok: false, reason: 'not-configured' };
-    try {
-        const { error } = await sb.from('rooms').select('code').limit(1);
-        if (error) return { ok: false, reason: error.message };
-        return { ok: true };
-    } catch (e) {
-        return { ok: false, reason: String(e) };
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Workspace key — scopes an organizer's sessions/presets across devices.
 // ---------------------------------------------------------------------------
@@ -195,6 +182,10 @@ async function openLiveRoom() {
     }
     if (state.players.length === 0) {
         showToast('error', 'No Players', 'Add the player names first so they can pick theirs.');
+        return;
+    }
+    if (state.factions.length < state.players.length) {
+        showToast('error', 'Not Enough Factions', `You have ${state.factions.length} faction${state.factions.length === 1 ? '' : 's'} for ${state.players.length} players. Add more before opening a room, or no valid assignment will exist.`);
         return;
     }
     const names = state.players.map(p => p.name);
