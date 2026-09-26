@@ -12,9 +12,11 @@ The user chose a local Windows script on 2026-09-26. This setup needs the comput
 - Missed starts: Windows StartWhenAvailable is enabled. Failed runs are retried up to three times at 15-minute intervals. A run has a five-minute execution limit.
 - Duplicate protection: only one task instance runs at a time; the script also takes a file lock and skips further runs after success on the same local calendar date. `-Force` overrides the daily skip.
 
-Each check makes three small Supabase database reads. It reads at most one `updated_at` value from `sessions`, validates status/content type/JSON shape, and discards the returned timestamp. It does not fetch player names, preferences, workspace labels, or session titles, and does not modify game data. An empty table response is valid.
+Each check makes three small Supabase database reads from `app_health?select=status&limit=1`. It requires exactly `[{"status":"ok"}]`, with valid HTTP status/content type/JSON shape. Empty, missing, or unexpected data fails the check. It does not read or modify game records.
 
-Configuration comes from the public project URL and publishable key in `config.js`. No additional privileged credential is needed. A separate read-only health table can replace this query when database administration access is available; the current query should be revisited when SEC-02 tightens permissions.
+Configuration comes from the public project URL and publishable key in `config.js`. No additional privileged credential is needed. The dedicated health table has one non-sensitive sentinel row; anonymous and authenticated clients can read it but cannot insert, update, delete, or truncate it. The check is independent of organizer/guest permissions on game tables.
+
+The state marker includes `probe: health-v1`. A successful run of the former session-timestamp query does not suppress the first run of this new probe, and `-Status` rejects an old marker until the new endpoint succeeds.
 
 Each request has a 20-second timeout and up to three attempts with bounded delay. The script returns exit code **0** for a successful check or a same-day skip and **1** for failure. A failed attempt never advances the last-success marker. Logs omit response bodies, keys, and raw exception text.
 
@@ -66,7 +68,7 @@ Registration refuses to overwrite an unrelated task with the same name. If Windo
 
 1. Check the task is enabled, its executable/script paths exist, and its principal is the expected Windows user. Task registration and successful script execution are separate checks.
 2. Inspect `keepalive.log` and run `-Status`. `LastTaskResult = 0` may reflect a same-day skip; `lastSuccessUtc` shows the last real database check.
-3. If the check fails, confirm network access and that `config.js` still points to the correct project. The query's read permission must remain available after access-policy changes.
+3. If the check fails, confirm network access and that `config.js` still points to the correct project. Check that `app_health` contains its `ok` row and retains its read-only policy. Do not reopen game-table permissions to fix a health-check failure.
 4. If Supabase is already paused, resume it in the Supabase dashboard, then run with `-Force`. HTTP pings cannot themselves resume a paused project.
 5. If this computer will be off for extended periods, move the schedule to an external service or use a Supabase plan without inactivity pausing.
 
@@ -81,3 +83,11 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/keepalive.Tests.ps
 ```
 
 These exercise response validation, three successful reads, same-day deduplication, bounded retries, unchanged last-success after failure, failed/overdue reporting, recovery from a damaged marker, and log redaction. Actual local task execution and the most recent deployment are recorded in the improvement plan.
+
+## Database migration and recovery
+
+The additive migration is [202609260001_public_health.sql](../supabase/migrations/202609260001_public_health.sql). It was applied on 2026-09-26 after confirming the table name was unused. It does not modify existing game data or game access policies. New deployments must apply it before running the updated script; do not rerun the legacy `schema.sql` as a repair step.
+
+[health_permissions.sql](../supabase/tests/health_permissions.sql) verifies real database-role permissions in a transaction that rolls back. It passed on the deployed project. The existing Windows task was then launched through Task Scheduler and completed three real reads on 2026-09-26 at 18:09:24 Atlantic. This verifies the new endpoint and scheduler launch; the next ordinary daily recurrence remains scheduled for 09:17.
+
+For a missing sentinel or accidentally changed policy, rerun this narrowly scoped migration as administrator and rerun the permission checks. To roll back the script, restore the preceding version only while its former `sessions` read is still allowed. The additive table can safely remain during rollback; deleting it is unnecessary.

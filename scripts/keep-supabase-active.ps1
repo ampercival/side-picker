@@ -7,6 +7,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $script:KeepAliveRoot = Split-Path -Parent $PSScriptRoot
 $script:KeepAliveDirectory = Join-Path $script:KeepAliveRoot '.local\supabase-keepalive'
+$script:KeepAliveProbe = 'health-v1'
 
 function Read-KeepAliveConfig {
     param([string]$Path = (Join-Path $script:KeepAliveRoot 'config.js'))
@@ -16,9 +17,8 @@ function Read-KeepAliveConfig {
     if ($url -notmatch '^https://[a-z0-9]+\.supabase\.co/?$' -or $key -notmatch '^sb_publishable_[A-Za-z0-9_-]+$') {
         throw 'Expected a hosted Supabase URL and public publishable key in config.js.'
     }
-    # This touches the actual database without fetching player names or picks.
-    # A dedicated health table can replace it when database admin access is available.
-    return @{ Url = $url.TrimEnd('/') + '/rest/v1/sessions?select=updated_at&limit=1'; Key = $key }
+    # This sentinel stays readable when all game tables become private.
+    return @{ Url = $url.TrimEnd('/') + '/rest/v1/app_health?select=status&limit=1'; Key = $key }
 }
 
 function Test-KeepAliveResponse {
@@ -29,12 +29,11 @@ function Test-KeepAliveResponse {
     if ($body.Length -gt 4096 -or $body.Trim() -notmatch '(?s)^\[.*\]$') { throw 'Invalid database response shape.' }
     $parsed = $body | ConvertFrom-Json
     $rows = @($parsed)
-    if ($rows.Count -gt 1) { throw 'Unexpected row count.' }
+    if ($rows.Count -ne 1) { throw 'Expected the health sentinel.' }
     foreach ($row in $rows) {
         if ($null -eq $row -or @($row.PSObject.Properties).Count -ne 1 -or
-            $null -eq $row.PSObject.Properties['updated_at']) { throw 'Expected only updated_at.' }
-        $timestamp = [DateTimeOffset]::MinValue
-        if (-not [DateTimeOffset]::TryParse([string]$row.updated_at, [ref]$timestamp)) { throw 'Invalid database timestamp.' }
+            $null -eq $row.PSObject.Properties['status']) { throw 'Expected only status.' }
+        if ($row.status -isnot [string] -or $row.status -cne 'ok') { throw 'Invalid health sentinel.' }
     }
 }
 
@@ -70,6 +69,10 @@ function Get-KeepAliveStatus {
     $saved = Read-KeepAliveState -Directory $Directory
     if ($null -eq $saved -or -not $saved.lastSuccessUtc) {
         Write-Host 'No successful database check recorded. Run the script without -Status.'
+        return 1
+    }
+    if ($saved.probe -ne $script:KeepAliveProbe) {
+        Write-Host 'The current health endpoint has not been checked. Run the script without -Status.'
         return 1
     }
     $last = [DateTimeOffset]::MinValue
@@ -113,7 +116,7 @@ function Invoke-KeepAlive {
         $saved = Read-KeepAliveState -Directory $Directory
         $lastSuccess = if ($null -ne $saved) { $saved.lastSuccessUtc } else { $null }
         $last = [DateTimeOffset]::MinValue
-        if (-not $Force -and $null -ne $saved -and $saved.result -eq 'success' -and
+        if (-not $Force -and $null -ne $saved -and $saved.result -eq 'success' -and $saved.probe -eq $script:KeepAliveProbe -and
             [DateTimeOffset]::TryParse([string]$lastSuccess, [ref]$last) -and $last.LocalDateTime.Date -eq (Get-Date).Date) {
             Write-KeepAliveLog -Directory $Directory -Message 'SKIP: already succeeded today.'
             return 0
@@ -140,13 +143,13 @@ function Invoke-KeepAlive {
                 if ($query -lt 3) { & $Pause 1 }
             }
             Save-KeepAliveState -Directory $Directory -State @{
-                lastAttemptUtc = $started; lastSuccessUtc = [DateTimeOffset]::UtcNow.ToString('o'); result = 'success'; queries = 3
+                lastAttemptUtc = $started; lastSuccessUtc = [DateTimeOffset]::UtcNow.ToString('o'); result = 'success'; queries = 3; probe = $script:KeepAliveProbe
             }
             Write-KeepAliveLog -Directory $Directory -Message 'SUCCESS: three validated read-only database queries.'
             return 0
         } catch {
             Save-KeepAliveState -Directory $Directory -State @{
-                lastAttemptUtc = $started; lastSuccessUtc = $lastSuccess; result = 'failed'; queries = 0
+                lastAttemptUtc = $started; lastSuccessUtc = $lastSuccess; result = 'failed'; queries = 0; probe = $script:KeepAliveProbe
             }
             Write-KeepAliveLog -Directory $Directory -Message 'FAILED: check config.js, network access, and the Supabase project status. No success recorded for this attempt.'
             return 1

@@ -16,10 +16,10 @@ Read [APP_GUIDE.md](APP_GUIDE.md) for current behavior. Follow [AGENTS.md](../AG
 
 - **Completed:** initial review and durable documentation.
 - **Implementation tasks completed:** SEC-01 (safe result links), OPS-01 (local daily database check), and OPT-01 (strict bans, conflict explanations, consistent input snapshots, result summaries).
-- **Next action:** redesign SEC-02 for a public app with immediate use and no required email/Google sign-in. The proposed approach is an unguessable private organizer link plus separate guest links, with permissions enforced by the backend. Do not resume account setup or bind all application use to the owner's email. Dashboard access is available; read-only inspection confirms unrestricted anonymous policies on all four tables, with 3 sessions in 1 workspace, 2 presets, 0 submissions, and 0 Auth users. Preserve existing saved games through an administrator-controlled migration; public workspace labels cannot establish ownership. Keep the health read working or migrate it to a dedicated health table.
+- **Next action:** continue SEC-02 for a public app with immediate use and no required email/Google sign-in. The proposed approach is an unguessable private organizer link plus separate guest links, with permissions enforced by the backend. Do not resume account setup or bind all application use to the owner's email. Dashboard access is available; read-only inspection confirms unrestricted anonymous policies on all four game tables, with 3 sessions in 1 workspace, 2 presets, 0 submissions, and 0 Auth users. Preserve existing saved games through an administrator-controlled migration; public workspace labels cannot establish ownership. The health check is now independent of these tables. Optional accounts are deferred under FEATURE-04.
 - **Recommended first release:** SEC-01, OPS-01, SEC-02, REL-01, OPT-01, ROOM-01, UX-01, and the supporting ENG-01 checks.
 - **Dependencies:** SEC-02's ownership and player-identity decisions affect REL-01 and ROOM-01. Coordinate schema changes instead of migrating the same identities repeatedly. ENG-01 should grow alongside fixes, not wait until the end.
-- **External state:** SEC-01 pushed as `2c72a21`, OPS-01 as `ce280b0`, OPT-01 as `27bbdd6`. GitHub Pages reports the optimizer commit built; live invalid-link recovery and the new result summary verified. Windows task `Side Picker Supabase Keepalive` is installed; a real timer-triggered run returned 0 and completed three validated reads on 2026-09-26 at 17:39 Atlantic. Next daily run: 2026-09-27 at 09:17 Atlantic. No production schema migration performed.
+- **External state:** SEC-01 pushed as `2c72a21`, OPS-01 as `ce280b0`, OPT-01 as `27bbdd6`. GitHub Pages reports the optimizer commit built; live invalid-link recovery and the new result summary verified. Windows task `Side Picker Supabase Keepalive` is installed. Additive health-table migration `202609260001_public_health.sql` is applied, and live role checks passed. The existing scheduled task completed three reads of the new sentinel on 2026-09-26 at 18:09:24 Atlantic. Next daily run: 2026-09-27 at 09:17 Atlantic. Game permissions have not yet been migrated.
 - **Working state:** all three improvements committed and pushed separately; final rollout notes recorded. Signed-out keep-alive execution is not supported by the selected Interactive principal.
 
 ## Decisions to settle during planning
@@ -28,6 +28,7 @@ Read [APP_GUIDE.md](APP_GUIDE.md) for current behavior. Follow [AGENTS.md](../AG
 | --- | --- | --- |
 | Daily scheduler | Local PowerShell script with Windows Task Scheduler, daily plus sign-in catch-up | User selected local script on 2026-09-26; requires this computer on, signed in, and connected |
 | Public access | Anyone can create and use a game without an account setup requirement | User clarified on 2026-09-26; supersedes email/Google onboarding work |
+| Optional accounts later | Let people manage saved games across devices and recover access, with a safe way to attach existing games | User requested a future TODO on 2026-09-26; FEATURE-04. Do not block current work on provider setup |
 | Organizer permissions | Private organizer link using an unguessable capability checked by the backend; preserve saved games through a deliberate migration | Proposed design; no required email/Google sign-in. Define game/workspace scope, recovery, revocation, and safe link handling before implementation |
 | Guest permissions | Players join by link without an account; separate guest access from organizer access and scope submissions to the authorized player | Proposed; room/individual invitation mechanism to be designed |
 | Bans | Hard exclusions; explain infeasible assignments rather than silently forcing a ban | Implemented in OPT-01 |
@@ -51,7 +52,7 @@ Routine implementation choices can be resolved from the user's instructions and 
 
 ### OPS-01 — Daily Supabase health check and inactivity mitigation
 
-- [x] Define a tiny database-backed health query without personal data: select at most one `sessions.updated_at`. A separate health table is deferred until administration access/SEC-02; no private row fields are fetched or logged.
+- [x] Define a tiny database-backed health query without personal data: dedicated `app_health` sentinel, deployed and verified. Replaced the temporary `sessions.updated_at` query on 2026-09-26.
 - [x] Provide a small runnable check with timeout, bounded retries, nonzero exit on failure, and expected-response validation. Do not treat any HTTP 200 as sufficient.
 - [x] Configure one daily local run and sign-in catch-up that make a few lightweight real database reads. Keep credentials out of logs; do not use a service-role key merely for a public health read.
 - [x] Expose failure in logs, last-run state, and the Windows task result; provide `-Status` with 36-hour overdue detection. Scope adjusted for the local script: no independent email/push notification configured.
@@ -71,6 +72,7 @@ Routine implementation choices can be resolved from the user's instructions and 
 ### SEC-02 — Enforced ownership and guest permissions
 
 - [x] Inspect actual deployed tables/policies and inventory legacy workspaces before designing the migration.
+- [x] Move the keep-alive to an independent public, read-only health sentinel before restricting game tables; deploy and verify allowed reads/denied writes.
 - [ ] Design private organizer links and a safe transfer process for existing data, preserving immediate public use without required email/Google sign-in. Knowledge of a publicly readable workspace label alone must not establish ownership.
 - [ ] Define organizer-link scope, secure generation, server-side verification, storage, revocation, recovery, and sharing warnings. Treat the link as an editing credential; never include it in guest/result links, logs, or public database reads.
 - [ ] Introduce stable session/player identifiers where needed, retaining display names as editable labels.
@@ -165,6 +167,18 @@ Routine implementation choices can be resolved from the user's instructions and 
 
 **Acceptance:** history is immutable or versioned, and optional rotation rules never silently override bans or the declared optimization goal. Agree scoring trade-offs before implementation.
 
+### FEATURE-04 — Optional accounts for managing games (later)
+
+- [ ] Add an optional account and a "My games" view for finding, organizing, and resuming saved games across devices.
+- [ ] Let an organizer attach existing games/workspaces only after proving control through the private organizer link; never claim data using a public workspace label or matching display name.
+- [ ] Provide account recovery and a clear way to manage/revoke organizer links without losing saved games.
+- [ ] Choose sign-in providers and configure reliable email delivery when this feature is implemented; email and Google remain options, not current prerequisites.
+- [ ] Preserve immediate account-free game creation and guest participation; explain the benefits of an account without forcing one.
+
+**Acceptance:** an account holder can find and manage their games on another device; linking preserves the original sessions and permissions; another account cannot claim those games; people who skip accounts can still create and join games.
+
+**Requested:** 2026-09-26. Deferred until the security and reliability foundation is in place.
+
 ## Supporting engineering work
 
 ### ENG-01 — Focused checks and maintainability
@@ -237,3 +251,12 @@ At the end of each implementation session, update Current handoff and append a d
 - Supabase inspection found Email enabled, Google disabled with no client configured, and custom SMTP disabled. These settings were read only. No provider changes, sign-in emails, Auth users, or ownership migration were created during this exploration.
 - Removed the uncommitted sign-in-page prototype. No authentication UI was deployed. Do not ask the user to complete Google Cloud or email-sender setup to continue the public app improvements.
 - Updated this plan and the application guide. SEC-02 remains incomplete; the next implementation must preserve immediate public use while protecting individual games. Earlier deployed improvements and the local keep-alive remain in place.
+
+### 2026-09-26 — Future accounts recorded; health access separated from games
+
+- Added FEATURE-04 at the user's request: optional accounts, My games, cross-device management, verified attachment of existing games, recovery, and retained account-free entry.
+- Applied additive migration `202609260001_public_health.sql` after confirming no existing table conflict. Its single `ok` row is public-read-only; existing game records and their policies are unchanged.
+- Changed the local check to require exactly the health sentinel. Empty/malformed/unexpected replies fail. Versioned the success marker so an earlier timestamp-based check cannot suppress verification of the new endpoint.
+- Validation: Windows PowerShell 5.1 regression checks passed, including malformed/empty/surplus fields, retry bounds, log redaction, old-marker transition, deduplication, and recovery. Deployed transactional role checks passed for anonymous reads and rejected insert/update/delete/truncate, plus authenticated reads and absence of mutation grants.
+- Launched the existing Windows scheduled task through Task Scheduler. It completed three real sentinel reads at 18:09:24 Atlantic with `LastTaskResult = 0`; next daily run remains 09:17. This was a scheduler-launched verification, not another observed daily timer recurrence.
+- SEC-02 is still in progress. Remaining work is the private organizer/player access model, data-preserving cutover, browser flows, and negative permission tests for game records. No sign-in requirement added.

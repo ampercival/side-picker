@@ -48,6 +48,8 @@ If both URL forms are present, room mode takes precedence at startup.
 | `rooms.js` | Supabase client, database operations, workspace key, host/guest room synchronization |
 | `config.js` | Public Supabase project URL and publishable key |
 | `supabase/schema.sql` | Current schema and legacy migration instructions |
+| `supabase/migrations/` | Additive versioned migrations; the public health sentinel is deployed |
+| `supabase/tests/health_permissions.sql` | Transactional health-table role/permission checks |
 | `.claude/launch.json` | Local static-server launch configuration on port 8753 |
 | `scripts/keep-supabase-active.ps1` | Daily local read-only database check, bounded retries, logging and status |
 | `scripts/register-keepalive-task.ps1` | Registers the daily Windows task and sign-in catch-up |
@@ -75,10 +77,13 @@ There is no application server, framework, bundler, or package manifest. Focused
 | `sessions` | `(owner_key, name)` | Display name, game title, JSON factions and players, unique optional room code, JSON results, timestamp |
 | `presets` | `(owner_key, name)` | JSON faction list and timestamp |
 | `submissions` | `(room_code, player_name)` | JSON preferences/bans, unranked flag, timestamp |
+| `app_health` | Single constrained `status = 'ok'` row | Non-sensitive read-only sentinel for the daily check |
 
 Submissions reference `sessions.room_code` with cascading deletion. There is no separate rooms table in the current model. The schema file deletes orphan submissions and drops the old rooms table as part of migration; it is not a harmless diagnostic script.
 
 RLS is enabled, but the policies grant unrestricted anonymous select/insert/update/delete on all four tables. Workspace filters in JavaScript do not enforce authorization. Read-only dashboard inspection on 2026-09-26 confirmed the deployed policies match the checked-in rules. At inspection there were 3 sessions across 1 session workspace, 2 presets, 0 submissions, and 0 Auth users. No production mutation tests were performed.
+
+The separate `app_health` table was added afterward using migration `202609260001_public_health.sql`. It exposes only its sentinel to anonymous/authenticated readers and denies their writes. Live role checks and the updated scheduled script passed. This does not resolve the four game tables' outstanding access issue.
 
 ### Live-room data flow
 
