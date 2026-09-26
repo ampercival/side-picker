@@ -8,6 +8,8 @@ This describes the existing application, not the proposed future design. See [th
 
 Side Picker assigns distinct board-game factions to players using their ranked preferences, neutral choices, and bans. An organizer can enter everyone's choices or collect them through a live room, then optimize and share the assignments.
 
+**Product direction confirmed 2026-09-26:** this is a public app that anyone should be able to use immediately. Required Google/email sign-in is not the planned entry flow. The proposed security work will protect individual games with private organizer links and separate guest permissions; it has not yet been implemented. See SEC-02 in the plan. Do not confuse the current public workspace label with a secure editing credential.
+
 ## Current user journeys
 
 ### Organizer

@@ -8,7 +8,7 @@ Status: implementation in progress; commit and push after each improvement as re
 
 Make Side Picker reliable for occasional game nights: keep Supabase active, protect saved data, produce trustworthy assignments, and make host/guest use comfortable on phones. Retain the lightweight static application unless a concrete requirement justifies changing it.
 
-The user authorized starting this plan on 2026-09-26, with a commit and push after each improvement. The user then selected a local script for the daily Supabase check. Material unresolved identity decisions remain recorded below; do not confuse proposed features with completed implementation or external activation.
+The user authorized starting this plan on 2026-09-26, with a commit and push after each improvement. The user selected a local script for the daily Supabase check and clarified that anyone must be able to use the app. Keep entry open; do not make email/Google configuration or an owner-account allowlist a prerequisite. Material unresolved access-design details remain recorded below; do not confuse proposed features with completed implementation or external activation.
 
 Read [APP_GUIDE.md](APP_GUIDE.md) for current behavior. Follow [AGENTS.md](../AGENTS.md) for session continuity.
 
@@ -16,7 +16,7 @@ Read [APP_GUIDE.md](APP_GUIDE.md) for current behavior. Follow [AGENTS.md](../AG
 
 - **Completed:** initial review and durable documentation.
 - **Implementation tasks completed:** SEC-01 (safe result links), OPS-01 (local daily database check), and OPT-01 (strict bans, conflict explanations, consistent input snapshots, result summaries).
-- **Next action:** SEC-02 awaits the user's organizer email address (asked in the active task). Email sign-in links are the stated default unless the user prefers Google. Dashboard access is available after the user's sign-in; read-only inspection confirms unrestricted anonymous policies on all four tables, with 3 sessions in 1 workspace, 2 presets, 0 submissions, and 0 Auth users. Bind the existing workspace through an administrator-controlled migration after verifying the organizer account. Keep the health read working or migrate it to a dedicated health table.
+- **Next action:** redesign SEC-02 for a public app with immediate use and no required email/Google sign-in. The proposed approach is an unguessable private organizer link plus separate guest links, with permissions enforced by the backend. Do not resume account setup or bind all application use to the owner's email. Dashboard access is available; read-only inspection confirms unrestricted anonymous policies on all four tables, with 3 sessions in 1 workspace, 2 presets, 0 submissions, and 0 Auth users. Preserve existing saved games through an administrator-controlled migration; public workspace labels cannot establish ownership. Keep the health read working or migrate it to a dedicated health table.
 - **Recommended first release:** SEC-01, OPS-01, SEC-02, REL-01, OPT-01, ROOM-01, UX-01, and the supporting ENG-01 checks.
 - **Dependencies:** SEC-02's ownership and player-identity decisions affect REL-01 and ROOM-01. Coordinate schema changes instead of migrating the same identities repeatedly. ENG-01 should grow alongside fixes, not wait until the end.
 - **External state:** SEC-01 pushed as `2c72a21`, OPS-01 as `ce280b0`, OPT-01 as `27bbdd6`. GitHub Pages reports the optimizer commit built; live invalid-link recovery and the new result summary verified. Windows task `Side Picker Supabase Keepalive` is installed; a real timer-triggered run returned 0 and completed three validated reads on 2026-09-26 at 17:39 Atlantic. Next daily run: 2026-09-27 at 09:17 Atlantic. No production schema migration performed.
@@ -27,8 +27,9 @@ Read [APP_GUIDE.md](APP_GUIDE.md) for current behavior. Follow [AGENTS.md](../AG
 | Decision | Recommended starting point | Status |
 | --- | --- | --- |
 | Daily scheduler | Local PowerShell script with Windows Task Scheduler, daily plus sign-in catch-up | User selected local script on 2026-09-26; requires this computer on, signed in, and connected |
-| Organizer identity | Supabase Auth with ownership enforced by RLS; preserve existing sessions through a deliberate migration | Email sign-in links stated as default; awaiting owner email/any Google preference; legacy owner binding remains pending |
-| Guest identity | Keep joining simple, but enforce scoped room/player access using validated identity or a server-checked token | Proposed; mechanism unresolved |
+| Public access | Anyone can create and use a game without an account setup requirement | User clarified on 2026-09-26; supersedes email/Google onboarding work |
+| Organizer permissions | Private organizer link using an unguessable capability checked by the backend; preserve saved games through a deliberate migration | Proposed design; no required email/Google sign-in. Define game/workspace scope, recovery, revocation, and safe link handling before implementation |
+| Guest permissions | Players join by link without an account; separate guest access from organizer access and scope submissions to the authorized player | Proposed; room/individual invitation mechanism to be designed |
 | Bans | Hard exclusions; explain infeasible assignments rather than silently forcing a ban | Implemented in OPT-01 |
 | Unsaved edits | Small durable pending-edit store with visible sync status; database remains authoritative for acknowledged saves | Proposed; do not silently replace the cloud model with local-only storage |
 | Room stages | Collecting, locked, published, with explicit reopen | Proposed |
@@ -70,7 +71,8 @@ Routine implementation choices can be resolved from the user's instructions and 
 ### SEC-02 — Enforced ownership and guest permissions
 
 - [x] Inspect actual deployed tables/policies and inventory legacy workspaces before designing the migration.
-- [ ] Choose organizer authentication and a safe ownership-claim process for existing data. Knowledge of a publicly readable workspace label alone must not establish ownership.
+- [ ] Design private organizer links and a safe transfer process for existing data, preserving immediate public use without required email/Google sign-in. Knowledge of a publicly readable workspace label alone must not establish ownership.
+- [ ] Define organizer-link scope, secure generation, server-side verification, storage, revocation, recovery, and sharing warnings. Treat the link as an editing credential; never include it in guest/result links, logs, or public database reads.
 - [ ] Introduce stable session/player identifiers where needed, retaining display names as editable labels.
 - [ ] Replace unrestricted anonymous table access with enforced organizer ownership and narrow guest access.
 - [ ] Restrict a guest to authorized room data and their permitted submission; prevent arbitrary player impersonation, room enumeration, and unauthorized result edits/deletes.
@@ -78,6 +80,8 @@ Routine implementation choices can be resolved from the user's instructions and 
 - [ ] Apply a versioned, recoverable migration with backup and compatibility checks for existing sessions and room links.
 
 **Acceptance:** two separate organizers cannot read or mutate each other's private data through direct API calls; guests cannot change another player's picks or host data; intended room/result sharing still works. Test negative permission cases using isolated fixtures. Record migration application and deployment separately from code completion.
+
+**Public-use requirement:** a new visitor can create a game immediately. A player can join through an invitation without creating an account. Security must separate organizer, guest, and public-result capabilities rather than restricting the whole app to one owner or requiring sign-in. Any future optional account feature must solve a clear recovery/sync need and must not block these entry paths.
 
 ### REL-01 — Reliable saves and session switching
 
@@ -225,3 +229,11 @@ At the end of each implementation session, update Current handoff and append a d
 - GitHub Pages reports `27bbdd6` built; the live site displays Unicode result snapshots, goal, Preference Score, and the new choice breakdown. Application write testing used the isolated fixture only.
 - The plan and app-guide links were checked; no runtime logs or state files were committed.
 - Requested the email address that should own the existing workspace. Email sign-in links are the stated default unless the user chooses Google. Keep the current app working until the migration, backend rules, and new sign-in flow are prepared and verified together.
+
+### 2026-09-26 — Public access clarified; account setup stopped
+
+- User clarified: "I want anyone to be able to use the app." Required account onboarding is no longer the proposed entry flow. Earlier Google/email setup questions are superseded.
+- Explained the actual security issue: open use is desirable; unrestricted modification/deletion of other organizers' saved games is not. Proposed private organizer links and separately scoped guest invitations with backend enforcement.
+- Supabase inspection found Email enabled, Google disabled with no client configured, and custom SMTP disabled. These settings were read only. No provider changes, sign-in emails, Auth users, or ownership migration were created during this exploration.
+- Removed the uncommitted sign-in-page prototype. No authentication UI was deployed. Do not ask the user to complete Google Cloud or email-sender setup to continue the public app improvements.
+- Updated this plan and the application guide. SEC-02 remains incomplete; the next implementation must preserve immediate public use while protecting individual games. Earlier deployed improvements and the local keep-alive remain in place.
