@@ -46,6 +46,8 @@ If both URL forms are present, room mode takes precedence at startup.
 | `config.js` | Public Supabase project URL and publishable key |
 | `supabase/schema.sql` | Current schema and legacy migration instructions |
 | `.claude/launch.json` | Local static-server launch configuration on port 8753 |
+| `scripts/keep-supabase-active.ps1` | Daily local read-only database check, bounded retries, logging and status |
+| `scripts/register-keepalive-task.ps1` | Registers the daily Windows task and sign-in catch-up |
 
 The scripts are classic browser scripts sharing globals, not ES modules. Loading order is Supabase's CDN client, `config.js`, `results.js`, `script.js`, then `rooms.js`. Much of initialization runs at `DOMContentLoaded`, after the application scripts are available.
 
@@ -114,7 +116,7 @@ Results use the payload `{v, t, gm, g, pct, r}`: version, session title, game, g
 | Live rooms | Reconnection, stale requests, roster changes, and host/guest copy conflicts need handling | ROOM-01 |
 | Optimizer | Bans can be forced; tied solutions consume unbounded memory | OPT-01, OPT-02 |
 | Mobile | Add Player text is clipped at 390px; ranking controls are 26px; view changes retain scroll position | UX-01 |
-| Operations | No daily health job yet; focused results tests added, broader checks remain outstanding | OPS-01, ENG-01 |
+| Operations | Local daily check installed and timer-triggered run verified; computer must be on/signed in. Broader app checks remain outstanding | OPS-01 complete; ENG-01 ongoing |
 
 ## Hosting, local use, and validation
 
@@ -122,6 +124,7 @@ Results use the payload `{v, t, gm, g, pct, r}`: version, session title, game, g
 - Live site: [Side Picker](https://ampercival.github.io/side-picker/).
 - On 2026-09-26, GitHub reported a public repository with Pages publishing from the root of `main`.
 - On that date, a read-only Supabase REST request selecting zero session rows returned HTTP 200. This establishes reachability at that time, not the deployed authorization rules or future availability.
+- A local Windows task now runs three validated database reads daily at 09:17 Atlantic local time, with sign-in catch-up. A real timer-triggered run succeeded on 2026-09-26. See [the operational guide](SUPABASE_KEEPALIVE.md) for manual commands, log paths, limitations, and registration.
 
 From the repository root, run:
 
@@ -139,6 +142,7 @@ node --check rooms.js
 node --check config.js
 node --check results.js
 node --test --test-isolation=none tests/results.test.cjs
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/keepalive.Tests.ps1
 ```
 
 The initial review included source/schema inspection, syntax checks, isolated function probes, and browser checks with mocked database responses at phone width. It did not verify production multi-device Realtime, deployed RLS, or failure recovery end to end. The temporary mock server used for that review was stopped and was not checked into the repository.

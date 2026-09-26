@@ -15,12 +15,12 @@ Read [APP_GUIDE.md](APP_GUIDE.md) for current behavior. Follow [AGENTS.md](../AG
 ## Current handoff
 
 - **Completed:** initial review and durable documentation.
-- **Implementation tasks completed:** SEC-01 (safe result links and regression checks).
-- **Next action:** implement OPS-01 as a local PowerShell script and Windows scheduled task, per user preference. Resolve production administration access before SEC-02 migrations.
+- **Implementation tasks completed:** SEC-01 (safe result links) and OPS-01 (local daily database check, adjusted to the user's chosen scope).
+- **Next action:** SEC-02 awaits Supabase dashboard sign-in and organizer sign-in preference; administration currently redirects to sign-in and no Supabase administration connector/CLI credential is available. Inspect policies and settle legacy ownership before changing permissions. While waiting, continue independent OPT-01. Ensure the keep-alive read remains permitted or migrate it to a dedicated health table during SEC-02.
 - **Recommended first release:** SEC-01, OPS-01, SEC-02, REL-01, OPT-01, ROOM-01, UX-01, and the supporting ENG-01 checks.
 - **Dependencies:** SEC-02's ownership and player-identity decisions affect REL-01 and ROOM-01. Coordinate schema changes instead of migrating the same identities repeatedly. ENG-01 should grow alongside fixes, not wait until the end.
-- **External state:** Supabase responded HTTP 200 on 2026-09-26; no scheduled keep-alive is installed. No deployed RLS inspection or production schema migration was performed.
-- **Working state:** SEC-01 tested locally; first improvement ready for commit/push and Pages verification.
+- **External state:** SEC-01 pushed as `2c72a21`; Pages reports built and live invalid-link recovery verified. Windows task `Side Picker Supabase Keepalive` is installed; a real timer-triggered run returned 0 and completed three validated database reads on 2026-09-26 at 17:39 Atlantic. Next daily run: 2026-09-27 at 09:17 Atlantic. No production schema migration performed.
+- **Working state:** OPS-01 tested locally and through Windows Task Scheduler; ready for its separate commit/push. Signed-out execution is not supported by the selected Interactive principal.
 
 ## Decisions to settle during planning
 
@@ -50,14 +50,16 @@ Routine implementation choices can be resolved from the user's instructions and 
 
 ### OPS-01 — Daily Supabase health check and inactivity mitigation
 
-- [ ] Define a tiny dedicated database-backed health query with no personal/session data exposure. Prefer a read-only sentinel table or tightly scoped function.
-- [ ] Provide a small runnable check with timeout, bounded retries, nonzero exit on failure, and expected-response validation. Do not treat any HTTP 200 as sufficient.
-- [ ] Configure one daily local run and sign-in catch-up that make a few lightweight real database reads. Keep credentials out of logs; do not use a service-role key merely for a public health read.
-- [ ] Configure failure notification and a way to detect missed runs, not just failed executions.
-- [ ] Document job owner, provider, schedule/timezone, endpoint, last successful run, and resume/recovery instructions. Store identifiers, not secrets.
-- [ ] Verify one manual run and at least one scheduled run before marking the operational setup complete.
+- [x] Define a tiny database-backed health query without personal data: select at most one `sessions.updated_at`. A separate health table is deferred until administration access/SEC-02; no private row fields are fetched or logged.
+- [x] Provide a small runnable check with timeout, bounded retries, nonzero exit on failure, and expected-response validation. Do not treat any HTTP 200 as sufficient.
+- [x] Configure one daily local run and sign-in catch-up that make a few lightweight real database reads. Keep credentials out of logs; do not use a service-role key merely for a public health read.
+- [x] Expose failure in logs, last-run state, and the Windows task result; provide `-Status` with 36-hour overdue detection. Scope adjusted for the local script: no independent email/push notification configured.
+- [x] Document job owner, provider, schedule/timezone, endpoint, last successful run, and resume/recovery instructions. Store identifiers, not secrets.
+- [x] Verify one manual run and at least one scheduled run before marking the operational setup complete.
 
 **Acceptance (updated for the user's local-script choice):** runs without an open browser or repository commits when this computer is on, the task's user is signed in, and networking is available; catches up after missed runs; reports database availability accurately; failures are observable; reads do not modify game data. A prepared script alone is not a completed daily service. Extended computer shutdowns or sign-out remain a limitation.
+
+**Operational guide:** [SUPABASE_KEEPALIVE.md](SUPABASE_KEEPALIVE.md). Daily and logon trigger definitions plus StartWhenAvailable verified; a one-time timer trigger proved actual scheduler execution, then was removed. Tomorrow's daily recurrence and a future sign-in catch-up have not yet occurred. Shutdown/sign-out monitoring requires an external service and is outside this local setup.
 
 **Important limits:** Supabase documents low activity over seven days and says a few database requests daily are typically enough. This is mitigation, not a Free-plan availability guarantee. A paused project must be resumed; a ping does not itself restore it. An internal job in the paused project cannot provide independent recovery or monitoring. GitHub Actions is an alternative, but public-repository schedules can be disabled after 60 days of repository inactivity.
 
@@ -195,3 +197,14 @@ At the end of each implementation session, update Current handoff and append a d
 - Validation: all five tests pass with `node --test --test-isolation=none tests/results.test.cjs`; JavaScript syntax checks pass. Default test isolation was blocked by the environment's child-process permission, so the tests ran without child isolation.
 - Browser validation: invalid-link recovery and a valid Unicode v1 link both rendered correctly with local static hosting; no database writes used.
 - Commit/push and live verification follow this entry. Next: OPS-01 local daily check, as selected by the user.
+
+### 2026-09-26 — OPS-01 local check installed and verified
+
+- User selected a local script rather than an external scheduler. Added PowerShell 5.1-compatible check, registration script, ignored runtime state, isolated tests, and an operations guide.
+- Query uses only the existing public publishable key and a one-column/one-row read. No schema changes, secrets, or session writes are required.
+- Validation: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/keepalive.Tests.ps1` passed response, retry, deduplication, recovery, overdue, and log-redaction checks. Real manual run succeeded at 17:36 Atlantic.
+- Installed task under Windows user Owner, Interactive/Limited, hidden PowerShell, daily 09:17 Atlantic plus logon +2 minutes, StartWhenAvailable and bounded failure restarts.
+- Actual timed run started 17:39:07 Atlantic, completed three database reads at 17:39:11, and returned `LastTaskResult = 0`. Removed the temporary verification trigger; daily and logon triggers remain. Runtime evidence is local in `.local/supabase-keepalive/`.
+- SEC-01 commit `2c72a21` is pushed; GitHub Pages reports built and the deployed invalid-link view was verified in the browser.
+- Limits: cannot run while off/signed out; local status rather than independent notifications; dedicated health table deferred to the access-policy migration. Next task is SEC-02.
+- SEC-02 access check reached the Supabase sign-in page; requested dashboard sign-in and organizer sign-in preference. No production permissions changed. OPT-01 can proceed independently while that is pending.

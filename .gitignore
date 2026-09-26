@@ -1,0 +1,3 @@
+# Local task logs and last-run state; never publish machine-specific runtime data.
+.local/
+
