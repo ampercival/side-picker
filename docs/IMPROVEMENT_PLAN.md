@@ -15,12 +15,12 @@ Read [APP_GUIDE.md](APP_GUIDE.md) for current behavior. Follow [AGENTS.md](../AG
 ## Current handoff
 
 - **Completed:** initial review and durable documentation.
-- **Implementation tasks completed:** SEC-01 (safe result links) and OPS-01 (local daily database check, adjusted to the user's chosen scope).
-- **Next action:** SEC-02 awaits Supabase dashboard sign-in and organizer sign-in preference; administration currently redirects to sign-in and no Supabase administration connector/CLI credential is available. Inspect policies and settle legacy ownership before changing permissions. While waiting, continue independent OPT-01. Ensure the keep-alive read remains permitted or migrate it to a dedicated health table during SEC-02.
+- **Implementation tasks completed:** SEC-01 (safe result links), OPS-01 (local daily database check), and OPT-01 (strict bans, conflict explanations, consistent input snapshots, result summaries).
+- **Next action:** SEC-02: organizer sign-in preference is pending. Dashboard access is available after the user's sign-in; read-only inspection confirms unrestricted anonymous policies on all four tables, with 3 sessions in 1 workspace, 2 presets, 0 submissions, and 0 Auth users. Settle the organizer identity and bind the existing workspace through an administrator-controlled migration. Keep the health read working or migrate it to a dedicated health table.
 - **Recommended first release:** SEC-01, OPS-01, SEC-02, REL-01, OPT-01, ROOM-01, UX-01, and the supporting ENG-01 checks.
 - **Dependencies:** SEC-02's ownership and player-identity decisions affect REL-01 and ROOM-01. Coordinate schema changes instead of migrating the same identities repeatedly. ENG-01 should grow alongside fixes, not wait until the end.
-- **External state:** SEC-01 pushed as `2c72a21`; Pages reports built and live invalid-link recovery verified. Windows task `Side Picker Supabase Keepalive` is installed; a real timer-triggered run returned 0 and completed three validated database reads on 2026-09-26 at 17:39 Atlantic. Next daily run: 2026-09-27 at 09:17 Atlantic. No production schema migration performed.
-- **Working state:** OPS-01 tested locally and through Windows Task Scheduler; ready for its separate commit/push. Signed-out execution is not supported by the selected Interactive principal.
+- **External state:** SEC-01 pushed as `2c72a21`, OPS-01 as `ce280b0`. SEC-01 Pages build and live invalid-link recovery verified. Windows task `Side Picker Supabase Keepalive` is installed; a real timer-triggered run returned 0 and completed three validated reads on 2026-09-26 at 17:39 Atlantic. Next daily run: 2026-09-27 at 09:17 Atlantic. No production schema migration performed.
+- **Working state:** OPT-01 tested locally, ready for separate commit/push. Signed-out keep-alive execution is not supported by the selected Interactive principal.
 
 ## Decisions to settle during planning
 
@@ -29,7 +29,7 @@ Read [APP_GUIDE.md](APP_GUIDE.md) for current behavior. Follow [AGENTS.md](../AG
 | Daily scheduler | Local PowerShell script with Windows Task Scheduler, daily plus sign-in catch-up | User selected local script on 2026-09-26; requires this computer on, signed in, and connected |
 | Organizer identity | Supabase Auth with ownership enforced by RLS; preserve existing sessions through a deliberate migration | Proposed; sign-in and legacy ownership claim flow unresolved |
 | Guest identity | Keep joining simple, but enforce scoped room/player access using validated identity or a server-checked token | Proposed; mechanism unresolved |
-| Bans | Hard exclusions; explain infeasible assignments rather than silently forcing a ban | Proposed |
+| Bans | Hard exclusions; explain infeasible assignments rather than silently forcing a ban | Implemented in OPT-01 |
 | Unsaved edits | Small durable pending-edit store with visible sync status; database remains authoritative for acknowledged saves | Proposed; do not silently replace the cloud model with local-only storage |
 | Room stages | Collecting, locked, published, with explicit reopen | Proposed |
 | Expanded features | Prioritize repeat sessions, easier setup, and clearer results after reliability work | Proposed; final selection pending |
@@ -69,7 +69,7 @@ Routine implementation choices can be resolved from the user's instructions and 
 
 ### SEC-02 — Enforced ownership and guest permissions
 
-- [ ] Inspect actual deployed tables/policies and inventory legacy workspaces before designing the migration.
+- [x] Inspect actual deployed tables/policies and inventory legacy workspaces before designing the migration.
 - [ ] Choose organizer authentication and a safe ownership-claim process for existing data. Knowledge of a publicly readable workspace label alone must not establish ownership.
 - [ ] Introduce stable session/player identifiers where needed, retaining display names as editable labels.
 - [ ] Replace unrestricted anonymous table access with enforced organizer ownership and narrow guest access.
@@ -97,11 +97,11 @@ Routine implementation choices can be resolved from the user's instructions and 
 
 ### OPT-01 — Hard bans and understandable outcomes
 
-- [ ] Treat bans as unavailable assignment edges by default.
-- [ ] Detect infeasible assignments and explain which constraints conflict without modifying preferences automatically.
-- [ ] Preserve both documented optimization goals and their secondary tie-break rules.
-- [ ] Validate optimizer inputs and calculate/display results from the same input snapshot, even if live picks arrive while solving.
-- [ ] Show goal, first-choice/top-three/neutral counts, and understandable scoring context.
+- [x] Treat bans as unavailable assignment edges by default.
+- [x] Detect infeasible assignments and explain which constraints conflict without modifying preferences automatically.
+- [x] Preserve both documented optimization goals and their secondary tie-break rules.
+- [x] Validate optimizer inputs and calculate/display results from the same input snapshot, even if live picks arrive while solving.
+- [x] Show goal, first-choice/top-three/neutral counts, and understandable scoring context.
 
 **Acceptance:** banned factions are never assigned under strict rules; one player banning the only faction fails clearly; competing players with no distinct allowed match fail clearly; ordinary valid assignments remain optimal. Verify small cases against an independent exhaustive reference and verify cancellation.
 
@@ -208,3 +208,13 @@ At the end of each implementation session, update Current handoff and append a d
 - SEC-01 commit `2c72a21` is pushed; GitHub Pages reports built and the deployed invalid-link view was verified in the browser.
 - Limits: cannot run while off/signed out; local status rather than independent notifications; dedicated health table deferred to the access-policy migration. Next task is SEC-02.
 - SEC-02 access check reached the Supabase sign-in page; requested dashboard sign-in and organizer sign-in preference. No production permissions changed. OPT-01 can proceed independently while that is pending.
+
+### 2026-09-26 — OPT-01 implemented; SEC-02 inventory verified
+
+- Extracted the solver into `optimizer.js`. Added input validation and a matching feasibility check that identifies players with too few mutually available factions; removed forced-ban fallback.
+- Solving uses an immutable input snapshot. Setup/pick/session changes invalidate a pending result before it can be displayed or published. Worker helpers and cancellation remain covered.
+- Results show the goal, first/top-three/unranked/neutral counts, and preference-score context. Historical negative-score snapshots remain readable.
+- Validation: 11 Node tests pass, including 400 comparisons to an independent exhaustive reference over both goals, input rejection, strict bans, worker-source execution/cancellation, snapshot guards, and result-link regressions. Local browser fixture verified conflict explanation and successful assignment after unbanning one choice, with the correct 50% summary. Syntax/diff checks passed.
+- Added `tests/serve-fixture.cjs` for repeatable isolated browser checks without a production connection. The exhaustive solver's tie-memory/performance issue remains OPT-02; this change does not claim to solve it.
+- User signed into Supabase. Read-only catalog query verified `users_all`, `sessions_all`, `presets_all`, and `submissions_all`: role anon, command ALL, using/check true. Inventory: 3 sessions, 1 session workspace, 2 presets, 0 submissions, 0 Auth users. No raw game records exported and no schema/policy changes made.
+- SEC-02 next needs the organizer sign-in choice and a verified organizer account to bind existing workspace ownership. Do not assign legacy ownership based solely on its public label.

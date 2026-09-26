@@ -42,6 +42,7 @@ If both URL forms are present, room mode takes precedence at startup.
 | `style.css` | Themes, cards, ranking lists, modals, responsive layout |
 | `script.js` | Organizer UI, state, ranking controls, optimizer, saving orchestration, presets, result links |
 | `results.js` | Snapshot validation, bounded decoding, safe result card rendering; also testable under Node |
+| `optimizer.js` | Pure scoring, input validation, conflict detection, strict-ban assignment solver |
 | `rooms.js` | Supabase client, database operations, workspace key, host/guest room synchronization |
 | `config.js` | Public Supabase project URL and publishable key |
 | `supabase/schema.sql` | Current schema and legacy migration instructions |
@@ -49,7 +50,7 @@ If both URL forms are present, room mode takes precedence at startup.
 | `scripts/keep-supabase-active.ps1` | Daily local read-only database check, bounded retries, logging and status |
 | `scripts/register-keepalive-task.ps1` | Registers the daily Windows task and sign-in catch-up |
 
-The scripts are classic browser scripts sharing globals, not ES modules. Loading order is Supabase's CDN client, `config.js`, `results.js`, `script.js`, then `rooms.js`. Much of initialization runs at `DOMContentLoaded`, after the application scripts are available.
+The scripts are classic browser scripts sharing globals, not ES modules. Loading order is Supabase's CDN client, `config.js`, `results.js`, `optimizer.js`, `script.js`, then `rooms.js`. Much of initialization runs at `DOMContentLoaded`, after the application scripts are available.
 
 There is no application server, framework, bundler, or package manifest. Focused Node tests now live in `tests/`. Supabase JS is loaded from a floating major-version CDN URL (`@supabase/supabase-js@2`). Google Fonts supplies Outfit.
 
@@ -75,7 +76,7 @@ There is no application server, framework, bundler, or package manifest. Focused
 
 Submissions reference `sessions.room_code` with cascading deletion. There is no separate rooms table in the current model. The schema file deletes orphan submissions and drops the old rooms table as part of migration; it is not a harmless diagnostic script.
 
-RLS is enabled, but the checked-in policies grant unrestricted anonymous select/insert/update/delete on all four tables. Workspace filters in JavaScript do not enforce authorization. The review did not inspect deployed policies or attempt production writes to verify these grants.
+RLS is enabled, but the policies grant unrestricted anonymous select/insert/update/delete on all four tables. Workspace filters in JavaScript do not enforce authorization. Read-only dashboard inspection on 2026-09-26 confirmed the deployed policies match the checked-in rules. At inspection there were 3 sessions across 1 session workspace, 2 presets, 0 submissions, and 0 Auth users. No production mutation tests were performed.
 
 ### Live-room data flow
 
@@ -88,7 +89,7 @@ The host browser currently bridges submissions into the session's player snapsho
 
 ## Assignment rules and implementation
 
-Scores are 10 for first preference, 7 for second, 4 for third, 2 for fourth, 1 for fifth or later, and 0 for neutral. The unranked toggle makes every preferred faction worth 10. Bans score -1000.
+Scores are 10 for first preference, 7 for second, 4 for third, 2 for fourth, 1 for fifth or later, and 0 for neutral. The unranked toggle makes every preferred faction worth 10. Banned factions are excluded from new assignments. The legacy -1000 ban score remains only for compatibility with older result snapshots/scoring.
 
 - **Highest Group Score:** maximize total score, then the lowest individual score.
 - **Fairest for Everyone:** maximize the lowest individual score, then total score.
@@ -98,11 +99,11 @@ Scores are 10 for first preference, 7 for second, 4 for third, 2 for fourth, 1 f
 
 `findOptimalAssignment()` performs recursive exhaustive search with pruning. A Web Worker is generated from the solver functions so it normally runs off the main thread. Large estimated searches prompt the organizer, and the worker can be cancelled. Worker failures can fall back to synchronous execution, which can block the page on large problems.
 
-Current caveat: when a player's branch has no remaining preferred or neutral candidates, the solver tries banned factions. Thus Banned is not currently a hard constraint. The UI can display `BANNED (Forced)` and a negative Group Happiness percentage. With enough distinct factions and normal valid inputs, infeasible strict-ban cases may still return success.
+OPT-01 added input validation and a preliminary matching check. Infeasible bans now produce a conflict explanation naming the affected players; the app does not relax bans automatically. Each optimization works from an immutable snapshot and discards its result if picks/setup/session changed while it was running. Display-only changes such as expanding a card do not invalidate it.
 
 Every tied best assignment is retained in memory. Eight neutral players with eight factions produced 40,320 ties in the review. This grows factorially.
 
-Results use the payload `{v, t, gm, g, pct, r}`: version, session title, game, goal, percentage, and rows. Rows use `{n, f, note, s}` for player name, assigned faction, explanation, and score. The percentage is total score divided by `10 * player count`, not a probability or percentage of satisfied players.
+Results use the payload `{v, t, gm, g, pct, r}`: version, session title, game, goal, percentage, and rows. Rows use `{n, f, note, s}` for player name, assigned faction, explanation, and score. The displayed Preference Score is total score divided by `10 * player count`, not a probability or percentage of satisfied players. A summary counts first choices, top-three choices (including first), unranked preferences, and neutral assignments. Historical forced-ban results remain readable and are labelled as legacy in the summary.
 
 ## Known issues at the reviewed baseline
 
@@ -114,7 +115,7 @@ Results use the payload `{v, t, gm, g, pct, r}`: version, session title, game, g
 | Saving | Reloading the session cache during a pending save can replace the intended data; unload saves are not guaranteed | REL-01 |
 | Submissions | Submitted status requires every faction to be ranked or banned, despite neutral choices being valid | ROOM-01 |
 | Live rooms | Reconnection, stale requests, roster changes, and host/guest copy conflicts need handling | ROOM-01 |
-| Optimizer | Bans can be forced; tied solutions consume unbounded memory | OPT-01, OPT-02 |
+| Optimizer | Strict bans/conflict explanations and snapshot guard implemented; tied solutions still consume unbounded memory | OPT-01 complete; OPT-02 outstanding |
 | Mobile | Add Player text is clipped at 390px; ranking controls are 26px; view changes retain scroll position | UX-01 |
 | Operations | Local daily check installed and timer-triggered run verified; computer must be on/signed in. Broader app checks remain outstanding | OPS-01 complete; ENG-01 ongoing |
 
@@ -141,11 +142,14 @@ node --check script.js
 node --check rooms.js
 node --check config.js
 node --check results.js
-node --test --test-isolation=none tests/results.test.cjs
+node --check optimizer.js
+node --test --test-isolation=none tests/results.test.cjs tests/optimizer.test.cjs
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/keepalive.Tests.ps1
 ```
 
-The initial review included source/schema inspection, syntax checks, isolated function probes, and browser checks with mocked database responses at phone width. It did not verify production multi-device Realtime, deployed RLS, or failure recovery end to end. The temporary mock server used for that review was stopped and was not checked into the repository.
+For a repeatable host browser fixture with no production database connection, run `node tests/serve-fixture.cjs` and open `http://127.0.0.1:8754/`. Resume the sample session, optimize to see its ban conflict, then unban B for Jordan and optimize to obtain one first choice plus one neutral assignment (50%). Reload resets the in-browser data. This mock does not simulate Realtime or backend permissions.
+
+The initial review included source/schema inspection, syntax checks, isolated function probes, and mocked browser checks. Subsequent work verified deployed RLS read-only and a real timer-triggered keep-alive. Production multi-device Realtime and end-to-end save recovery remain unverified.
 
 ## Maintaining this guide
 

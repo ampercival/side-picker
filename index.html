@@ -230,10 +230,13 @@
 
                     <div class="stats-panel">
                         <div class="stat-item">
-                            <span class="label">Group Happiness</span>
+                            <span class="label">Preference Score</span>
                             <span class="value" id="total-score">0</span>
                         </div>
                     </div>
+
+                    <p id="results-summary" class="subtitle"></p>
+                    <p class="subtitle">Points earned as a share of everyone receiving a top preference. Neutral assignments earn zero points.</p>
 
                     <div class="actions center">
                         <button class="btn primary" onclick="openResultsShareModal()">Share Results Link</button>
@@ -539,6 +542,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="config.js"></script>
     <script src="results.js"></script>
+    <script src="optimizer.js"></script>
     <script src="script.js"></script>
     <script src="rooms.js"></script>
 </body>

@@ -20,4 +20,4 @@ Read these files before substantial work:
 
 ## Quick orientation
 
-Static HTML/CSS/JavaScript hosted on GitHub Pages, with Supabase database and Realtime. There is currently no package manager setup, build step, or checked-in test suite. See the application guide for local startup and the distinction between organizer, guest, and shared-results modes.
+Static HTML/CSS/JavaScript hosted on GitHub Pages, with Supabase database and Realtime. No package manager setup or build step is required. Focused Node and PowerShell checks and an isolated browser fixture live in `tests/`. See the application guide for commands and the distinction between organizer, guest, and shared-results modes.

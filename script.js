@@ -900,6 +900,8 @@ function buildOptimizerWorker() {
     const src = `
         const SCORES = ${JSON.stringify(SCORES)};
         ${getScore.toString()}
+        ${validateOptimizerInput.toString()}
+        ${findAssignmentConflict.toString()}
         ${findOptimalAssignment.toString()}
         self.onmessage = function (e) {
             try {
@@ -980,6 +982,20 @@ function hideOptimizerSpinner() {
 // whole async span, so re-entry is ignored rather than orphaning a worker.
 let _optimizing = false;
 
+function optimizationSnapshot() {
+    return JSON.parse(JSON.stringify({
+        activeSessionName, workspace: getWorkspaceKey(),
+        factions: state.factions, sessionName: state.sessionName, gameTitle: state.gameTitle,
+        roomCode: state.roomCode,
+        players: state.players.map(({ id, name, preferences, bans, noPreference }) =>
+            ({ id, name, preferences, bans, noPreference: noPreference ?? false }))
+    }));
+}
+
+function optimizationSnapshotIsCurrent(snapshot) {
+    return JSON.stringify(snapshot) === JSON.stringify(optimizationSnapshot());
+}
+
 async function calculateOptimization() {
     if (state.players.length === 0) {
         showToast('error', 'No Players', "Add players first!");
@@ -1009,10 +1025,11 @@ async function calculateOptimization() {
             if (!proceed) return;
         }
 
+        const snapshot = optimizationSnapshot();
         showOptimizerSpinner();
         let result;
         try {
-            result = await runOptimization(state.players, state.factions, mode);
+            result = await runOptimization(snapshot.players, snapshot.factions, mode);
         } catch (e) {
             hideOptimizerSpinner();
             if (e && e.message !== 'cancelled') {
@@ -1022,20 +1039,25 @@ async function calculateOptimization() {
         }
         hideOptimizerSpinner();
 
+        if (!optimizationSnapshotIsCurrent(snapshot)) {
+            showToast('info', 'Picks Changed', 'The setup or player choices changed while calculating. Run Optimize again to include the latest picks.');
+            return;
+        }
+
         if (result.success) {
-            displayResults(result); // sets lastResults
+            displayResults(result, snapshot); // Render the inputs actually solved.
             switchView('view-results');
 
             // Publish results to the session so the room link shows them to players.
             state.results = lastResults;
-            autoSave(); // keep the localStorage blob in sync so a refresh can't clobber results
+            autoSave();
             if (activeSessionName) {
                 // Push immediately so the room flips to results without waiting for the debounce.
                 sessionsCache[activeSessionName] = currentSessionObject();
                 upsertSessionToDb(activeSessionName, sessionsCache[activeSessionName]);
             }
         } else {
-            showToast('error', 'Optimization Failed', "Could not find a valid assignment! Try removing some bans.");
+            showToast('error', 'No Valid Assignment', result.reason || 'No assignment respects all bans. Add factions or revise the conflicting choices.');
         }
     } finally {
         _optimizing = false;
@@ -1068,175 +1090,20 @@ function reopenForChanges() {
     );
 }
 
-// Scores
-const SCORES = {
-    rank1: 10,
-    rank2: 7,
-    rank3: 4,
-    rank4: 2,
-    rank5Plus: 1,
-    neutral: 0,
-    ban: -1000
-};
-
-function getScore(player, faction) {
-    if (player.bans.includes(faction)) return SCORES.ban;
-
-    const rankIndex = player.preferences.indexOf(faction);
-
-    // No Preference Mode: every preferred faction is treated as top rank.
-    if (player.noPreference) {
-        if (rankIndex >= 0) return 10; // Treat all preferences as top rank
-        return SCORES.neutral;
-    }
-
-    if (rankIndex === 0) return SCORES.rank1;
-    if (rankIndex === 1) return SCORES.rank2;
-    if (rankIndex === 2) return SCORES.rank3;
-    if (rankIndex === 3) return SCORES.rank4;
-    if (rankIndex >= 4) return SCORES.rank5Plus;
-
-    return SCORES.neutral; // Not in preferences, not banned
-}
-
-function findOptimalAssignment(players, factions, mode) {
-    // Mode: 'total' (Maximize Sum) or 'fairness' (Maximize Minimum, tie-break with Sum)
-
-    let bestMetric = { primary: -Infinity, secondary: -Infinity };
-    let bestAssignments = [];
-
-    // Helper to calculate score of a complete assignment map
-    function solve(playerIndex, usedFactions, currentSum, currentMin, currentAssignment) {
-        // Base case: All players assigned
-        if (playerIndex === players.length) {
-            // Calculate Metric based on Mode
-            let primary, secondary;
-
-            if (mode === 'fairness') {
-                primary = currentMin; // Maximize the lowest score
-                secondary = currentSum; // Tiebreaker: Total Happiness
-            } else {
-                primary = currentSum; // Maximize Total Happiness
-                secondary = currentMin; // Tiebreaker: Improve worst player if totals equal
-            }
-
-            if (primary > bestMetric.primary) {
-                bestMetric = { primary, secondary };
-                bestAssignments = [{ ...currentAssignment }];
-            } else if (primary === bestMetric.primary) {
-                // Check secondary
-                if (secondary > bestMetric.secondary) {
-                    bestMetric = { primary, secondary };
-                    bestAssignments = [{ ...currentAssignment }];
-                } else if (secondary === bestMetric.secondary) {
-                    bestAssignments.push({ ...currentAssignment });
-                }
-            }
-            return;
-        }
-
-        const player = players[playerIndex];
-
-        // Pruning checks (Optimization)
-        // If we are in fairness mode, and currentMin is already worse than bestMetric.primary, we can prune?
-        // currentMin only decreases (or stays same). It never goes up.
-        // So if currentMin < bestMetric.primary (and mode is fairness), we can STOP.
-        if (mode === 'fairness' && currentMin < bestMetric.primary) {
-            return;
-        }
-
-        // Construct ordered list of candidates
-        let candidates = [];
-
-        // 1. Preferences (in order)
-        player.preferences.forEach(f => {
-            if (!usedFactions.has(f)) candidates.push(f);
-        });
-
-        // 2. Neutrals
-        const neutrals = [];
-        factions.forEach(f => {
-            if (!usedFactions.has(f) && !player.preferences.includes(f) && !player.bans.includes(f)) {
-                neutrals.push(f);
-            }
-        });
-        candidates = candidates.concat(neutrals);
-
-        // 3. Bans (Only if desperate)
-        if (candidates.length === 0) {
-            factions.forEach(f => {
-                if (!usedFactions.has(f) && player.bans.includes(f)) {
-                    candidates.push(f);
-                }
-            });
-        }
-
-        if (candidates.length === 0) return; // Dead end
-
-        for (const faction of candidates) {
-            const score = getScore(player, faction);
-
-            // Sum Pruning (Only for total mode)
-            if (mode === 'total') {
-                const maxRemaining = (players.length - 1 - playerIndex) * SCORES.rank1;
-                // If even with perfect remainder we can't beat the best primary, prune.
-                if (currentSum + score + maxRemaining < bestMetric.primary) {
-                    continue;
-                }
-            }
-
-            usedFactions.add(faction);
-            currentAssignment[player.id] = faction;
-
-            solve(
-                playerIndex + 1,
-                usedFactions,
-                currentSum + score,
-                Math.min(currentMin, score),
-                currentAssignment
-            );
-
-            delete currentAssignment[player.id];
-            usedFactions.delete(faction);
-        }
-    }
-
-    solve(0, new Set(), 0, Infinity, {});
-
-    if (bestAssignments.length > 0) {
-        const winner = bestAssignments[Math.floor(Math.random() * bestAssignments.length)];
-        const finalSum = mode === 'fairness' ? bestMetric.secondary : bestMetric.primary;
-
-        return {
-            success: true,
-            score: finalSum, // Always return total score for display
-            assignment: winner,
-            tieCount: bestAssignments.length
-        };
-    }
-
-    return {
-        success: false,
-        score: -Infinity,
-        assignment: null
-    };
-}
-
-
 // Most recent optimization, captured for the shareable results link.
 let lastResults = null;
 
-function displayResults(result) {
+function displayResults(result, input = state) {
     const container = get('results-container');
     container.innerHTML = '';
 
-    const maxPossible = state.players.length * SCORES.rank1;
+    const maxPossible = input.players.length * SCORES.rank1;
     const percent = maxPossible > 0 ? Math.round((result.score / maxPossible) * 100) : 0;
 
     get('total-score').textContent = `${percent}%`;
 
-    const sessionName = (state.sessionName || '').trim();
-    const gameTitle = (state.gameTitle || '').trim();
+    const sessionName = (input.sessionName || '').trim();
+    const gameTitle = (input.gameTitle || '').trim();
     const subtitleParts = [sessionName, gameTitle].filter(Boolean);
     get('results-subtitle').textContent =
         subtitleParts.length ? subtitleParts.join(' · ') : 'The happiness algorithm has spoken.';
@@ -1246,7 +1113,7 @@ function displayResults(result) {
 
     const shareRows = [];
 
-    state.players.forEach((p, index) => {
+    input.players.forEach((p, index) => {
         const assignedFaction = result.assignment[p.id];
         const score = getScore(p, assignedFaction);
 
@@ -1262,6 +1129,8 @@ function displayResults(result) {
     });
 
     lastResults = { v: 1, t: sessionName, gm: gameTitle, g: goalText, pct: percent, r: shareRows };
+    get('results-subtitle').textContent = [...subtitleParts, `Goal: ${goalText}`].join(' · ');
+    get('results-summary').textContent = describeResultRows(shareRows);
 }
 
 // --- Session Management ---
@@ -1561,7 +1430,7 @@ function showHostResults(payload) {
     container.innerHTML = '';
     get('total-score').textContent = `${payload.pct != null ? payload.pct : 0}%`;
 
-    const parts = [payload.t, payload.gm].filter(Boolean);
+    const parts = [payload.t, payload.gm, payload.g ? `Goal: ${payload.g}` : ''].filter(Boolean);
     get('results-subtitle').textContent =
         parts.length ? parts.join(' · ') : 'The happiness algorithm has spoken.';
 
@@ -1570,6 +1439,7 @@ function showHostResults(payload) {
     });
 
     lastResults = payload; // keep Share Results Link working after a resume
+    get('results-summary').textContent = describeResultRows(payload.r);
     isSharedMode = false;
     document.body.classList.remove('shared-mode');
     switchView('view-results');
@@ -1865,6 +1735,7 @@ function enterSharedResultsMode(payload) {
     if (payload.gm) parts.push(payload.gm);
     if (payload.g) parts.push(`Goal: ${payload.g}`);
     get('results-subtitle').textContent = parts.length ? parts.join(' · ') : 'Final assignments';
+    get('results-summary').textContent = describeResultRows(payload.r);
 
     (payload.r || []).forEach((row, index) => {
         container.appendChild(buildResultCard({ name: row.n, faction: row.f, note: row.note, score: row.s, index }));

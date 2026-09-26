@@ -59,6 +59,18 @@ function buildResultCard({ name, faction, note, score, index }) {
     return card;
 }
 
+function describeResultRows(rows) {
+    const first = rows.filter(r => r.note === 'Choice #1').length;
+    const topThree = rows.filter(r => /^Choice #[123]$/.test(r.note)).length;
+    const unranked = rows.filter(r => r.note === 'Choice').length;
+    const neutral = rows.filter(r => r.note === 'Neutral').length;
+    const forced = rows.filter(r => r.s < 0).length;
+    const parts = [`First choices: ${first}`, `Top-three choices (including first): ${topThree}`,
+        `Unranked preferences: ${unranked}`, `Neutral: ${neutral}`];
+    if (forced) parts.push(`Legacy forced bans: ${forced}`);
+    return parts.join(' · ');
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { RESULT_LIMITS, validateResultsPayload, encodeData, decodeData, buildResultCard };
+    module.exports = { RESULT_LIMITS, validateResultsPayload, encodeData, decodeData, buildResultCard, describeResultRows };
 }
