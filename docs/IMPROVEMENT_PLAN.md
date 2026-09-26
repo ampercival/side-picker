@@ -16,18 +16,18 @@ Read [APP_GUIDE.md](APP_GUIDE.md) for current behavior. Follow [AGENTS.md](../AG
 
 - **Completed:** initial review and durable documentation.
 - **Implementation tasks completed:** SEC-01 (safe result links), OPS-01 (local daily database check), and OPT-01 (strict bans, conflict explanations, consistent input snapshots, result summaries).
-- **Next action:** SEC-02: organizer sign-in preference is pending. Dashboard access is available after the user's sign-in; read-only inspection confirms unrestricted anonymous policies on all four tables, with 3 sessions in 1 workspace, 2 presets, 0 submissions, and 0 Auth users. Settle the organizer identity and bind the existing workspace through an administrator-controlled migration. Keep the health read working or migrate it to a dedicated health table.
+- **Next action:** SEC-02 awaits the user's organizer email address (asked in the active task). Email sign-in links are the stated default unless the user prefers Google. Dashboard access is available after the user's sign-in; read-only inspection confirms unrestricted anonymous policies on all four tables, with 3 sessions in 1 workspace, 2 presets, 0 submissions, and 0 Auth users. Bind the existing workspace through an administrator-controlled migration after verifying the organizer account. Keep the health read working or migrate it to a dedicated health table.
 - **Recommended first release:** SEC-01, OPS-01, SEC-02, REL-01, OPT-01, ROOM-01, UX-01, and the supporting ENG-01 checks.
 - **Dependencies:** SEC-02's ownership and player-identity decisions affect REL-01 and ROOM-01. Coordinate schema changes instead of migrating the same identities repeatedly. ENG-01 should grow alongside fixes, not wait until the end.
-- **External state:** SEC-01 pushed as `2c72a21`, OPS-01 as `ce280b0`. SEC-01 Pages build and live invalid-link recovery verified. Windows task `Side Picker Supabase Keepalive` is installed; a real timer-triggered run returned 0 and completed three validated reads on 2026-09-26 at 17:39 Atlantic. Next daily run: 2026-09-27 at 09:17 Atlantic. No production schema migration performed.
-- **Working state:** OPT-01 tested locally, ready for separate commit/push. Signed-out keep-alive execution is not supported by the selected Interactive principal.
+- **External state:** SEC-01 pushed as `2c72a21`, OPS-01 as `ce280b0`, OPT-01 as `27bbdd6`. GitHub Pages reports the optimizer commit built; live invalid-link recovery and the new result summary verified. Windows task `Side Picker Supabase Keepalive` is installed; a real timer-triggered run returned 0 and completed three validated reads on 2026-09-26 at 17:39 Atlantic. Next daily run: 2026-09-27 at 09:17 Atlantic. No production schema migration performed.
+- **Working state:** all three improvements committed and pushed separately; final rollout notes recorded. Signed-out keep-alive execution is not supported by the selected Interactive principal.
 
 ## Decisions to settle during planning
 
 | Decision | Recommended starting point | Status |
 | --- | --- | --- |
 | Daily scheduler | Local PowerShell script with Windows Task Scheduler, daily plus sign-in catch-up | User selected local script on 2026-09-26; requires this computer on, signed in, and connected |
-| Organizer identity | Supabase Auth with ownership enforced by RLS; preserve existing sessions through a deliberate migration | Proposed; sign-in and legacy ownership claim flow unresolved |
+| Organizer identity | Supabase Auth with ownership enforced by RLS; preserve existing sessions through a deliberate migration | Email sign-in links stated as default; awaiting owner email/any Google preference; legacy owner binding remains pending |
 | Guest identity | Keep joining simple, but enforce scoped room/player access using validated identity or a server-checked token | Proposed; mechanism unresolved |
 | Bans | Hard exclusions; explain infeasible assignments rather than silently forcing a ban | Implemented in OPT-01 |
 | Unsaved edits | Small durable pending-edit store with visible sync status; database remains authoritative for acknowledged saves | Proposed; do not silently replace the cloud model with local-only storage |
@@ -218,3 +218,10 @@ At the end of each implementation session, update Current handoff and append a d
 - Added `tests/serve-fixture.cjs` for repeatable isolated browser checks without a production connection. The exhaustive solver's tie-memory/performance issue remains OPT-02; this change does not claim to solve it.
 - User signed into Supabase. Read-only catalog query verified `users_all`, `sessions_all`, `presets_all`, and `submissions_all`: role anon, command ALL, using/check true. Inventory: 3 sessions, 1 session workspace, 2 presets, 0 submissions, 0 Auth users. No raw game records exported and no schema/policy changes made.
 - SEC-02 next needs the organizer sign-in choice and a verified organizer account to bind existing workspace ownership. Do not assign legacy ownership based solely on its public label.
+
+### 2026-09-26 — Release verification and next-session handoff
+
+- All three improvements were pushed separately to `main`: `2c72a21`, `ce280b0`, `27bbdd6`.
+- GitHub Pages reports `27bbdd6` built; the live site displays Unicode result snapshots, goal, Preference Score, and the new choice breakdown. Application write testing used the isolated fixture only.
+- The plan and app-guide links were checked; no runtime logs or state files were committed.
+- Requested the email address that should own the existing workspace. Email sign-in links are the stated default unless the user chooses Google. Keep the current app working until the migration, backend rules, and new sign-in flow are prepared and verified together.
