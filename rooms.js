@@ -428,7 +428,7 @@ async function enterRoomGuestMode(code) {
 }
 
 function guestResultsReady(results) {
-    return results && Array.isArray(results.r) && results.r.length > 0;
+    return validateResultsPayload(results) !== null;
 }
 
 // Show players a live "who's submitted" list so stragglers know to send picks.

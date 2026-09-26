@@ -1226,22 +1226,6 @@ function findOptimalAssignment(players, factions, mode) {
 // Most recent optimization, captured for the shareable results link.
 let lastResults = null;
 
-function buildResultCard({ name, faction, note, score, index }) {
-    const card = document.createElement('div');
-    card.className = 'result-card';
-    card.style.animationDelay = `${index * 0.1}s`; // Stagger animation
-
-    const badgeClass = score < 0 ? 'score-badge negative' : 'score-badge';
-    const scoreLabel = score >= 0 ? `+${score}` : `${score}`;
-
-    card.innerHTML = `
-        <div class="player">${escapeHtml(name)}</div>
-        <div class="assigned-faction">${escapeHtml(faction)}</div>
-        <div class="${badgeClass}">${escapeHtml(note)} (${scoreLabel})</div>
-    `;
-    return card;
-}
-
 function displayResults(result) {
     const container = get('results-container');
     container.innerHTML = '';
@@ -1344,9 +1328,14 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
-    const sharedResults = parseResultsFromUrl();
-    if (sharedResults) {
-        enterSharedResultsMode(sharedResults);
+    try {
+        const sharedResults = parseResultsFromUrl();
+        if (sharedResults) {
+            enterSharedResultsMode(sharedResults);
+            return;
+        }
+    } catch {
+        showInvalidResultsLink();
         return;
     }
 
@@ -1562,6 +1551,12 @@ function resumeSession(name) {
 // Render the results view from a stored snapshot (e.g. on resume), keeping the
 // host's action buttons available — unlike the read-only shared/guest view.
 function showHostResults(payload) {
+    payload = validateResultsPayload(payload);
+    if (!payload) {
+        showToast('error', 'Invalid Results', 'These saved results cannot be displayed. You can generate new assignments.');
+        switchView('view-players');
+        return;
+    }
     const container = get('results-container');
     container.innerHTML = '';
     get('total-score').textContent = `${payload.pct != null ? payload.pct : 0}%`;
@@ -1794,22 +1789,6 @@ function deletePreset(name) {
 let isGuestMode = false;
 let isSharedMode = false;
 
-// UTF-8 safe, URL-safe base64 encoding of a JSON payload (used by results links).
-function encodeData(obj) {
-    const bytes = new TextEncoder().encode(JSON.stringify(obj));
-    let bin = '';
-    bytes.forEach(b => bin += String.fromCharCode(b));
-    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-function decodeData(str) {
-    let b64 = str.replace(/-/g, '+').replace(/_/g, '/');
-    while (b64.length % 4) b64 += '=';
-    const bin = atob(b64);
-    const bytes = Uint8Array.from(bin, c => c.charCodeAt(0));
-    return JSON.parse(new TextDecoder().decode(bytes));
-}
-
 async function copyToClipboard(text) {
     try {
         await navigator.clipboard.writeText(text);
@@ -1826,7 +1805,13 @@ function openResultsShareModal() {
         return;
     }
     const base = location.origin + location.pathname;
-    const link = `${base}#results=${encodeData(lastResults)}`;
+    const payload = validateResultsPayload(lastResults);
+    const encoded = payload && encodeData(payload);
+    if (!encoded || encoded.length > RESULT_LIMITS.encodedLength) {
+        showToast('error', 'Cannot Share Results', 'These results are invalid or too large to share in a link.');
+        return;
+    }
+    const link = `${base}#results=${encoded}`;
 
     get('results-link-input').value = link;
     get('modal-overlay').classList.add('active');
@@ -1847,18 +1832,26 @@ async function copyResultsLink() {
 }
 
 function parseResultsFromUrl() {
-    const match = location.hash.match(/results=([^&]+)/);
+    const match = location.hash.match(/(?:^#|&)results(?:=([^&]*))?(?=&|$)/);
     if (!match) return null;
-    try {
-        const data = decodeData(match[1]);
-        if (data && Array.isArray(data.r)) return data;
-    } catch (e) {
-        console.error('Invalid results link', e);
-    }
-    return null;
+    const data = validateResultsPayload(decodeData(match[1] || ''));
+    if (!data) throw new Error('Invalid results link');
+    return data;
+}
+
+function showInvalidResultsLink() {
+    isSharedMode = true;
+    document.body.classList.add('shared-mode');
+    switchView('view-invalid-results');
+    get('invalid-results-title').focus();
 }
 
 function enterSharedResultsMode(payload) {
+    payload = validateResultsPayload(payload);
+    if (!payload) {
+        showInvalidResultsLink();
+        return;
+    }
     isSharedMode = true;
     document.body.classList.add('shared-mode');
 
