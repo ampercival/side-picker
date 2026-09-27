@@ -991,17 +991,19 @@ async function calculateOptimization() {
 
     if (_optimizing) return; // a run is already in progress
 
-    // Get Mode
-    const mode = document.querySelector('input[name="opt-mode"]:checked').value; // 'total' or 'fairness'
-
     _optimizing = true;
     try {
         if (state.roomCode && !(await setRoomStage('locked'))) return;
         const snapshot = optimizationSnapshot();
         showOptimizerSpinner();
-        let result;
+        let result, comparison;
         try {
-            result = await runOptimization(snapshot.players, snapshot.factions, mode);
+            result = await runOptimization(snapshot.players, snapshot.factions, 'total');
+            if (result.success) {
+                const fairness = await runOptimization(snapshot.players, snapshot.factions, 'fairness');
+                comparison = { total: result, fairness };
+                if (!fairness.success) result = fairness;
+            }
         } catch (e) {
             hideOptimizerSpinner();
             if (e && e.message !== 'cancelled') {
@@ -1017,16 +1019,7 @@ async function calculateOptimization() {
         }
 
         if (result.success) {
-            displayResults(result, snapshot); // Render the inputs actually solved.
-            switchView('view-results');
-
-            // Publish results to the session so the room link shows them to players.
-            state.results = lastResults;
-            state.roomStage = 'published';
-            autoSave();
-            if (activeSessionName) {
-                if (!(await flushSession())) showToast('info', 'Results not published yet', 'These results are local. Guests will see them after saving succeeds.');
-            }
+            showGoalComparison(comparison, snapshot);
         } else {
             showToast('error', 'No Valid Assignment', result.reason || 'No assignment respects all bans. Add factions or revise the conflicting choices.');
         }
@@ -1064,7 +1057,7 @@ function reopenForChanges() {
 // Most recent optimization, captured for the shareable results link.
 let lastResults = null;
 
-function displayResults(result, input = state) {
+function displayResults(result, input = state, goalOverride = null) {
     const container = get('results-container');
     container.innerHTML = '';
 
@@ -1080,7 +1073,7 @@ function displayResults(result, input = state) {
         subtitleParts.length ? subtitleParts.join(' · ') : 'The happiness algorithm has spoken.';
 
     const goalEl = document.querySelector('input[name="opt-mode"]:checked');
-    const goalText = goalEl ? goalEl.parentElement.querySelector('strong').textContent : '';
+    const goalText = goalOverride || (goalEl ? goalEl.parentElement.querySelector('strong').textContent : '');
 
     const shareRows = [];
 
@@ -1651,6 +1644,7 @@ function openResultsShareModal() {
     const link = `${base}#results=${encoded}`;
 
     get('results-link-input').value = link;
+    get('results-summary-text').value = formatResultsSummary(payload);
     get('modal-overlay').classList.add('active');
     get('results-share-modal').classList.add('active');
     get('results-link-input').focus();

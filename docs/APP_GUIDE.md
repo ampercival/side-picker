@@ -49,6 +49,7 @@ If both URL forms are present, room mode takes precedence at startup.
 | `access.js` | Secure token generation, fragment parsing, safe link construction |
 | `save-journal.js` | Durable draft queue, immutable retry requests, save states |
 | `persistence.js` | Save-status and recovery UI, connection retries |
+| `sharing.js` | Goal comparison, explicit publication, result summaries, local invitation QR codes |
 | `repeat-games.js` | Fresh repeat-session setup and bounded bulk-name entry |
 | `accessibility.js` | Dialog focus/keyboard behavior, announcements, and browser view navigation |
 | `config.js` | Public Supabase project URL and publishable key |
@@ -59,7 +60,7 @@ If both URL forms are present, room mode takes precedence at startup.
 | `scripts/keep-supabase-active.ps1` | Daily local read-only database check, bounded retries, logging and status |
 | `scripts/register-keepalive-task.ps1` | Registers the daily Windows task and sign-in catch-up |
 
-The scripts are classic browser scripts sharing globals, not ES modules. Loading order is Supabase's CDN client, `config.js`, `access.js`, `save-journal.js`, `results.js`, `optimizer.js`, `repeat-games.js`, `script.js`, `rooms.js`, then `persistence.js` and `accessibility.js`. Much of initialization runs at `DOMContentLoaded`, after the application scripts are available.
+The scripts are classic browser scripts sharing globals, not ES modules. Loading order is Supabase's CDN client, `config.js`, `access.js`, `save-journal.js`, `results.js`, `optimizer.js`, `repeat-games.js`, the pinned QR encoder, `sharing.js`, `script.js`, `rooms.js`, then `persistence.js` and `accessibility.js`. Much of initialization runs at `DOMContentLoaded`, after the application scripts are available.
 
 There is no application server, framework, bundler, or package manifest. Focused Node tests now live in `tests/`. Supabase JS is loaded from a floating major-version CDN URL (`@supabase/supabase-js@2`). Google Fonts supplies Outfit.
 
@@ -104,7 +105,7 @@ Private links use two capability-checked functions, `sp_workspace` and `sp_room`
 3. Guest submits through `sp_room`; the backend checks the capability, membership, faction choices, and published status, then stores the submission in the private schema.
 4. The host polls new submissions and merges them by player ID and timestamp. Guests poll minimal room data and published results. Polling runs every three seconds while the page is visible, avoids overlapping requests, and reports connection interruptions.
 
-The host still bridges submitted picks into the working session. The guest roster uses explicit backend submission status, including neutral submissions, even when the host is offline. A submitted acknowledgement disappears when the guest edits their choices. Concurrent organizer saves are version-checked and conflicts preserve local drafts. Guest-versus-host choice reconciliation and the full room lifecycle remain ROOM-01 work.
+The host still bridges submitted picks into the working session. The guest roster uses explicit backend submission status, including neutral submissions, even when the host is offline. A submitted acknowledgement disappears when the guest edits their choices. Concurrent organizer saves are version-checked and conflicts preserve local drafts. Room revisions, explicit stages, and conflict resolution are implemented; see Room synchronization below.
 
 ## Assignment rules and implementation
 
@@ -163,7 +164,7 @@ node --check config.js
 node --check results.js
 node --check optimizer.js
 node --check access.js
-node --test --test-isolation=none tests/results.test.cjs tests/optimizer.test.cjs tests/access.test.cjs tests/saves.test.cjs tests/rooms.test.cjs tests/repeat-games.test.cjs tests/text-encoding.test.cjs
+node --test --test-isolation=none tests/results.test.cjs tests/optimizer.test.cjs tests/access.test.cjs tests/saves.test.cjs tests/rooms.test.cjs tests/repeat-games.test.cjs tests/sharing.test.cjs tests/text-encoding.test.cjs
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/keepalive.Tests.ps1
 ```
 
@@ -202,3 +203,13 @@ Validated with isolated 360px/390px iframe previews and a desktop browser: reada
 Every session card offers **Repeat game**. The name can be changed before creation. It copies the game title, factions, and player display names into an independent saved session; choices, bans, submission metadata, locks, results, room code, and old player IDs are cleared. The new room gets its own invitations. The original session is untouched.
 
 **Paste faction list** and **Paste player list** accept one name per line or comma-separated names. A preview reports additions and duplicates. Names are trimmed; matching is case-insensitive with Unicode normalization. Existing entries are preserved; exceeding 100 entries or 500 characters per name rejects the entire pasted list. This is simple name entry, not a quoted CSV importer. Single-player entry still permits intentionally distinct people with the same display name; each has a unique ID.
+
+## Comparing and sharing results
+
+**Compare & Assign** closes live picking, synchronizes submissions, and calculates both goals. Expand each preview for assignments, then publish the chosen goal. Cancelling leaves picking closed until explicitly reopened. A changed setup or pick invalidates the preview; publication never silently uses stale choices. Tied outcomes can differ even when the two goals reach the same scores.
+
+The room dialog has a QR disclosure for its viewing invitation. Copying a personal invitation switches the QR and label to that player; copying the viewing invitation switches back. QR generation runs entirely in the browser using a pinned, vendored MIT library; private links never go to an external QR service. A personal QR grants exactly the same permission as its personal link, so share it with that player. Guest identity remains in the current tab's session storage after the fragment is removed.
+
+Share Results provides a read-only snapshot link and a plain-text summary containing the session/game, selected goal, percentage, and each assignment with its explanation and points. Clipboard failure selects the summary for manual copying.
+
+Optional independent QR verification: obtain `dist/jsQR.js` from the npm `jsqr@1.4.0` package, keep it outside tracked files (for example `.local/qr-decoder.cjs`), and run `node tests/qr-roundtrip.cjs .local/qr-decoder.cjs`. It decodes the actual canvas pixel output for viewing/personal/encoded-identity URLs. This decoder is test-only and is not loaded by the app.

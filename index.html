@@ -199,30 +199,30 @@
                     </div>
 
                     <div class="options-panel">
-                        <h3>Optimization Goal</h3>
+                        <h3>Compare both goals before publishing</h3>
                         <div class="opt-choices">
-                            <label class="opt-choice">
-                                <input type="radio" name="opt-mode" value="total" checked>
+                            <div class="opt-choice">
+
                                 <div>
                                     <strong>Highest Group Score</strong>
                                     <p>Adds up everyone's happiness and picks the biggest total. Best on average — but
                                         one player may get stuck with a low choice if it lifts the group.</p>
                                 </div>
-                            </label>
-                            <label class="opt-choice">
-                                <input type="radio" name="opt-mode" value="fairness">
+                            </div>
+                            <div class="opt-choice">
+
                                 <div>
                                     <strong>Fairest for Everyone</strong>
                                     <p>Makes the least-happy player as happy as possible first, then breaks ties by total
                                         score. No one is left with a bad pick if it can be avoided.</p>
                                 </div>
-                            </label>
+                            </div>
                         </div>
                     </div>
 
                     <div class="actions space-between">
                         <button class="btn text" onclick="prevStep('view-factions')">Back</button>
-                        <button class="btn accent" onclick="calculateOptimization()">Optimize & Assign</button>
+                        <button class="btn accent" onclick="calculateOptimization()">Compare & Assign</button>
                     </div>
                 </div>
             </section>
@@ -432,7 +432,7 @@
             <p style="margin-bottom: 1rem;"><strong>4. Collect picks live (optional):</strong> Click <strong>Live
                     Room</strong> and send each person their private player link. Players rank their own factions on their phones and submit — their
                 picks appear here in real time.</p>
-            <p style="margin-bottom: 1rem;"><strong>5. Optimize:</strong> Click <strong>Optimize &amp; Assign</strong>
+            <p style="margin-bottom: 1rem;"><strong>5. Optimize:</strong> Click <strong>Compare &amp; Assign</strong>
                 and choose a goal — <em>Highest Group Score</em> (best total) or <em>Fairest for Everyone</em> (lifts the
                 unluckiest player). Use <strong>Share Results Link</strong> to send everyone the final assignments.</p>
             <p style="font-size: 0.85rem; opacity: 0.7;"><em>Everything saves to your Sessions automatically — reopen a
@@ -543,6 +543,12 @@
         <p id="room-connection" role="status" class="subtitle">Connecting…</p>
         <label for="room-link-input">Invitation link</label>
         <input type="text" id="room-link-input" readonly onclick="this.select()">
+        <details class="invitation-qr-wrap">
+            <summary>Show QR code for this invitation</summary>
+            <p id="invitation-qr-label"></p>
+            <canvas id="invitation-qr" role="img" aria-label="QR code for the selected invitation">Use the invitation link above.</canvas>
+            <p>Generated here in your browser. Share personal invitations only with that player.</p>
+        </details>
         <div id="room-status-list" class="room-status" style="margin-bottom: 1.5rem;"></div>
         <div class="actions right">
             <button class="btn" onclick="closeModals()">Done</button>
@@ -557,10 +563,21 @@
             Send this link to your players so they can see the final assignments. It's read-only.
         </p>
         <input type="text" id="results-link-input" aria-label="Read-only results link" readonly onclick="this.select()">
+        <label for="results-summary-text">Copyable results summary</label>
+        <textarea id="results-summary-text" rows="6" readonly onclick="this.select()"></textarea>
         <div class="actions right">
             <button class="btn" onclick="closeModals()">Close</button>
+            <button class="btn secondary" onclick="copyResultsSummary()">Copy summary</button>
             <button class="btn primary" onclick="copyResultsLink()">Copy Link</button>
         </div>
+    </div>
+
+    <div id="comparison-modal" class="modal">
+        <h3>Compare assignment goals</h3>
+        <p id="comparison-room-note"></p>
+        <p>Both goals respect every ban. They can reach the same score; tied outcomes may assign factions differently.</p>
+        <div id="goal-previews"></div>
+        <div class="actions right"><button class="btn secondary" onclick="closeModals()">Back to picks</button></div>
     </div>
 
     <template id="template-session-card">
@@ -583,6 +600,8 @@
     <script src="results.js"></script>
     <script src="optimizer.js"></script>
     <script src="repeat-games.js"></script>
+    <script src="vendor/qrcode-generator-1.4.4.js"></script>
+    <script src="sharing.js"></script>
     <script src="script.js"></script>
     <script src="rooms.js"></script>
     <script src="persistence.js"></script>

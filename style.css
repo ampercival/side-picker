@@ -1526,6 +1526,16 @@ input[type="text"], input[type="password"], textarea, select { min-width: 0; max
 :is(button,a,input,textarea,select,[contenteditable],[tabindex]):focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 #bulk-input { width: 100%; margin-block: .75rem; padding: 12px; background: var(--input-bg); color: var(--text-main); border: 1px solid var(--border); border-radius: 8px; font: inherit; resize: vertical; }
+#results-summary-text { width: 100%; margin-block: .75rem; padding: 12px; font: inherit; background: var(--input-bg); color: var(--text-main); border: 1px solid var(--border); border-radius: 8px; }
+#comparison-modal { max-width: 760px; }
+#goal-previews { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(260px,100%),1fr)); gap: 1rem; margin-block: 1rem; }
+.goal-preview { border: 1px solid var(--border); border-radius: 12px; padding: 1rem; min-width: 0; }
+.goal-preview p, .goal-preview li { overflow-wrap: anywhere; margin-block: .5rem; }
+.goal-preview ul { padding-left: 1.2rem; }
+.goal-preview .btn { width: 100%; margin-top: 1rem; white-space: normal; }
+summary { cursor: pointer; min-height: 44px; padding-block: 10px; }
+.invitation-qr-wrap { margin-block: 1rem; }
+#invitation-qr { max-width: 100%; height: auto; display: block; margin: 1rem auto; }
 .sc-repeat { width: 100%; margin-top: 8px; }
 @media (max-width: 600px) {
     .card { padding: 1.25rem; }

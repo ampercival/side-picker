@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let top = null, lastOutside = document.activeElement;
     const openers = new Map(), modals = [...document.querySelectorAll('.modal')];
     const visible = el => el?.isConnected && el.getClientRects().length > 0;
-    const focusable = modal => [...modal.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),a[href],[tabindex="0"],[contenteditable="true"]')].filter(visible);
+    const focusable = modal => [...modal.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary,a[href],[tabindex="0"],[contenteditable="true"]')].filter(visible);
     document.addEventListener('focusin', event => { if (!event.target.closest('.modal')) lastOutside=event.target; });
     for (const modal of modals) {
         modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');modal.tabIndex=-1;

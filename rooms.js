@@ -339,6 +339,7 @@ async function showRoomModal() {
     try {
         const link = await invitation(); if (name !== activeSessionName) return;
         get('room-link-input').value = link; get('room-code-label').textContent = ''; renderRoomStatus();
+        showInvitationQR(link,'Viewing invitation — read only');
         get('modal-overlay').classList.add('active'); get('room-modal').classList.add('active');
     } catch (error) { accessError(error, 'Could not load invitations'); }
 }
@@ -346,6 +347,7 @@ async function copyPlayerLink(id) {
     try {
         if (!(await flushSession())) return;
         const link = await invitation(id); get('room-link-input').value = link;
+        showInvitationQR(link,`Personal invitation for ${state.players.find(p=>p.id===id)?.name || 'this player'}`);
         if (await copyToClipboard(link)) showToast('success', 'Player link copied', 'Send this invitation only to this player.');
         else { get('room-link-input').select(); showToast('info', 'Copy manually', 'Copy the selected player link.'); }
     } catch (error) { accessError(error, 'Could not copy invitation'); }
@@ -353,6 +355,7 @@ async function copyPlayerLink(id) {
 async function copyRoomLink() {
     try {
         get('room-link-input').value = await invitation();
+        showInvitationQR(get('room-link-input').value,'Viewing invitation — read only');
         if (await copyToClipboard(get('room-link-input').value)) showToast('success', 'Viewing link copied', 'This link can view the room but cannot submit picks.');
         else get('room-link-input').select();
     } catch (error) { accessError(error, 'Could not copy viewing link'); }

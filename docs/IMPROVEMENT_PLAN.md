@@ -16,11 +16,11 @@ Read [APP_GUIDE.md](APP_GUIDE.md) for current behavior. Follow [AGENTS.md](../AG
 
 - **Completed:** initial review and durable documentation.
 - **Implementation tasks completed:** SEC-01 (safe result links), OPS-01 (local daily database check), OPT-01 (strict bans, conflict explanations, consistent input snapshots, result summaries), SEC-02 (private organizer/player links and enforced database access), REL-01 (durable drafts, truthful status, safe retries, version-checked saves, and explicit conflict recovery), and ROOM-01 (room stages and safe submission reconciliation).
-- **Next action:** FEATURE-02 sharing and goal comparison, then ENG-01 repeatable checks/release documentation. Optional player groups, accounts, and rotation/history remain deferred.
+- **Next action:** ENG-01 repeatable checks and release documentation. Optional player groups, accounts, and rotation/history remain deferred.
 - **Scope:** no required sign-in. Private organizer links control one workspace; personal invitations control one player; viewing links are read-only. Three existing sessions and two presets belong to two separate workspaces and have separate recovery links. Optional accounts remain FEATURE-04.
 - **External state:** SEC-01 `2c72a21`, OPS-01 `ce280b0`, OPT-01 `27bbdd6`, independent health access `ac3f649`, and SEC-02 `b5cbd3a` are pushed. Pages reports SEC-02 built. Both private-link migrations and legacy bindings are applied; public game-table access is revoked. The live original-game link and post-cutover API/permission checks passed. The local check completed three validated health reads at 22:35:44 Atlantic on 2026-09-26. Daily schedule remains 09:17 plus sign-in catch-up; this computer must be on and signed in.
 - **Recovery:** `.local/private-organizer-links.html` contains private buttons for the original games and presets. Keep this ignored local file; never commit it. Database-local pre-upgrade snapshot: `side_picker_private.before_private_links`. Old room invitations require fresh personal/viewing links; public result snapshots still work.
-- **Working state:** ROOM-01 `6b7bc0d`, OPT-02 `a458d18`, and UX-01 `482e0e4` are deployed (latest verified Pages run `36289083762`). FEATURE-01 core duplication/bulk entry is implemented and validated; Pages verification follows its commit.
+- **Working state:** ROOM-01 `6b7bc0d`, OPT-02 `a458d18`, and UX-01 `482e0e4` are deployed (latest verified Pages run `36289083762`). FEATURE-01 `87d3b20` is deployed (Pages run `36289319157`). FEATURE-02 is implemented and validated; deployment follows its commit.
 
 ## Decisions to settle during planning
 
@@ -154,9 +154,9 @@ Routine implementation choices can be resolved from the user's instructions and 
 
 ### FEATURE-02 — Sharing and result comparison
 
-- [ ] Add a room QR code and remember guest identity within the agreed permission model.
-- [ ] Preview both optimization goals before publishing one outcome.
-- [ ] Add concise share/copy output with the selected goal and assignment explanations.
+- [x] Add a room QR code and remember guest identity within the agreed permission model.
+- [x] Preview both optimization goals before publishing one outcome.
+- [x] Add concise share/copy output with the selected goal and assignment explanations.
 
 **Acceptance:** previews do not publish prematurely; QR codes resolve to the correct room; shared snapshots clearly identify their context.
 
@@ -333,3 +333,11 @@ At the end of each implementation session, update Current handoff and append a d
 - Browser-history navigation now keeps published games on their results until explicitly reopened, preventing editing closed picks through Back.
 - Validation: two helper tests cover fresh identities, source immutability, clearing prior state, duplicate handling, and overflow rejection. Isolated browser duplicated a two-player game, added three unique factions and two unique players, confirmed both originals and copies on home, and inspected the bulk dialog at 360px.
 - UX-01 Pages run `36289083762` succeeded.
+
+### 2026-09-26 — FEATURE-02 comparison and sharing implemented
+
+- Compare & Assign calculates both goals from one locked/synchronized snapshot. The comparison shows total/minimum points and individual assignments; nothing publishes until the organizer chooses. Publication checks the snapshot again and reports failed saves honestly.
+- Added locally generated QR codes for viewing and personal invitations, with explicit labels. Personal identity continues to use the existing invitation fragment and per-tab storage. No private invitation is sent to a QR service. Vendored MIT encoder is pinned with its upstream hash/license.
+- Added a plain-text copyable summary with game, chosen goal, preference score, assignments, and explanations.
+- Validation: 37 Node tests pass. Independent jsQR decoder round-tripped viewer, personal, and URL-encoded legacy-player invitations. Isolated desktop/360px browser comparison left the guest on closed picks until explicit publication, then delivered the selected fairness result. Desktop clipboard content matched the displayed summary; phone summary rendering and copy feedback checked (the browser tool clipboard does not expose the iframe clipboard). No production writes.
+- FEATURE-01 Pages run `36289319157` succeeded. Next: ENG-01.

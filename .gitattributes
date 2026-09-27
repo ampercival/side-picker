@@ -1,0 +1,2 @@
+# Preserve vendored upstream bytes and their integrity hash on every platform.
+vendor/* -text
