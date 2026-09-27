@@ -128,8 +128,8 @@ Results use the payload `{v, t, gm, g, pct, r}`: version, session title, game, g
 | --- | --- | --- |
 | Access | Capability RPCs and personal invitations deployed; direct game access denied | SEC-02 complete |
 | Shared links | Fixed: payloads validated and card fields rendered with text nodes; invalid-link recovery added | SEC-01 complete |
-| Saving | Durable drafts, truthful status, idempotent retries, and explicit conflict recovery implemented; see plan for deployment status | REL-01 |
-| Saving | Navigation preserves backed-up edits; recovery does not depend on unload delivery | REL-01 |
+| Saving | Durable drafts, truthful status, idempotent retries, and explicit conflict recovery deployed | REL-01 complete |
+| Saving | Navigation preserves backed-up edits; recovery does not depend on unload delivery | REL-01 complete |
 | Submissions | Explicit submissions now include neutral choices; full collecting/locked/published lifecycle remains | ROOM-01 |
 | Live rooms | Scoped polling retries and stable IDs are in place; host/guest conflict handling still needs work | ROOM-01 |
 | Optimizer | Strict bans/conflict explanations and snapshot guard implemented; tied solutions still consume unbounded memory | OPT-01 complete; OPT-02 outstanding |
@@ -161,7 +161,7 @@ node --check config.js
 node --check results.js
 node --check optimizer.js
 node --check access.js
-node --test --test-isolation=none tests/results.test.cjs tests/optimizer.test.cjs tests/access.test.cjs tests/saves.test.cjs
+node --test --test-isolation=none tests/results.test.cjs tests/optimizer.test.cjs tests/access.test.cjs tests/saves.test.cjs tests/text-encoding.test.cjs
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/keepalive.Tests.ps1
 ```
 

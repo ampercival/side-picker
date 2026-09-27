@@ -19,10 +19,12 @@ The receipt table retains responses for 30 days, with cleanup on later writes in
 Validate with:
 
 ```powershell
-node --test --test-isolation=none tests/results.test.cjs tests/optimizer.test.cjs tests/access.test.cjs tests/saves.test.cjs
+node --test --test-isolation=none tests/results.test.cjs tests/optimizer.test.cjs tests/access.test.cjs tests/saves.test.cjs tests/text-encoding.test.cjs
 node tests/serve-fixture.cjs
 ```
 
 The isolated fixture supports `/controls` for failed saves, a lost response after commit, and delayed responses. `/phone.html?width=360` and `?width=390` provide exact-width previews. These controls exist only in the test server, never in the deployed app.
 
 Run `supabase/tests/reliable_saves.sql`, `supabase/tests/private_links.sql`, and `supabase/tests/game_permissions.sql` in the database. Mutation tests use isolated transactional fixtures and roll back. The plan records applied/deployed status and actual verification evidence; mocked browser tests do not establish database authorization.
+
+Release status: migration applied and client `d4087bc` deployed/verified on 2026-09-26. Existing game fields are preserved in `side_picker_private.before_reliable_saves`; the plan records the full validation evidence.
