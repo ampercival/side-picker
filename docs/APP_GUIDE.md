@@ -49,6 +49,7 @@ If both URL forms are present, room mode takes precedence at startup.
 | `access.js` | Secure token generation, fragment parsing, safe link construction |
 | `save-journal.js` | Durable draft queue, immutable retry requests, save states |
 | `persistence.js` | Save-status and recovery UI, connection retries |
+| `accessibility.js` | Dialog focus/keyboard behavior, announcements, and browser view navigation |
 | `config.js` | Public Supabase project URL and publishable key |
 | `supabase/schema.sql` | Historical fresh-install baseline; refuses rerun after private links |
 | `supabase/migrations/` | Versioned migrations; health sentinel and both private-link stages are deployed |
@@ -57,7 +58,7 @@ If both URL forms are present, room mode takes precedence at startup.
 | `scripts/keep-supabase-active.ps1` | Daily local read-only database check, bounded retries, logging and status |
 | `scripts/register-keepalive-task.ps1` | Registers the daily Windows task and sign-in catch-up |
 
-The scripts are classic browser scripts sharing globals, not ES modules. Loading order is Supabase's CDN client, `config.js`, `access.js`, `save-journal.js`, `results.js`, `optimizer.js`, `script.js`, `rooms.js`, then `persistence.js`. Much of initialization runs at `DOMContentLoaded`, after the application scripts are available.
+The scripts are classic browser scripts sharing globals, not ES modules. Loading order is Supabase's CDN client, `config.js`, `access.js`, `save-journal.js`, `results.js`, `optimizer.js`, `script.js`, `rooms.js`, then `persistence.js` and `accessibility.js`. Much of initialization runs at `DOMContentLoaded`, after the application scripts are available.
 
 There is no application server, framework, bundler, or package manifest. Focused Node tests now live in `tests/`. Supabase JS is loaded from a floating major-version CDN URL (`@supabase/supabase-js@2`). Google Fonts supplies Outfit.
 
@@ -133,7 +134,7 @@ Results use the payload `{v, t, gm, g, pct, r}`: version, session title, game, g
 | Submissions | Neutral submissions, edited/organizer-updated status, and enforced collecting/locked/published stages | ROOM-01 complete |
 | Live rooms | Stable IDs, reconnect refresh, guest conflict choices, and preserved host conflicts | ROOM-01 complete |
 | Optimizer | Exact objectives with bounded matching, randomized tie traversal, and cancellable workers | OPT-01 and OPT-02 complete |
-| Mobile | Add Player text is clipped at 390px; ranking controls are 26px; view changes retain scroll position | UX-01 |
+| Mobile | Flexible inputs, 44px controls, wrapping names, compact empty lists, view focus/scroll reset | UX-01 complete |
 | Operations | Local daily check installed and timer-triggered run verified; computer must be on/signed in. Broader app checks remain outstanding | OPS-01 complete; ENG-01 ongoing |
 
 ## Hosting, local use, and validation
@@ -186,3 +187,11 @@ Run `supabase/tests/room_lifecycle.sql` in the SQL editor after migration 005, a
 ### Optimizer performance checks
 
 Run `node tests/optimizer.bench.cjs` for 100-player/100-faction neutral, shared-rank, and constrained cases under both goals. Development budgets are under 2 seconds per solve and under 32 MiB peak process RSS growth across the benchmark (including runtime/JIT overhead). On this Windows machine on 2026-09-26, all six cases took 10.6–32.7 ms and peak RSS grew 7.3 MiB. Browser/device performance varies; the worker watchdog is a separate 15-second safety limit. The normal Node suite also checks 400 independent exhaustive-reference comparisons, maximum-size neutral assignments, variable tie outcomes, cancellation, and both worker failure paths.
+
+## Phone and keyboard interaction
+
+Ranking buttons are 44px and provide the complete no-drag workflow. Touch dragging starts only on the visible grip; swiping the rest of a row can scroll normally. Cancelling a touch drag restores the prior choices. Desktop drops stay within the same player. Empty ranking sections remain visible drop targets with a compact None label.
+
+Views reset scrolling and focus their heading. Organizer navigation records view/session identity in browser history state, without putting private links in URLs; Back/Forward restore screens and preserve the existing save rules. Modals have accessible names, trap focus, make the background inert, support Escape, and restore focus to their opener. Ranking actions preserve focus and announce their result. Reduced-motion preferences shorten animation. Room polling avoids rebuilding unchanged invitation buttons or repeatedly announcing unchanged connection text.
+
+Validated with isolated 360px/390px iframe previews and a desktop browser: readable Add Player, keyboard ranking/submission, Help focus trap/Escape restoration, browser Back between setup and picks, room dialog, long result names, and reconnect catching up to published results. Both phone previews had no horizontal page overflow. Physical-device touch gestures were not emulated by the browser-control tools; the grip-only gesture path remains a useful real-phone spot check.

@@ -13,7 +13,7 @@ const fixture = `window.SUPABASE_CONFIG={url:'https://fixture.invalid',publishab
 localStorage.removeItem('side_picker_workspace_key');
 if(!localStorage.getItem('side_picker_private_workspace_v1'))localStorage.setItem('side_picker_private_workspace_v1',JSON.stringify({credential:'${'a'.repeat(64)}',ownerKey:'fixture'}));
 window.supabase={createClient:()=>({rpc:async(fn,args)=>{const r=await fetch('/fixture-api',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fn,args})});return r.json()}})};`;
-const files = new Set(['/index.html','/style.css','/script.js','/rooms.js','/results.js','/optimizer.js','/access.js','/save-journal.js','/persistence.js']);
+const files = new Set(['/index.html','/style.css','/script.js','/rooms.js','/results.js','/optimizer.js','/access.js','/save-journal.js','/persistence.js','/accessibility.js']);
 function fail(message='Invalid link',code='42501'){throw {message,code};}
 function invitation(seed,player){return crypto.createHmac('sha256',seed).update(player).digest('hex');}
 function rpc(fn,args){

@@ -1494,3 +1494,45 @@ input:checked+.slider:before {
 [hidden] { display: none !important; }
 .room-banner { flex-wrap: wrap; }
 #guest-conflict-actions { flex-wrap: wrap; }
+
+/* Comfortable controls and readable text at phone widths. */
+input[type="text"], input[type="password"], textarea, select { min-width: 0; max-width: 100%; }
+.input-group { flex-wrap: wrap; gap: 8px; }
+.input-group input { flex: 1 1 140px; width: 0; }
+.input-group > button { flex: 0 0 auto; white-space: nowrap; }
+.session-meta input { width: 100%; }
+.game-select { min-width: 0; }
+.actions, .player-toolbar { flex-wrap: wrap; gap: 8px; }
+.btn, .btn-sm, .remove-btn, .remove-btn-sm, .icon-toggle, .expand-player { min-height: 44px; }
+.expand-player, .icon-toggle, .remove-btn { min-width: 44px; }
+.sc-delete { min-width: 44px; min-height: 44px; }
+.expand-player { color: var(--text-main); background: transparent; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
+.player-header { flex-wrap: wrap; gap: 8px; }
+.player-name { min-width: 0; overflow-wrap: anywhere; white-space: normal; }
+.sortable-list { min-height: 52px; }
+.sortable-list:empty::after { content: 'None'; display: block; padding: 8px; color: var(--text-muted); font-size: .85rem; text-align: center; }
+.sortable-list li { display: grid; grid-template-columns: 44px minmax(0,1fr); gap: 4px; padding: 8px; touch-action: pan-y; }
+.sortable-list li::before { content: none; }
+.sortable-list li .li-label { white-space: normal; overflow-wrap: anywhere; overflow: visible; }
+.drag-handle { display: flex; align-items: center; justify-content: center; min-height: 44px; cursor: grab; touch-action: none; font-size: 1.5rem; color: var(--text-muted); }
+.sortable-list li .li-actions { grid-column: 1 / -1; justify-content: flex-end; flex-wrap: wrap; gap: 6px; }
+.sortable-list li .li-action { width: 44px; height: 44px; font-size: 1rem; }
+.preference-column { min-width: 0; }
+.modal { max-height: 90dvh; overflow-y: auto; overscroll-behavior: contain; }
+.modal .actions .btn { white-space: normal; }
+.dialog-open { overflow: hidden; }
+.toast { min-width: 0; max-width: min(400px, calc(100vw - 32px)); }
+.toast-content, .sc-name, .result-card, .tag .name { min-width: 0; overflow-wrap: anywhere; }
+:is(button,a,input,textarea,select,[contenteditable],[tabindex]):focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media (max-width: 600px) {
+    .card { padding: 1.25rem; }
+    .modal { padding: 1.25rem; }
+    .input-group > .btn { padding-inline: 16px; }
+    .player-body, .guest-body { gap: .75rem; }
+    .player-toolbar { justify-content: flex-start !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+    .result-card { opacity: 1; transform: none; }
+}

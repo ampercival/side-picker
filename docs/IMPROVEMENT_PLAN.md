@@ -16,11 +16,11 @@ Read [APP_GUIDE.md](APP_GUIDE.md) for current behavior. Follow [AGENTS.md](../AG
 
 - **Completed:** initial review and durable documentation.
 - **Implementation tasks completed:** SEC-01 (safe result links), OPS-01 (local daily database check), OPT-01 (strict bans, conflict explanations, consistent input snapshots, result summaries), SEC-02 (private organizer/player links and enforced database access), REL-01 (durable drafts, truthful status, safe retries, version-checked saves, and explicit conflict recovery), and ROOM-01 (room stages and safe submission reconciliation).
-- **Next action:** UX-01. Fix phone control clipping/tap targets and improve keyboard, modal, and view navigation. Then implement the resolved repeat-session items; optional accounts and history/scoring extensions remain deferred.
+- **Next action:** FEATURE-01 core repeat sessions: duplicate with fresh identities and cleared choices/results, and bulk faction/player entry. Reusable player groups are optional and not selected. Then finish resolved sharing/engineering improvements; accounts and rotation/history remain deferred.
 - **Scope:** no required sign-in. Private organizer links control one workspace; personal invitations control one player; viewing links are read-only. Three existing sessions and two presets belong to two separate workspaces and have separate recovery links. Optional accounts remain FEATURE-04.
 - **External state:** SEC-01 `2c72a21`, OPS-01 `ce280b0`, OPT-01 `27bbdd6`, independent health access `ac3f649`, and SEC-02 `b5cbd3a` are pushed. Pages reports SEC-02 built. Both private-link migrations and legacy bindings are applied; public game-table access is revoked. The live original-game link and post-cutover API/permission checks passed. The local check completed three validated health reads at 22:35:44 Atlantic on 2026-09-26. Daily schedule remains 09:17 plus sign-in catch-up; this computer must be on and signed in.
 - **Recovery:** `.local/private-organizer-links.html` contains private buttons for the original games and presets. Keep this ignored local file; never commit it. Database-local pre-upgrade snapshot: `side_picker_private.before_private_links`. Old room invitations require fresh personal/viewing links; public result snapshots still work.
-- **Working state:** ROOM-01 `6b7bc0d` is deployed (Pages run `36288467602` succeeded); database postflight passed all four suites and preserved all original records. OPT-02 is implemented and validated; Pages verification follows its commit.
+- **Working state:** ROOM-01 `6b7bc0d` and OPT-02 `a458d18` are deployed (Pages runs `36288467602` and `36288680698` succeeded). All three original games remain visible on the live home. UX-01 is implemented and validated; Pages verification follows its commit.
 
 ## Decisions to settle during planning
 
@@ -136,11 +136,11 @@ Routine implementation choices can be resolved from the user's instructions and 
 
 ### UX-01 — Mobile and accessibility improvements
 
-- [ ] Fix clipped Add Player controls and audit inputs, buttons, notifications, and modals at 360px, 390px, and desktop widths.
-- [ ] Enlarge ranking controls and reduce unnecessary scrolling through empty sections.
-- [ ] Preserve tap-based ranking while improving touch drag behaviour so normal scrolling is practical.
-- [ ] Reset scroll and move focus appropriately when changing views; make browser navigation predictable.
-- [ ] Add modal focus management, Escape handling, labels, status announcements, and reduced-motion support.
+- [x] Fix clipped Add Player controls and audit inputs, buttons, notifications, and modals at 360px, 390px, and desktop widths.
+- [x] Enlarge ranking controls and reduce unnecessary scrolling through empty sections.
+- [x] Preserve tap-based ranking while improving touch drag behaviour so normal scrolling is practical.
+- [x] Reset scroll and move focus appropriately when changing views; make browser navigation predictable.
+- [x] Add modal focus management, Escape handling, labels, status announcements, and reduced-motion support.
 
 **Acceptance:** complete host and guest flows without clipped controls; rank without dragging; usable keyboard focus through dialogs and list edits; opening results brings the results into view; long names and error messages remain readable.
 
@@ -317,3 +317,11 @@ At the end of each implementation session, update Current handoff and append a d
 - Removed obsolete factorial warnings and synchronous worker fallback. Startup/runtime errors remain recoverable; Cancel terminates the worker; a 15-second watchdog bounds a stuck run.
 - Validation: nine optimizer checks pass, including 400 independent reference comparisons, maximum-size neutral inputs, tie variation, worker cancellation and startup/runtime failure. Six 100×100 benchmark cases finish in 10.6–32.7 ms with 7.3 MiB peak process RSS growth, below the development budgets of 2 seconds/solve and 32 MiB. Isolated browser worker produced and published the correct two-first-choice result.
 - ROOM-01 release verified: Pages run `36288467602` succeeded. Existing games remain preserved; no production games used for write tests.
+
+### 2026-09-26 — UX-01 implemented
+
+- Fixed flexible inputs/button wrapping, enlarged ranking and small controls to 44px, wrapped long names, and reduced empty-list height. Touch scrolling is separated from dragging through a visible grip; cancelled gestures restore choices. Cross-player desktop drops are ignored.
+- Added dialog roles/names, focus trapping, background inertness, Escape/cancel behavior, focus restoration, input labels, status announcements, focus retention after ranking, and reduced-motion support. Player expansion is keyboard-operable. View changes reset scroll/focus; organizer Back/Forward uses scoped history state and the existing save-preservation rules.
+- Fixed unchanged room polling rebuilding invitation controls every three seconds, which otherwise disrupted focus. Unchanged connection text is not re-announced.
+- Isolated browser checks: 360px host Add Player/room dialog, 390px guest keyboard ranking/submission and results, desktop long-name rendering, Help dialog Tab/Escape/return focus, and Back between setup/picks. No horizontal overflow in either phone preview. Disconnected room reads showed retrying; reconnect caught up to the renamed player and published result. Physical touch gestures remain a device spot-check limitation.
+- OPT-02 Pages run `36288680698` succeeded. Existing production games were read only.

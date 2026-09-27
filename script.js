@@ -130,8 +130,10 @@ function prevStep(viewId) {
 }
 
 function switchView(viewId) {
+    const changed = !get(viewId).classList.contains('active');
     document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
     get(viewId).classList.add('active');
+    if (changed && typeof onViewChanged === 'function') onViewChanged(viewId);
 }
 
 function handleEnter(e, callback) {
@@ -313,6 +315,7 @@ function renderFactions() {
     state.factions.forEach(faction => {
         const clone = template.content.cloneNode(true);
         clone.querySelector('.name').textContent = faction;
+        clone.querySelector('.remove-btn').setAttribute('aria-label', `Remove ${faction}`);
         container.appendChild(clone);
     });
 }
@@ -442,6 +445,7 @@ function togglePlayerCard(header) {
         // Toggle the class directly to avoid a full re-render on a simple click;
         // the saved state keeps the next render consistent.
         card.classList.toggle('active');
+        card.querySelector('.expand-player').setAttribute('aria-expanded', String(player.expanded));
     }
 }
 
@@ -470,6 +474,10 @@ function renderPlayers() {
         }
 
         clone.querySelector('.player-name').textContent = player.name;
+        const expand = clone.querySelector('.expand-player');
+        expand.setAttribute('aria-label', `Choices for ${player.name}`);
+        expand.setAttribute('aria-expanded', String(!!player.expanded));
+        clone.querySelector('.player-name').setAttribute('aria-label', `Player name: ${player.name}`);
 
         // Lock State
         const lockBtn = clone.querySelector('.unlock');
@@ -545,7 +553,15 @@ function refreshListsForCard(player, availableList, prefList, banList) {
         b.title = title;
         b.setAttribute('aria-label', title);
         b.draggable = false;
-        b.onclick = (e) => { e.stopPropagation(); onClick(); };
+        b.onclick = (e) => {
+            e.stopPropagation();
+            const faction = b.closest('li').dataset.faction;
+            onClick();
+            const item = [availableList,prefList,banList].flatMap(list => [...list.children]).find(li => li.dataset.faction === faction);
+            const buttons = [...(item?.querySelectorAll('button') || [])];
+            (buttons.find(button => button.getAttribute('aria-label') === title) || buttons[0])?.focus({preventScroll:true});
+            if (typeof announce === 'function') announce(`${faction}: ${player.bans.includes(faction) ? 'banned' : player.preferences.includes(faction) ? `preference ${player.preferences.indexOf(faction)+1}` : 'available'}`);
+        };
         return b;
     };
 
@@ -553,6 +569,8 @@ function refreshListsForCard(player, availableList, prefList, banList) {
         const li = document.createElement('li');
         li.draggable = true;
         li.dataset.faction = name; // Read by drag commit instead of textContent.
+        const handle = document.createElement('span'); handle.className = 'drag-handle'; handle.textContent = '⠿';
+        handle.setAttribute('aria-hidden','true'); handle.title = 'Drag from here, or use the buttons'; li.appendChild(handle);
 
         const label = document.createElement('span');
         label.className = 'li-label';
@@ -681,6 +699,7 @@ function setupDragAndDrop(list1, list2, list3, playerObj) {
             e.preventDefault();
             const afterElement = getDragAfterElement(list, e.clientY);
             const draggable = document.querySelector('.dragging');
+            if (!draggable || !lists.includes(draggable.parentElement)) return;
             if (afterElement == null) {
                 list.appendChild(draggable);
             } else {
@@ -696,7 +715,7 @@ function setupDragAndDrop(list1, list2, list3, playerObj) {
 function setupTouchDrag(list, allLists, playerObj) {
     list.addEventListener('touchstart', e => {
         // Let taps on the action buttons through (accessible, no-drag path).
-        if (e.target.closest('button')) return;
+        if (!e.target.closest('.drag-handle')) return;
 
         const li = e.target.closest('li');
         if (!li) return;
@@ -789,11 +808,11 @@ function updateTouchDragPosition() {
     touchDragState.lastAfterElement = afterElement;
 }
 
-function onTouchEnd() {
-    cleanupTouchDrag();
+function onTouchEnd(event) {
+    cleanupTouchDrag(event?.type !== 'touchcancel');
 }
 
-function cleanupTouchDrag() {
+function cleanupTouchDrag(commit = true) {
     if (touchDragState.rafId) {
         cancelAnimationFrame(touchDragState.rafId);
         touchDragState.rafId = null;
@@ -811,7 +830,8 @@ function cleanupTouchDrag() {
 
     if (touchDragState.player && touchDragState.allLists) {
         const [l1, l2, l3] = touchDragState.allLists;
-        updatePlayerStateFromDOM(touchDragState.player, l1, l2, l3);
+        if (commit) updatePlayerStateFromDOM(touchDragState.player, l1, l2, l3);
+        else refreshListsForCard(touchDragState.player, l1, l2, l3);
     }
 
     touchDragState.item = null;
@@ -1518,6 +1538,7 @@ function renderPresetFactionTags() {
 
         const btn = document.createElement('button');
         btn.className = 'remove-btn';
+        btn.setAttribute('aria-label', `Remove ${faction}`);
         btn.innerHTML = '&times;';
         btn.onclick = () => removePresetFaction(faction);
 
@@ -1682,5 +1703,3 @@ function enterSharedResultsMode(payload) {
 function closeModals() {
     document.querySelectorAll('.modal, .modal-overlay').forEach(el => el.classList.remove('active'));
 }
-
-

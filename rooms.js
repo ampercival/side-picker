@@ -283,7 +283,8 @@ if (typeof window.addEventListener === 'function') {
 }
 function setRoomConnection(ok) {
     const el = get(isGuestMode ? 'guest-connection' : 'room-connection');
-    if (el) el.textContent = ok ? 'Live updates connected' : navigator.onLine === false ? 'Offline — reconnect to update' : 'Connection interrupted — retrying…';
+    const message = ok ? 'Live updates connected' : navigator.onLine === false ? 'Offline — reconnect to update' : 'Connection interrupted — retrying…';
+    if (el && el.textContent !== message) el.textContent = message;
 }
 async function refreshRoomSubmissions(epoch = roomEpoch) {
     const name = activeSessionName, workspace = getWorkspaceKey();
@@ -363,9 +364,12 @@ function replaceRoomLinks() {
     }, 'Replace links', 'danger');
 }
 function renderRoomStatus() {
-    const container = get('room-status-list'); if (!container) return; container.replaceChildren();
+    const container = get('room-status-list'); if (!container) return;
     const players = state.players || [], count = get('room-banner-count');
     if (count) count.textContent = `${players.filter(playerHasSubmitted).length}/${players.length} submitted`;
+    const signature = JSON.stringify(players.map(p => [p.id,p.name,playerSubmissionLabel(p)]));
+    if (container.dataset.signature === signature) return;
+    container.dataset.signature = signature; container.replaceChildren();
     for (const p of players) {
         const row = document.createElement('div'); row.className = 'room-status-row';
         const name = document.createElement('span'); name.className = 'rs-name'; name.textContent = p.name;

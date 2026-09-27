@@ -340,9 +340,9 @@
     <template id="template-player-card">
         <div class="player-card" data-player-id="">
             <div class="player-header" onclick="togglePlayerCard(this)">
-                <span class="player-name" contenteditable="true" onclick="event.stopPropagation()"
+                <span class="player-name" role="textbox" aria-multiline="false" contenteditable="true" onclick="event.stopPropagation()"
                     onblur="updatePlayerName(this)" onkeydown="handleNameEdit(event, this)">Name</span>
-                <span class="expand-icon">▼</span>
+                <button class="expand-player" onclick="event.stopPropagation(); togglePlayerCard(this)" aria-expanded="false"><span class="expand-icon" aria-hidden="true">▼</span></button>
                 <button class="icon-toggle unlock" onclick="togglePlayerLock(event, this)" title="Lock randomization">
                     <span class="unlocked">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
@@ -543,7 +543,7 @@
         <p style="color: var(--text-muted); line-height: 1.5; font-size: 0.9rem; margin-bottom: 1rem;">
             Send this link to your players so they can see the final assignments. It's read-only.
         </p>
-        <input type="text" id="results-link-input" readonly onclick="this.select()">
+        <input type="text" id="results-link-input" aria-label="Read-only results link" readonly onclick="this.select()">
         <div class="actions right">
             <button class="btn" onclick="closeModals()">Close</button>
             <button class="btn primary" onclick="copyResultsLink()">Copy Link</button>
@@ -571,6 +571,7 @@
     <script src="script.js"></script>
     <script src="rooms.js"></script>
     <script src="persistence.js"></script>
+    <script src="accessibility.js"></script>
 </body>
 
 </html>
