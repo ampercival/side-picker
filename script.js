@@ -851,48 +851,8 @@ function updatePlayerStateFromDOM(player, availableList, prefList, banList) {
 
 // --- Optimization Engine ---
 
-// The solver is an exhaustive search whose worst case grows like F!/(F-P)!.
-// Above this estimated node count we warn before running (the search still
-// runs off the main thread in a Worker, so this is about time, not freezing).
-const OPT_WARN_THRESHOLD = 1e8;
-
-// Rough upper bound on the search size (ignores pruning, so it over-estimates —
-// which is what we want for a "this might be slow" heads-up).
-function estimateSearchCost(playerCount, factionCount) {
-    let cost = 1;
-    for (let i = 0; i < playerCount; i++) {
-        cost *= (factionCount - i);
-        if (cost > 1e15) return Infinity;
-    }
-    return cost;
-}
-
-// Promise wrapper around showConfirm so we can `await` the user's choice.
-// Resolves true on confirm, false on cancel OR any other dismissal (e.g.
-// clicking the overlay backdrop) so the awaiting caller can never hang.
-function confirmAsync(title, message, btnText, btnClass) {
-    return new Promise(resolve => {
-        const modal = get('confirm-modal');
-        let settled = false;
-        const finish = (val) => {
-            if (settled) return;
-            settled = true;
-            observer.disconnect();
-            resolve(val);
-        };
-        // Treat closing the modal by any means as cancel. The button handlers
-        // run synchronously (setting `settled`) before this observer's microtask
-        // fires, so an explicit confirm/cancel still wins over this fallback.
-        const observer = new MutationObserver(() => {
-            if (!modal.classList.contains('active')) finish(false);
-        });
-        observer.observe(modal, { attributes: true, attributeFilter: ['class'] });
-        showConfirm(title, message, () => finish(true), btnText, btnClass, () => finish(false));
-    });
-}
-
 // --- Solver runner (Web Worker) ---
-// The solver is pure (depends only on SCORES + getScore), so we build a Worker
+// The solver is pure, so we build a Worker
 // from the existing functions via .toString() — no duplicated logic to drift.
 let _optimizerWorker = null;
 let _optimizerReject = null;
@@ -915,32 +875,32 @@ function buildOptimizerWorker() {
     `;
     const blob = new Blob([src], { type: 'application/javascript' });
     const url = URL.createObjectURL(blob);
-    const worker = new Worker(url);
-    URL.revokeObjectURL(url); // Worker is already initialized; free the URL so it doesn't leak.
-    return worker;
+    try { return new Worker(url); }
+    finally { URL.revokeObjectURL(url); }
 }
 
-// Run the solver off the main thread. Falls back to a synchronous run if Workers
-// (or blob URLs) aren't available, so the feature degrades rather than breaking.
+// Keep solving cancellable. A blocked/broken Worker never starts work on the UI
+// thread; timeout also releases the worker if a browser cannot complete it.
 function runOptimization(players, factions, mode) {
     return new Promise((resolve, reject) => {
         let worker;
         try {
             worker = buildOptimizerWorker();
         } catch (e) {
-            try { resolve(findOptimalAssignment(players, factions, mode)); }
-            catch (err) { reject(err); }
+            reject(new Error('This browser could not start the optimizer. Refresh or try another browser.'));
             return;
         }
 
         _optimizerWorker = worker;
-        _optimizerReject = reject;
-
+        let timer;
         const teardown = () => {
+            clearTimeout(timer);
             if (_optimizerWorker === worker) _optimizerWorker = null;
             _optimizerReject = null;
             worker.terminate();
         };
+        _optimizerReject = error => { teardown(); reject(error); };
+        timer = setTimeout(() => { teardown(); reject(new Error('Optimization took too long. Try again or use fewer players and factions.')); }, 15000);
 
         worker.onmessage = (e) => {
             teardown();
@@ -948,13 +908,12 @@ function runOptimization(players, factions, mode) {
             else reject(new Error((e.data && e.data.error) || 'Optimization failed'));
         };
         worker.onerror = () => {
-            // Worker couldn't run — fall back to a synchronous solve.
             teardown();
-            try { resolve(findOptimalAssignment(players, factions, mode)); }
-            catch (err) { reject(err); }
+            reject(new Error('The optimizer could not run. Refresh or try another browser.'));
         };
 
-        worker.postMessage({ players, factions, mode });
+        try { worker.postMessage({ players, factions, mode }); }
+        catch (error) { teardown(); reject(error); }
     });
 }
 
@@ -1016,17 +975,6 @@ async function calculateOptimization() {
     _optimizing = true;
     try {
         if (state.roomCode && !(await setRoomStage('locked'))) return;
-        // Heads-up before a potentially long search.
-        if (estimateSearchCost(state.players.length, state.factions.length) > OPT_WARN_THRESHOLD) {
-            const proceed = await confirmAsync(
-                'Large Optimization',
-                'This many players and factions could take a while to solve. It runs in the background and you can cancel — run it anyway?',
-                'Run Anyway',
-                'accent'
-            );
-            if (!proceed) return;
-        }
-
         const snapshot = optimizationSnapshot();
         showOptimizerSpinner();
         let result;

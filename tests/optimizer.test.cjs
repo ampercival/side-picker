@@ -80,7 +80,7 @@ test('malformed inputs fail clearly, neutral and unranked choices remain valid',
 
 function loadRunner() {
     const elements = new Map();
-    const context = vm.createContext({ console, Blob, TextEncoder, TextDecoder, atob, btoa,
+    const context = vm.createContext({ console, Blob, TextEncoder, TextDecoder, atob, btoa, setTimeout, clearTimeout,
         localStorage: { getItem: () => null }, window: { matchMedia: () => ({ matches: true }) },
         document: { documentElement: { removeAttribute() {} }, addEventListener() {},
             getElementById: id => { if (id === 'theme-toggle') return null; if (!elements.has(id)) elements.set(id, { style: {} }); return elements.get(id); } },
@@ -120,4 +120,36 @@ test('summary counts unranked choices separately from ranked top-three picks', (
     const text = describeResultRows([{ note: 'Choice #1', s: 10 }, { note: 'Choice #3', s: 4 }, { note: 'Choice', s: 10 }, { note: 'Neutral', s: 0 }]);
     assert.match(text, /First choices: 1/); assert.match(text, /including first\): 2/);
     assert.match(text, /Unranked preferences: 1/); assert.match(text, /Neutral: 1/);
+});
+
+test('100 neutral players finish with one assignment instead of retaining factorial ties',()=>{
+    const factions=Array.from({length:100},(_,i)=>'F'+i),players=factions.map((_,i)=>player('P'+i));
+    for(const mode of ['total','fairness']){
+        const result=findOptimalAssignment(players,factions,mode);
+        assert.equal(result.success,true);assert.equal(result.score,0);
+        assert.equal(new Set(Object.values(result.assignment)).size,100);
+        assert.equal(result.tieSelection,'randomized-order');assert.equal(result.tieCount,undefined);
+    }
+});
+
+test('randomized tie order varies assignments while preserving objectives',()=>{
+    const players=[player('A'),player('B'),player('C')],factions=['X','Y','Z'];
+    let seed=123;const random=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/2**32);
+    const outcomes=new Set();
+    for(let i=0;i<100;i++){
+        const result=findOptimalAssignment(players,factions,'total',random);
+        outcomes.add(JSON.stringify(players.map(p=>result.assignment[p.id])));
+        assert.equal(result.score,0);
+    }
+    assert.equal(outcomes.size,6); // Coverage, not a claim of uniform sampling.
+});
+
+test('worker startup/runtime failures reject without a synchronous fallback',async()=>{
+    const context=loadRunner();
+    vm.runInContext("findOptimalAssignment=()=>{throw new Error('unsafe synchronous fallback')}; Worker=class {constructor(){throw new Error('blocked')}}",context);
+    await assert.rejects(vm.runInContext("runOptimization([],[],'total')",context),/could not start/);
+    const runtime=loadRunner();
+    const pending=vm.runInContext("runOptimization(state.players,state.factions,'total')",runtime);
+    const check=assert.rejects(pending,/could not run/);
+    runtime.worker.onerror();await check;assert.equal(runtime.worker.terminated,true);
 });

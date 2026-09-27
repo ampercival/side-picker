@@ -16,11 +16,11 @@ Read [APP_GUIDE.md](APP_GUIDE.md) for current behavior. Follow [AGENTS.md](../AG
 
 - **Completed:** initial review and durable documentation.
 - **Implementation tasks completed:** SEC-01 (safe result links), OPS-01 (local daily database check), OPT-01 (strict bans, conflict explanations, consistent input snapshots, result summaries), SEC-02 (private organizer/player links and enforced database access), REL-01 (durable drafts, truthful status, safe retries, version-checked saves, and explicit conflict recovery), and ROOM-01 (room stages and safe submission reconciliation).
-- **Next action:** OPT-02. Replace factorial assignment enumeration, preserve both objectives, document tie selection and measured limits, and retain worker cancellation. Then continue UX-01. Accounts remain deferred.
+- **Next action:** UX-01. Fix phone control clipping/tap targets and improve keyboard, modal, and view navigation. Then implement the resolved repeat-session items; optional accounts and history/scoring extensions remain deferred.
 - **Scope:** no required sign-in. Private organizer links control one workspace; personal invitations control one player; viewing links are read-only. Three existing sessions and two presets belong to two separate workspaces and have separate recovery links. Optional accounts remain FEATURE-04.
 - **External state:** SEC-01 `2c72a21`, OPS-01 `ce280b0`, OPT-01 `27bbdd6`, independent health access `ac3f649`, and SEC-02 `b5cbd3a` are pushed. Pages reports SEC-02 built. Both private-link migrations and legacy bindings are applied; public game-table access is revoked. The live original-game link and post-cutover API/permission checks passed. The local check completed three validated health reads at 22:35:44 Atlantic on 2026-09-26. Daily schedule remains 09:17 plus sign-in catch-up; this computer must be on and signed in.
 - **Recovery:** `.local/private-organizer-links.html` contains private buttons for the original games and presets. Keep this ignored local file; never commit it. Database-local pre-upgrade snapshot: `side_picker_private.before_private_links`. Old room invitations require fresh personal/viewing links; public result snapshots still work.
-- **Working state:** ROOM-01 implementation and migration are complete; release verification is in progress. REL-01 remains deployed. Continue to OPT-02 after recording the Pages result.
+- **Working state:** ROOM-01 `6b7bc0d` is deployed (Pages run `36288467602` succeeded); database postflight passed all four suites and preserved all original records. OPT-02 is implemented and validated; Pages verification follows its commit.
 
 ## Decisions to settle during planning
 
@@ -125,10 +125,10 @@ Routine implementation choices can be resolved from the user's instructions and 
 
 ### OPT-02 — Scalable optimizer
 
-- [ ] Replace factorial enumeration with an appropriate matching/assignment approach, preserving primary and secondary objectives.
-- [ ] Avoid retaining all optimal assignments; document how equally optimal outcomes are selected and whether selection is uniform.
-- [ ] Keep cancellation responsive and avoid an unbounded synchronous fallback on worker failure.
-- [ ] Agree a representative upper bound for players/factions and record a measured time/memory budget.
+- [x] Replace factorial enumeration with an appropriate matching/assignment approach, preserving primary and secondary objectives.
+- [x] Avoid retaining all optimal assignments; document how equally optimal outcomes are selected and whether selection is uniform.
+- [x] Keep cancellation responsive and avoid an unbounded synchronous fallback on worker failure.
+- [x] Set a representative upper bound for players/factions and record a measured time/memory budget.
 
 **Acceptance:** small-case results match the independent reference for both goals; a many-neutral-choice case does not allocate factorially many solutions; large supported examples finish within the agreed budget. Preserve fairness intentionally when changing tie selection.
 
@@ -309,3 +309,11 @@ At the end of each implementation session, update Current handoff and append a d
 - Clean guest editors receive organizer changes; dirty editors preserve local choices and offer Use saved choices / Keep my edits before submission. Late replies are scoped to the current room. Removed/revoked players lose their editor. Reconnect/return-to-tab starts a fresh poll; status distinguishes offline from retrying.
 - Validation: 28 Node checks pass, including four new behavioral room checks. Supabase rolled-back migration trial passed room lifecycle, private links, reliable saves, and permission suites. Isolated host plus two guest tabs verified neutral submission, locking, identical published assignments, reopening, and explicit resolution of competing guest/host edits. Guest layout inspected at 360px.
 - Migration application and all four post-deployment SQL suites succeeded; original three games and two presets are unchanged. Pages verification follows the commit. Browser fixture is a mock; deployed database assertions are separate evidence. No original games were used for write-heavy tests.
+
+### 2026-09-26 — OPT-02 implemented
+
+- Replaced factorial enumeration/all-tie storage with rectangular Hungarian matching plus score thresholds. Both optimization goals, secondary objectives, hard bans, and input snapshots are preserved. The existing schema/input ceiling becomes the supported limit: 100 players and 100 factions.
+- Randomized row/column order varies equally optimal results without permanent input-order priority. Sampling is not guaranteed uniform across all tied assignments; this explicit trade-off avoids factorial enumeration and does not change score/fairness objectives.
+- Removed obsolete factorial warnings and synchronous worker fallback. Startup/runtime errors remain recoverable; Cancel terminates the worker; a 15-second watchdog bounds a stuck run.
+- Validation: nine optimizer checks pass, including 400 independent reference comparisons, maximum-size neutral inputs, tie variation, worker cancellation and startup/runtime failure. Six 100×100 benchmark cases finish in 10.6–32.7 ms with 7.3 MiB peak process RSS growth, below the development budgets of 2 seconds/solve and 32 MiB. Isolated browser worker produced and published the correct two-first-choice result.
+- ROOM-01 release verified: Pages run `36288467602` succeeded. Existing games remain preserved; no production games used for write tests.

@@ -78,121 +78,75 @@ function findAssignmentConflict(players, factions) {
     return null;
 }
 
-function findOptimalAssignment(players, factions, mode) {
-    // Mode: 'total' (Maximize Sum) or 'fairness' (Maximize Minimum, tie-break with Sum)
+function findOptimalAssignment(players, factions, mode, random = Math.random) {
     const reason = validateOptimizerInput(players, factions, mode) || findAssignmentConflict(players, factions);
     if (reason) return { success: false, score: null, assignment: null, reason };
 
-    let bestMetric = { primary: -Infinity, secondary: -Infinity };
-    let bestAssignments = [];
-
-    // Helper to calculate score of a complete assignment map
-    function solve(playerIndex, usedFactions, currentSum, currentMin, currentAssignment) {
-        // Base case: All players assigned
-        if (playerIndex === players.length) {
-            // Calculate Metric based on Mode
-            let primary, secondary;
-
-            if (mode === 'fairness') {
-                primary = currentMin; // Maximize the lowest score
-                secondary = currentSum; // Tiebreaker: Total Happiness
-            } else {
-                primary = currentSum; // Maximize Total Happiness
-                secondary = currentMin; // Tiebreaker: Improve worst player if totals equal
-            }
-
-            if (primary > bestMetric.primary) {
-                bestMetric = { primary, secondary };
-                bestAssignments = [{ ...currentAssignment }];
-            } else if (primary === bestMetric.primary) {
-                // Check secondary
-                if (secondary > bestMetric.secondary) {
-                    bestMetric = { primary, secondary };
-                    bestAssignments = [{ ...currentAssignment }];
-                } else if (secondary === bestMetric.secondary) {
-                    bestAssignments.push({ ...currentAssignment });
-                }
-            }
-            return;
+    // Randomize traversal to avoid a permanent roster/faction-order advantage.
+    // This samples optimal outcomes, but is NOT uniform over all tied matchings.
+    function shuffled(values) {
+        const copy = values.slice();
+        for (let i = copy.length - 1; i > 0; i--) {
+            const j = Math.floor(random() * (i + 1));
+            [copy[i], copy[j]] = [copy[j], copy[i]];
         }
+        return copy;
+    }
+    const roster = shuffled(players), options = shuffled(factions);
+    const scores = roster.map(p => options.map(f => p.bans.includes(f) ? -1 : getScore(p, f)));
+    const thresholds = [...new Set(scores.flat().filter(score => score >= 0))].sort((a,b) => b-a);
 
-        const player = players[playerIndex];
-
-        // Pruning checks (Optimization)
-        // If we are in fairness mode, and currentMin is already worse than bestMetric.primary, we can prune?
-        // currentMin only decreases (or stays same). It never goes up.
-        // So if currentMin < bestMetric.primary (and mode is fairness), we can STOP.
-        if (mode === 'fairness' && currentMin < bestMetric.primary) {
-            return;
-        }
-
-        // Construct ordered list of candidates
-        let candidates = [];
-
-        // 1. Preferences (in order)
-        player.preferences.forEach(f => {
-            if (!usedFactions.has(f)) candidates.push(f);
-        });
-
-        // 2. Neutrals
-        const neutrals = [];
-        factions.forEach(f => {
-            if (!usedFactions.has(f) && !player.preferences.includes(f) && !player.bans.includes(f)) {
-                neutrals.push(f);
-            }
-        });
-        candidates = candidates.concat(neutrals);
-
-        if (candidates.length === 0) return; // Dead end
-
-        for (const faction of candidates) {
-            const score = getScore(player, faction);
-
-            // Sum Pruning (Only for total mode)
-            if (mode === 'total') {
-                const maxRemaining = (players.length - 1 - playerIndex) * SCORES.rank1;
-                // If even with perfect remainder we can't beat the best primary, prune.
-                if (currentSum + score + maxRemaining < bestMetric.primary) {
-                    continue;
+    // Rectangular Hungarian assignment: O(players^2 * factions) time and
+    // O(players * factions) space. Forbidden edges have a cost above the
+    // largest possible legal total, and are checked again before returning.
+    function solve(minimum) {
+        const n = roster.length, m = options.length, forbidden = 1000000;
+        const u = new Float64Array(n+1), v = new Float64Array(m+1);
+        const owner = new Int32Array(m+1), previous = new Int32Array(m+1);
+        for (let i = 1; i <= n; i++) {
+            owner[0] = i;
+            let column = 0;
+            const distance = new Float64Array(m+1).fill(Infinity), used = new Uint8Array(m+1);
+            do {
+                used[column] = 1;
+                const row = owner[column];
+                let delta = Infinity, next = 0;
+                for (let j = 1; j <= m; j++) if (!used[j]) {
+                    const score = scores[row-1][j-1];
+                    const cost = (score < minimum ? forbidden : SCORES.rank1 - score) - u[row] - v[j];
+                    if (cost < distance[j]) { distance[j] = cost; previous[j] = column; }
+                    if (distance[j] < delta) { delta = distance[j]; next = j; }
                 }
-            }
-
-            usedFactions.add(faction);
-            currentAssignment[player.id] = faction;
-
-            solve(
-                playerIndex + 1,
-                usedFactions,
-                currentSum + score,
-                Math.min(currentMin, score),
-                currentAssignment
-            );
-
-            delete currentAssignment[player.id];
-            usedFactions.delete(faction);
+                for (let j = 0; j <= m; j++) {
+                    if (used[j]) { u[owner[j]] += delta; v[j] -= delta; }
+                    else distance[j] -= delta;
+                }
+                column = next;
+            } while (owner[column] !== 0);
+            do { const next = previous[column]; owner[column] = owner[next]; column = next; } while (column !== 0);
+        }
+        const assignment = Object.create(null);
+        let total = 0, lowest = Infinity;
+        for (let j = 1; j <= m; j++) if (owner[j]) {
+            const i = owner[j]-1, score = scores[i][j-1];
+            if (score < minimum) return null;
+            assignment[roster[i].id] = options[j-1]; total += score; lowest = Math.min(lowest, score);
+        }
+        return { success: true, score: total, minimum: lowest, assignment, tieSelection: 'randomized-order' };
+    }
+    // There are only six legal score levels. Thresholding enforces the exact
+    // minimum-score objective without encoding it as an approximate weight.
+    if (mode === 'fairness') {
+        for (const threshold of thresholds) { const result = solve(threshold); if (result) return result; }
+    } else {
+        const bestTotal = solve(0);
+        for (const threshold of thresholds) {
+            if (threshold === 0) return bestTotal;
+            const result = solve(threshold);
+            if (result && result.score === bestTotal.score) return result;
         }
     }
-
-    solve(0, new Set(), 0, Infinity, Object.create(null));
-
-    if (bestAssignments.length > 0) {
-        const winner = bestAssignments[Math.floor(Math.random() * bestAssignments.length)];
-        const finalSum = mode === 'fairness' ? bestMetric.secondary : bestMetric.primary;
-
-        return {
-            success: true,
-            score: finalSum, // Always return total score for display
-            assignment: winner,
-            tieCount: bestAssignments.length
-        };
-    }
-
-    return {
-        success: false,
-        score: null,
-        assignment: null,
-        reason: 'No assignment respects all bans. Add factions or revise the conflicting choices.'
-    };
+    return { success: false, score: null, assignment: null, reason: 'No assignment respects all bans.' };
 }
 
 if (typeof module !== 'undefined' && module.exports) {

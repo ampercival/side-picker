@@ -110,15 +110,15 @@ Scores are 10 for first preference, 7 for second, 4 for third, 2 for fourth, 1 f
 
 - **Highest Group Score:** maximize total score, then the lowest individual score.
 - **Fairest for Everyone:** maximize the lowest individual score, then total score.
-- Equally optimal stored assignments are selected randomly.
+- Equally optimal assignments use randomized player/faction traversal. Outcomes vary without retaining all ties; sampling is not guaranteed uniform over all optimal assignments.
 - Player locks protect their choices from Randomize Choices; they do not lock an assignment.
 - Randomize Choices changes preferences and bans; it is not a neutral random assignment feature.
 
-`findOptimalAssignment()` performs recursive exhaustive search with pruning. A Web Worker is generated from the solver functions so it normally runs off the main thread. Large estimated searches prompt the organizer, and the worker can be cancelled. Worker failures can fall back to synchronous execution, which can block the page on large problems.
+`findOptimalAssignment()` uses rectangular Hungarian assignment with at most six score thresholds. This preserves both lexicographic objectives exactly, in O(6 × players² × factions) time and O(players × factions) working space. Supported limits are 100 players and 100 factions. A generated Web Worker keeps the UI responsive; Cancel terminates it, and a 15-second watchdog stops a stuck run. Worker startup/runtime failure produces a recoverable error with no synchronous fallback.
 
 OPT-01 added input validation and a preliminary matching check. Infeasible bans now produce a conflict explanation naming the affected players; the app does not relax bans automatically. Each optimization works from an immutable snapshot and discards its result if picks/setup/session changed while it was running. Display-only changes such as expanding a card do not invalidate it.
 
-Every tied best assignment is retained in memory. Eight neutral players with eight factions produced 40,320 ties in the review. This grows factorially.
+Only one optimal assignment is retained. The original eight-neutral-player case retained 40,320 solutions; the new solver also handles 100 neutral players without enumerating ties. Random traversal avoids a permanent input-order advantage, but it is not an exact lottery over every tied matching. The declared score/fairness goals and bans always take precedence.
 
 Results use the payload `{v, t, gm, g, pct, r}`: version, session title, game, goal, percentage, and rows. Rows use `{n, f, note, s}` for player name, assigned faction, explanation, and score. The displayed Preference Score is total score divided by `10 * player count`, not a probability or percentage of satisfied players. A summary counts first choices, top-three choices (including first), unranked preferences, and neutral assignments. Historical forced-ban results remain readable and are labelled as legacy in the summary.
 
@@ -132,7 +132,7 @@ Results use the payload `{v, t, gm, g, pct, r}`: version, session title, game, g
 | Saving | Navigation preserves backed-up edits; recovery does not depend on unload delivery | REL-01 complete |
 | Submissions | Neutral submissions, edited/organizer-updated status, and enforced collecting/locked/published stages | ROOM-01 complete |
 | Live rooms | Stable IDs, reconnect refresh, guest conflict choices, and preserved host conflicts | ROOM-01 complete |
-| Optimizer | Strict bans/conflict explanations and snapshot guard implemented; tied solutions still consume unbounded memory | OPT-01 complete; OPT-02 outstanding |
+| Optimizer | Exact objectives with bounded matching, randomized tie traversal, and cancellable workers | OPT-01 and OPT-02 complete |
 | Mobile | Add Player text is clipped at 390px; ranking controls are 26px; view changes retain scroll position | UX-01 |
 | Operations | Local daily check installed and timer-triggered run verified; computer must be on/signed in. Broader app checks remain outstanding | OPS-01 complete; ENG-01 ongoing |
 
@@ -182,3 +182,7 @@ A submitted player may leave every faction neutral. Host status distinguishes wa
 Polling runs every three seconds while visible and refreshes when connectivity or visibility returns. Room locks and publication are enforced by the database, even if a guest tab is stale. A closed room still allows drafting choices locally but disables submission. Organizer setup changes invalidate old requests; removed players and replaced invitations stop working. Private player IDs survive renaming.
 
 Run `supabase/tests/room_lifecycle.sql` in the SQL editor after migration 005, alongside `private_links.sql`, `reliable_saves.sql`, and `game_permissions.sql`. The first three use isolated transactions that roll back their sample data. Never rerun an old migration over the newer API wrappers.
+
+### Optimizer performance checks
+
+Run `node tests/optimizer.bench.cjs` for 100-player/100-faction neutral, shared-rank, and constrained cases under both goals. Development budgets are under 2 seconds per solve and under 32 MiB peak process RSS growth across the benchmark (including runtime/JIT overhead). On this Windows machine on 2026-09-26, all six cases took 10.6–32.7 ms and peak RSS grew 7.3 MiB. Browser/device performance varies; the worker watchdog is a separate 15-second safety limit. The normal Node suite also checks 400 independent exhaustive-reference comparisons, maximum-size neutral assignments, variable tie outcomes, cancellation, and both worker failure paths.
