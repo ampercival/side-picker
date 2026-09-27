@@ -43,6 +43,16 @@
     /* More opaque for modals */
 }
 
+/* Private-link controls remain usable on narrow screens. */
+#workspace-modal .actions, #room-modal .actions { flex-wrap: wrap; gap: .6rem; }
+#workspace-modal input, #room-modal input { width: 100%; min-width: 0; }
+#workspace-modal label, #room-modal label { display: block; margin-top: 1rem; }
+#room-modal .room-status-row { flex-wrap: wrap; gap: .6rem; }
+#room-modal .room-status-row .btn { min-height: 44px; white-space: normal; }
+#room-modal .rs-name { overflow-wrap: anywhere; min-width: 0; }
+#organizer-link-wrap[hidden] { display: none; }
+#room-code-label:empty { display: none; }
+
 [data-theme="light"] {
     /* Light Mode - Clean, Airy, Trustworthy */
     --bg-color: #f0f4f8;

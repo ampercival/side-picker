@@ -323,7 +323,7 @@ function addPlayer() {
     const name = input.value.trim();
 
     if (name) {
-        const id = 'player-' + Date.now();
+        const id = 'player-' + crypto.randomUUID();
         state.players.push({
             id: id,
             name: name,
@@ -507,6 +507,7 @@ function renderPlayers() {
 }
 
 function refreshListsForCard(player, availableList, prefList, banList) {
+    if (isGuestMode && typeof updateGuestSubmitted === 'function') updateGuestSubmitted();
     // Clear lists
     availableList.innerHTML = '';
     prefList.innerHTML = '';
@@ -1165,27 +1166,28 @@ function autoSave() {
     if (activeSessionName) {
         sessionsCache[activeSessionName] = currentSessionObject();
         clearTimeout(_sessionSyncTimer);
-        _sessionSyncTimer = setTimeout(() => {
-            if (activeSessionName) upsertSessionToDb(activeSessionName, sessionsCache[activeSessionName]);
-        }, 1200);
+        const name = activeSessionName;
+        const credential = privateWorkspace().credential;
+        const snapshot = JSON.parse(JSON.stringify(sessionsCache[name]));
+        _sessionSyncTimer = setTimeout(() => { _sessionSyncTimer = null; upsertSessionToDb(name, snapshot, credential); }, 1200);
     }
 
-    // If a live room is open, host-side pick changes affect who counts as
-    // "submitted" (Available box empty), so refresh the room status display.
+    // Keep explicit submission status current when the room is open.
     if (state.roomCode && typeof renderRoomStatus === 'function') renderRoomStatus();
 }
 
 // Flush any pending debounced save immediately (e.g. before the page unloads)
 // so an edit made within the debounce window isn't lost.
-function flushSession() {
+async function flushSession() {
     if (_sessionSyncTimer) {
         clearTimeout(_sessionSyncTimer);
         _sessionSyncTimer = null;
     }
     if (activeSessionName && !isGuestMode) {
         sessionsCache[activeSessionName] = currentSessionObject();
-        upsertSessionToDb(activeSessionName, sessionsCache[activeSessionName]);
+        return await upsertSessionToDb(activeSessionName, sessionsCache[activeSessionName]);
     }
+    return await pendingWrites;
 }
 
 // Initialize
@@ -1221,50 +1223,26 @@ async function initWorkspaceAndSessions() {
         renderHomeSessions(); // Will show a "not configured" notice.
         return;
     }
-    if (!hasWorkspaceKey()) {
-        renderHomeSessions(); // Empty behind the prompt.
-        openWorkspaceModal();
-        return;
-    }
-    ensureUser();
-    await loadSessionsFromDb();
-    await loadPresetsFromDb();
+    try { await initializePrivateWorkspace(); }
+    catch (error) { accessError(error, 'Could not open saved games'); openWorkspaceModal(); }
     renderPresetOptions();
     renderHomeSessions();
 }
 
 // --- Workspace key ---
 function openWorkspaceModal() {
-    get('workspace-input').value = getWorkspaceKey();
+    get('workspace-input').value = '';
+    get('organizer-link-wrap').hidden = !hasWorkspaceKey();
+    get('organizer-link').value = hasWorkspaceKey() ? makePrivateLink('organizer', privateWorkspace().credential) : '';
     get('modal-overlay').classList.add('active');
     get('workspace-modal').classList.add('active');
     get('workspace-input').focus();
 }
 
-async function confirmWorkspaceKey() {
-    const key = get('workspace-input').value.trim();
-    if (!key) {
-        showToast('error', 'Workspace Needed', 'Enter a workspace key to load your sessions.');
-        return;
-    }
-    setWorkspaceKey(key);
-    closeModals();
-    updateWorkspaceIndicator();
-    ensureUser();
-    await loadSessionsFromDb();
-    await loadPresetsFromDb();
-    renderPresetOptions();
-    renderHomeSessions();
-    showToast('success', 'Workspace Set', `Loaded sessions for "${key}".`);
-}
-
 function updateWorkspaceIndicator() {
     const el = get('workspace-indicator');
     if (!el) return;
-    const key = getWorkspaceKey();
-    el.innerHTML = key
-        ? `Workspace: <strong>${escapeHtml(key)}</strong> · <button class="link-btn" onclick="openWorkspaceModal()">change</button>`
-        : `<button class="link-btn" onclick="openWorkspaceModal()">Set your workspace key</button>`;
+    el.innerHTML = `<button class="link-btn" onclick="openWorkspaceModal()">${hasWorkspaceKey() ? 'Save or open your private organizer link' : 'Open saved games or start a workspace'}</button>`;
 }
 
 // Named Sessions (DB-backed; sessionsCache lives in rooms.js)
@@ -1279,6 +1257,7 @@ async function createNewSession(name) {
     if (!isSupabaseConfigured()) return showToast('error', 'Not Configured', 'Sessions need Supabase set up.');
     if (!hasWorkspaceKey()) { openWorkspaceModal(); return; }
     if (sessionsCache[name]) return showToast('error', 'Name Taken', `A session named "${name}" already exists.`);
+    if (!(await flushSession())) return;
 
     state.factions = [];
     state.players = [];
@@ -1290,7 +1269,7 @@ async function createNewSession(name) {
 
     const obj = currentSessionObject();
     sessionsCache[name] = obj;
-    await upsertSessionToDb(name, obj);
+    if (!(await upsertSessionToDb(name, obj))) return;
     autoSave();
 
     get('game-select').value = 'custom';
@@ -1308,7 +1287,9 @@ function deleteSession(name, onSuccess) {
         'Delete Session?',
         `Are you sure you want to delete "${name}"?`,
         async () => {
-            await deleteSessionFromDb(name); // cascades the room's submissions in the DB
+            if (activeSessionName !== name && !(await flushSession())) return;
+            if (_sessionSyncTimer) { clearTimeout(_sessionSyncTimer); _sessionSyncTimer = null; }
+            if (!(await deleteSessionFromDb(name))) return;
             delete sessionsCache[name];
 
             if (activeSessionName === name) {
@@ -1328,6 +1309,8 @@ function deleteSession(name, onSuccess) {
 
 // --- Sessions Home ---
 async function goHome() {
+    if (!(await flushSession())) return;
+    deactivateRoomSync();
     switchView('view-home');
     updateWorkspaceIndicator();
     if (isSupabaseConfigured() && hasWorkspaceKey()) {
@@ -1347,7 +1330,7 @@ function renderHomeSessions() {
         return;
     }
     if (!hasWorkspaceKey()) {
-        container.innerHTML = '<div class="empty-state">Set a workspace key to load your sessions.</div>';
+        container.innerHTML = '<div class="empty-state">Open your private organizer link, or start a new workspace. No account needed.</div>';
         return;
     }
 
@@ -1385,7 +1368,8 @@ function renderHomeSessions() {
     });
 }
 
-function resumeSession(name) {
+async function resumeSession(name) {
+    if (!(await flushSession())) return;
     const sessions = getSessions();
     const data = sessions[name];
     if (!data) {
@@ -1609,12 +1593,13 @@ function savePreset() {
     const overwritingDifferent = (name in presets) && name !== original;
 
     const doSave = async () => {
+        const factions = [...presetEditState.factions];
+        if (!(await upsertPresetToDb(name, factions))) return;
+        presets[name] = factions;
         if (original && original !== name) {
-            delete presets[original]; // Renamed
-            await deletePresetFromDb(original);
+            if (!(await deletePresetFromDb(original))) return;
+            delete presets[original];
         }
-        presets[name] = [...presetEditState.factions];
-        await upsertPresetToDb(name, presets[name]);
         renderPresetOptions();
         showToast('success', 'Game Saved', `"${name}" saved.`);
         showPresetListView();
@@ -1639,8 +1624,8 @@ function deletePreset(name) {
         `Are you sure you want to delete the game "${name}"? This cannot be undone.`,
         async () => {
             const presets = getPresets();
+            if (!(await deletePresetFromDb(name))) return;
             delete presets[name];
-            await deletePresetFromDb(name);
 
             const select = get('game-select');
             if (select.value === name) select.value = 'custom';

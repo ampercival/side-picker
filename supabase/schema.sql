@@ -1,4 +1,11 @@
--- Side Picker — Supabase schema
+-- Side Picker — LEGACY baseline, for a fresh database only.
+-- Then apply supabase/migrations/ in order. Do not rerun this after private links.
+begin;
+do $$ begin
+  if to_regnamespace('side_picker_private') is not null then
+    raise exception 'Private links are installed. Use versioned migrations; do not restore legacy public policies.';
+  end if;
+end $$;
 -- Run this in your project: SQL Editor -> New query -> paste -> Run.
 -- The script is idempotent and also migrates older versions (drops the old
 -- standalone `rooms` table now that a room is just a feature of a session).
@@ -98,3 +105,4 @@ end $$;
 
 -- The standalone rooms table is no longer used (merged into sessions).
 drop table if exists public.rooms;
+commit;

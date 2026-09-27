@@ -1,568 +1,304 @@
-// Side Picker — live rooms (Supabase-backed).
-// Loaded after script.js; relies on its globals (get, state, showToast,
-// setupDragAndDrop, refreshListsForCard, switchView, renderPlayers, autoSave,
-// isGuestMode, escapeHtml, etc.).
-
+// Account-free workspaces. Every operation is authorized by the database RPC.
 let _supabase = null;
-
-// Lazily create the Supabase client. Returns null if config.js isn't filled in
-// or the CDN client failed to load.
 function getSupabaseClient() {
-    if (_supabase) return _supabase;
     const cfg = window.SUPABASE_CONFIG;
-    if (!window.supabase || !cfg || !cfg.url || cfg.url.startsWith('YOUR_')) {
-        return null;
-    }
-    _supabase = window.supabase.createClient(cfg.url, cfg.publishableKey);
-    return _supabase;
+    if (!window.supabase || !cfg?.url || cfg.url.startsWith('YOUR_')) return null;
+    return _supabase ||= window.supabase.createClient(cfg.url, cfg.publishableKey, {
+        auth: { persistSession: false, detectSessionInUrl: false, autoRefreshToken: false }
+    });
 }
-
-function isSupabaseConfigured() {
-    return getSupabaseClient() !== null;
+function isSupabaseConfigured() { return getSupabaseClient() !== null; }
+const WORKSPACE_KEY_LS = 'side_picker_workspace_key'; // legacy label, never a credential
+// Keep this tab bound to the workspace it loaded, even if another tab imports a link.
+let workspaceAccess = null;
+function privateWorkspace() {
+    if (workspaceAccess) return workspaceAccess;
+    try { return workspaceAccess = JSON.parse(localStorage.getItem(PRIVATE_WORKSPACE_KEY)) || {}; }
+    catch { return workspaceAccess = {}; }
 }
-
-// ---------------------------------------------------------------------------
-// Workspace key — scopes an organizer's sessions/presets across devices.
-// ---------------------------------------------------------------------------
-const WORKSPACE_KEY_LS = 'side_picker_workspace_key';
-
-function getWorkspaceKey() {
-    return (localStorage.getItem(WORKSPACE_KEY_LS) || '').trim();
+function getWorkspaceKey() { return privateWorkspace().ownerKey || ''; }
+function hasWorkspaceKey() { return Boolean(getWorkspaceKey() && privateWorkspace().credential); }
+function storeWorkspace(credential, ownerKey) {
+    const next = { credential, ownerKey };
+    localStorage.setItem(PRIVATE_WORKSPACE_KEY, JSON.stringify(next)); workspaceAccess = next;
 }
-
-function setWorkspaceKey(key) {
-    localStorage.setItem(WORKSPACE_KEY_LS, (key || '').trim());
+function accessError(error, title = 'Could not save') {
+    showToast('error', title, error?.code === '42501' ? 'This private link is no longer valid, or picking is closed. Open a current link or ask the organizer to reopen picking.'
+        : error?.code === '22023' ? error.message : 'Check your connection and try again. Changes have not been confirmed saved.');
 }
-
-function hasWorkspaceKey() {
-    return getWorkspaceKey().length > 0;
+async function workspaceRequest(action, payload = {}, credential = privateWorkspace().credential) {
+    const sb = getSupabaseClient(); if (!sb) throw new Error('Unavailable');
+    const { data, error } = await sb.rpc('sp_workspace', { action, credential, payload });
+    if (error) throw error; return data;
 }
-
-// ---------------------------------------------------------------------------
-// Sessions — stored in Supabase, cached in memory for synchronous rendering.
-// ---------------------------------------------------------------------------
-let sessionsCache = {}; // name -> { factions, players, sessionName, gameTitle, roomCode, date }
-
+let sessionsCache = Object.create(null), presetsCache = Object.create(null);
+let pendingWrites = Promise.resolve(true);
 function mapRowToSession(row) {
-    return {
-        factions: row.factions || [],
-        players: row.players || [],
-        sessionName: row.session_name || row.name,
-        gameTitle: row.game_title || '',
-        roomCode: row.room_code || '',
-        results: row.results || null,
-        date: row.updated_at || new Date().toISOString()
-    };
+    return { id: row.id, factions: row.factions || [], players: row.players || [], sessionName: row.session_name || row.name,
+        gameTitle: row.game_title || '', roomCode: row.room_code || '', results: row.results || null, date: row.updated_at };
 }
-
 function sessionRow(name, s) {
-    return {
-        owner_key: getWorkspaceKey(),
-        name,
-        session_name: s.sessionName || name,
-        game_title: s.gameTitle || '',
-        factions: s.factions || [],
-        players: s.players || [],
-        room_code: s.roomCode || null,
-        results: s.results || null,
-        updated_at: new Date().toISOString()
-    };
+    return { name, session_name: s.sessionName || name, game_title: s.gameTitle || '', factions: s.factions || [], players: s.players || [], results: s.results || null };
 }
-
-// Forward-looking: record the organizer (workspace key) in the users table.
-async function ensureUser() {
-    const sb = getSupabaseClient();
-    if (!sb || !hasWorkspaceKey()) return;
-    await sb.from('users').upsert({ owner_key: getWorkspaceKey() }, { onConflict: 'owner_key' });
+function applyWorkspaceData(data) {
+    sessionsCache = Object.create(null); presetsCache = Object.create(null);
+    (data.sessions || []).forEach(row => { sessionsCache[row.name] = mapRowToSession(row); });
+    (data.presets || []).forEach(row => { presetsCache[row.name] = row.factions || []; });
 }
-
 async function loadSessionsFromDb() {
-    sessionsCache = {};
-    const sb = getSupabaseClient();
-    if (!sb || !hasWorkspaceKey()) return sessionsCache;
-
-    const { data, error } = await sb.from('sessions').select('*').eq('owner_key', getWorkspaceKey());
-    if (error) {
-        showToast('error', 'Sessions Error', error.message);
-        return sessionsCache;
-    }
-    (data || []).forEach(row => { sessionsCache[row.name] = mapRowToSession(row); });
+    const credential = privateWorkspace().credential;
+    try { const data = await workspaceRequest('load', {}, credential); if (credential === privateWorkspace().credential) applyWorkspaceData(data); }
+    catch (error) { accessError(error, 'Could not load games'); }
     return sessionsCache;
 }
-
-async function upsertSessionToDb(name, s) {
-    const sb = getSupabaseClient();
-    if (!sb || !hasWorkspaceKey()) return;
-    const { error } = await sb.from('sessions').upsert(sessionRow(name, s), { onConflict: 'owner_key,name' });
-    if (error) showToast('error', 'Save Error', error.message);
+async function loadPresetsFromDb() { return presetsCache; }
+function upsertSessionToDb(name, s, credential = privateWorkspace().credential) {
+    const snapshot = JSON.parse(JSON.stringify(sessionRow(name, s)));
+    pendingWrites = pendingWrites.then(async () => {
+        try { await workspaceRequest('save_session', snapshot, credential); return true; }
+        catch (error) { accessError(error); return false; }
+    });
+    return pendingWrites;
 }
-
 async function deleteSessionFromDb(name) {
-    const sb = getSupabaseClient();
-    if (!sb || !hasWorkspaceKey()) return;
-    const { error } = await sb.from('sessions').delete().eq('owner_key', getWorkspaceKey()).eq('name', name);
-    if (error) showToast('error', 'Delete Error', error.message);
+    await pendingWrites;
+    try { await workspaceRequest('delete_session', { name }); return true; }
+    catch (error) { accessError(error, 'Could not delete game'); return false; }
 }
-
-// ---------------------------------------------------------------------------
-// Presets — stored in Supabase (scoped by workspace key), cached in memory.
-// ---------------------------------------------------------------------------
-let presetsCache = {}; // name -> factions[]
-
-async function loadPresetsFromDb() {
-    presetsCache = {};
-    const sb = getSupabaseClient();
-    if (!sb || !hasWorkspaceKey()) return presetsCache;
-
-    const { data, error } = await sb.from('presets').select('*').eq('owner_key', getWorkspaceKey());
-    if (error) {
-        showToast('error', 'Presets Error', error.message);
-        return presetsCache;
-    }
-    (data || []).forEach(row => { presetsCache[row.name] = row.factions || []; });
-    return presetsCache;
-}
-
 async function upsertPresetToDb(name, factions) {
-    const sb = getSupabaseClient();
-    if (!sb || !hasWorkspaceKey()) return;
-    const { error } = await sb.from('presets').upsert({
-        owner_key: getWorkspaceKey(),
-        name,
-        factions,
-        updated_at: new Date().toISOString()
-    }, { onConflict: 'owner_key,name' });
-    if (error) showToast('error', 'Save Error', error.message);
+    try { await workspaceRequest('save_preset', { name, factions }); return true; } catch (error) { accessError(error); return false; }
 }
-
 async function deletePresetFromDb(name) {
-    const sb = getSupabaseClient();
-    if (!sb || !hasWorkspaceKey()) return;
-    const { error } = await sb.from('presets').delete().eq('owner_key', getWorkspaceKey()).eq('name', name);
-    if (error) showToast('error', 'Delete Error', error.message);
+    try { await workspaceRequest('delete_preset', { name }); return true; } catch (error) { accessError(error); return false; }
+}
+async function initializePrivateWorkspace() {
+    if (new URLSearchParams(location.hash.slice(1)).has('organizer')) {
+        const credential = parseOrganizerLink(location.href);
+        history.replaceState(null, '', location.pathname);
+        const data = await workspaceRequest('load', {}, credential);
+        storeWorkspace(credential, data.owner_key); applyWorkspaceData(data); return;
+    }
+    const saved = privateWorkspace();
+    if (saved.credential) {
+        let data, credential = saved.credential;
+        try { data = await workspaceRequest('load', {}, credential); }
+        catch (error) {
+            if (!saved.pendingCredential) throw error;
+            credential = saved.pendingCredential; data = await workspaceRequest('load', {}, credential);
+        }
+        storeWorkspace(credential, data.owner_key); applyWorkspaceData(data); return;
+    }
+    if (localStorage.getItem(WORKSPACE_KEY_LS)) {
+        openWorkspaceModal();
+        get('workspace-help').textContent = 'Your older saved games are preserved. Open the private organizer link supplied during the upgrade, or start a separate workspace below.';
+        return;
+    }
+    await createPrivateWorkspace();
+}
+async function createPrivateWorkspace(confirmed = false) {
+    if (hasWorkspaceKey() && !confirmed) {
+        showConfirm('Start a separate workspace?', 'Save your current organizer link first so you can return to these games. A separate workspace starts empty.', () => createPrivateWorkspace(true), 'Start workspace');
+        return;
+    }
+    if (activeSessionName && !(await flushSession())) return;
+    const credential = localStorage.getItem(PRIVATE_WORKSPACE_KEY + '_new') || newPrivateToken();
+    localStorage.setItem(PRIVATE_WORKSPACE_KEY + '_new', credential);
+    try {
+        const data = await workspaceRequest('create', {}, credential);
+        storeWorkspace(credential, data.owner_key); localStorage.removeItem(PRIVATE_WORKSPACE_KEY + '_new');
+        activeSessionName = null; state.roomCode = ''; deactivateRoomSync();
+        sessionsCache = Object.create(null); presetsCache = Object.create(null);
+        closeModals(); updateWorkspaceIndicator(); renderHomeSessions(); renderPresetOptions();
+    } catch (error) { accessError(error, 'Could not start workspace'); }
+}
+async function importOrganizerLink() {
+    try {
+        const credential = parseOrganizerLink(get('workspace-input').value);
+        if (!(await flushSession())) return;
+        const data = await workspaceRequest('load', {}, credential);
+        deactivateRoomSync(); activeSessionName = null; state.roomCode = '';
+        storeWorkspace(credential, data.owner_key); applyWorkspaceData(data);
+        closeModals(); renderHomeSessions(); renderPresetOptions(); switchView('view-home');
+    } catch (error) { accessError(error, 'Could not open organizer link'); }
+}
+async function copyOrganizerLink() {
+    if (await copyToClipboard(get('organizer-link').value)) showToast('success', 'Organizer link copied', 'Keep it private. It can edit all games in this workspace.');
+    else { get('organizer-link').select(); showToast('info', 'Copy manually', 'Copy the selected private link.'); }
+}
+function replaceOrganizerLink() {
+    showConfirm('Replace organizer link?', 'The old organizer link will stop working on every device. Save the replacement link afterward. Player links stay valid.', async () => {
+        if (!(await flushSession())) return;
+        const saved = privateWorkspace(), credential = newPrivateToken();
+        localStorage.setItem(PRIVATE_WORKSPACE_KEY, JSON.stringify({ ...saved, pendingCredential: credential }));
+        try {
+            await workspaceRequest('rotate', { token_hash: await privateTokenHash(credential) }, saved.credential);
+            storeWorkspace(credential, saved.ownerKey); openWorkspaceModal();
+            showToast('success', 'Organizer link replaced', 'Save your new private link.');
+        } catch (error) { accessError(error, 'Could not confirm replacement'); }
+    }, 'Replace link', 'danger');
 }
 
-// ---------------------------------------------------------------------------
-// Shared guest pick state (used by the guest faction-picker view)
-// ---------------------------------------------------------------------------
 let guestPick = { id: 'guest', name: '', preferences: [], bans: [], noPreference: false };
-let guestSession = null; // { code, factions, roster, sessionName, gameTitle }
-let guestShowingResults = false; // tracks whether the guest is on the results view
-
-// ---------------------------------------------------------------------------
-// Organizer: live room
-// ---------------------------------------------------------------------------
-let roomChannel = null;     // Realtime subscription
-
-function generateRoomCode() {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no ambiguous 0/O/1/I
-    let s = '';
-    for (let i = 0; i < 6; i++) s += chars[Math.floor(Math.random() * chars.length)];
-    return s;
-}
-
-function roomLink(code) {
-    return `${location.origin}${location.pathname}?room=${code}`;
-}
-
-async function openLiveRoom() {
-    const sb = getSupabaseClient();
-    if (!sb) {
-        showToast('error', 'Not Configured', 'Live rooms need Supabase set up in config.js.');
-        return;
-    }
-    if (!activeSessionName) {
-        showToast('error', 'No Session', 'Start a session first.');
-        return;
-    }
-    if (state.factions.length === 0) {
-        showToast('error', 'No Factions', 'Add factions before opening a room.');
-        return;
-    }
-    if (state.players.length === 0) {
-        showToast('error', 'No Players', 'Add the player names first so they can pick theirs.');
-        return;
-    }
-    if (state.factions.length < state.players.length) {
-        showToast('error', 'Not Enough Factions', `You have ${state.factions.length} faction${state.factions.length === 1 ? '' : 's'} for ${state.players.length} players. Add more before opening a room, or no valid assignment will exist.`);
-        return;
-    }
-    const names = state.players.map(p => p.name);
-    const dupes = names.filter((n, i) => names.indexOf(n) !== i);
-    if (dupes.length > 0) {
-        showToast('error', 'Duplicate Names', `Rename players so each name is unique (e.g. "${dupes[0]}").`);
-        return;
-    }
-
-    // A room is just a code on the session. Generate one if needed, then flush
-    // the session so guests can resolve it by code.
-    if (!state.roomCode) state.roomCode = generateRoomCode();
-    sessionsCache[activeSessionName] = currentSessionObject();
-    await upsertSessionToDb(activeSessionName, sessionsCache[activeSessionName]);
-    autoSave();
-
-    await activateRoomSync();
-    showRoomModal();
-}
-
-function showRoomModal() {
-    if (!state.roomCode) return;
-    get('room-link-input').value = roomLink(state.roomCode);
-    get('room-code-label').textContent = state.roomCode;
-    renderRoomStatus();
-    get('modal-overlay').classList.add('active');
-    get('room-modal').classList.add('active');
-}
-
-async function copyRoomLink() {
-    const ok = await copyToClipboard(get('room-link-input').value);
-    if (ok) {
-        showToast('success', 'Link Copied', 'Share it with your players.');
-    } else {
-        get('room-link-input').select();
-        showToast('info', 'Copy Manually', 'Press Ctrl/Cmd+C to copy the selected link.');
-    }
-}
-
-// A player counts as "submitted" once every faction is sorted into Preferences
-// or Banned (nothing left in Available). Derived from the player's data, so it
-// reflects both their own submitted picks and any the host fills in for them.
-function playerHasSubmitted(player, factions) {
-    if (!player || !factions || factions.length === 0) return false;
-    const prefs = player.preferences || [];
-    const bans = player.bans || [];
-    return factions.every(f => prefs.includes(f) || bans.includes(f));
-}
-
-function renderRoomStatus() {
-    const container = get('room-status-list');
-    if (!container) return;
-    container.innerHTML = '';
-
-    const players = state.players || [];
-    const submitted = players.filter(p => playerHasSubmitted(p, state.factions)).length;
-    const countEl = get('room-banner-count');
-    if (countEl) countEl.textContent = `${submitted}/${players.length} submitted`;
-
-    players.forEach(p => {
-        const row = document.createElement('div');
-        row.className = 'room-status-row';
-        const done = playerHasSubmitted(p, state.factions);
-        row.innerHTML = `
-            <span class="rs-name">${escapeHtml(p.name)}</span>
-            <span class="rs-state ${done ? 'done' : 'waiting'}">${done ? '✓ submitted' : 'waiting…'}</span>
-        `;
-        container.appendChild(row);
-    });
-}
-
-function applySubmissionToPlayer(row, { render = true } = {}) {
-    const player = state.players.find(p => p.name === row.player_name);
-    if (!player) return;
-    const isValid = f => state.factions.includes(f);
-    player.preferences = (row.preferences || []).filter(isValid);
-    player.bans = (row.bans || []).filter(isValid);
-    player.noPreference = !!row.no_preference;
-    if (render) {
-        autoSave();
-        renderPlayers();
-    }
-}
-
-async function refreshRoomSubmissions() {
-    const sb = getSupabaseClient();
-    if (!sb || !state.roomCode) return;
-    const { data, error } = await sb.from('submissions').select('*').eq('room_code', state.roomCode);
-    if (error) {
-        showToast('error', 'Room Error', error.message);
-        return;
-    }
-    (data || []).forEach(row => applySubmissionToPlayer(row, { render: false }));
-    autoSave();
-    renderPlayers();
-    renderRoomStatus();
-}
-
-async function activateRoomSync() {
-    const sb = getSupabaseClient();
-    if (!sb || !state.roomCode) return;
-
-    await refreshRoomSubmissions();
-
-    if (roomChannel) {
-        sb.removeChannel(roomChannel);
-        roomChannel = null;
-    }
-    roomChannel = sb.channel(`room-${state.roomCode}`)
-        .on('postgres_changes',
-            { event: '*', schema: 'public', table: 'submissions', filter: `room_code=eq.${state.roomCode}` },
-            payload => {
-                if (payload.new) {
-                    applySubmissionToPlayer(payload.new);
-                    renderRoomStatus();
-                    showToast('info', 'Pick Received', `${payload.new.player_name} submitted.`);
-                } else if (payload.old) {
-                    renderRoomStatus();
-                }
-            })
-        .subscribe();
-
-    updateRoomBanner();
-}
-
-function deactivateRoomSync() {
-    const sb = getSupabaseClient();
-    if (roomChannel && sb) {
-        sb.removeChannel(roomChannel);
-    }
-    roomChannel = null;
-    updateRoomBanner();
-}
-
-// Show/hide the "live room active" banner on the players view.
+let guestSession = null, guestShowingResults = false, guestAccess = null, guestSavedChoices = '';
+let roomTimer = null, roomEpoch = 0;
+function pickSignature(p) { return JSON.stringify([p.preferences, p.bans, !!p.noPreference]); }
+function playerHasSubmitted(player) { return Boolean(player?.submitted || player?.submittedAt); }
 function updateRoomBanner() {
-    const banner = get('room-banner');
-    if (!banner) return;
-    if (state.roomCode) {
-        banner.style.display = 'flex';
-        get('room-banner-code').textContent = state.roomCode;
-        renderRoomStatus();
-    } else {
-        banner.style.display = 'none';
-    }
+    const banner = get('room-banner'); if (!banner) return;
+    banner.style.display = state.roomCode ? 'flex' : 'none'; get('room-banner-code').textContent = state.roomCode ? 'Active' : '';
+    renderRoomStatus();
 }
-
-// Called after load/resume to reconnect to a session's room if it has one.
+function deactivateRoomSync() { ++roomEpoch; clearTimeout(roomTimer); roomTimer = null; }
+function startRoomPolling(work) {
+    deactivateRoomSync(); const epoch = roomEpoch;
+    async function tick() {
+        if (epoch !== roomEpoch) return;
+        if (!document.hidden) {
+            try { await work(epoch); if (epoch === roomEpoch) setRoomConnection(true); }
+            catch { if (epoch === roomEpoch) setRoomConnection(false); }
+        }
+        if (epoch === roomEpoch) roomTimer = setTimeout(tick, 3000);
+    }
+    tick();
+}
+function setRoomConnection(ok) {
+    const el = get(isGuestMode ? 'guest-connection' : 'room-connection');
+    if (el) el.textContent = ok ? 'Live updates connected' : 'Connection interrupted — retrying…';
+}
+async function refreshRoomSubmissions(epoch = roomEpoch) {
+    const name = activeSessionName, workspace = getWorkspaceKey();
+    const rows = await workspaceRequest('submissions', { name });
+    if (epoch !== roomEpoch || name !== activeSessionName || workspace !== getWorkspaceKey()) return;
+    let changed = false;
+    for (const row of rows) {
+        const player = state.players.find(p => p.id === row.player_id);
+        if (!player || player.submittedAt === row.updated_at) continue;
+        player.preferences = row.preferences.filter(f => state.factions.includes(f)); player.bans = row.bans.filter(f => state.factions.includes(f));
+        player.noPreference = row.no_preference; player.submittedAt = row.updated_at; changed = true;
+    }
+    if (changed) { autoSave(); renderPlayers(); renderRoomStatus(); }
+}
 function syncRoomForCurrentSession() {
-    if (state.roomCode && isSupabaseConfigured()) {
-        activateRoomSync();
-    } else {
-        deactivateRoomSync();
+    if (state.roomCode) startRoomPolling(refreshRoomSubmissions); else deactivateRoomSync(); updateRoomBanner();
+}
+async function openLiveRoom() {
+    if (!activeSessionName || !(await flushSession())) return;
+    try {
+        const row = await workspaceRequest('open_room', { name: activeSessionName });
+        state.roomCode = row.room_code; sessionsCache[activeSessionName] = currentSessionObject();
+        syncRoomForCurrentSession(); await showRoomModal();
+    } catch (error) { accessError(error, 'Could not open room'); }
+}
+async function invitation(player = '') {
+    const data = await workspaceRequest('invite', { name: activeSessionName, player_id: player });
+    return makePrivateLink('player', data.token, { room: data.room_code, player: data.player_id });
+}
+async function showRoomModal() {
+    if (!state.roomCode) return; const name = activeSessionName;
+    try {
+        const link = await invitation(); if (name !== activeSessionName) return;
+        get('room-link-input').value = link; get('room-code-label').textContent = ''; renderRoomStatus();
+        get('modal-overlay').classList.add('active'); get('room-modal').classList.add('active');
+    } catch (error) { accessError(error, 'Could not load invitations'); }
+}
+async function copyPlayerLink(id) {
+    try {
+        if (!(await flushSession())) return;
+        const link = await invitation(id); get('room-link-input').value = link;
+        if (await copyToClipboard(link)) showToast('success', 'Player link copied', 'Send this invitation only to this player.');
+        else { get('room-link-input').select(); showToast('info', 'Copy manually', 'Copy the selected player link.'); }
+    } catch (error) { accessError(error, 'Could not copy invitation'); }
+}
+async function copyRoomLink() {
+    try {
+        get('room-link-input').value = await invitation();
+        if (await copyToClipboard(get('room-link-input').value)) showToast('success', 'Viewing link copied', 'This link can view the room but cannot submit picks.');
+        else get('room-link-input').select();
+    } catch (error) { accessError(error, 'Could not copy viewing link'); }
+}
+function replaceRoomLinks() {
+    showConfirm('Replace player links?', 'All current player and viewing links for this game will stop working. Send new invitations afterward. Saved picks are kept.', async () => {
+        try { await workspaceRequest('reset_room_links', { name: activeSessionName }); await showRoomModal(); }
+        catch (error) { accessError(error, 'Could not replace invitations'); }
+    }, 'Replace links', 'danger');
+}
+function renderRoomStatus() {
+    const container = get('room-status-list'); if (!container) return; container.replaceChildren();
+    const players = state.players || [], count = get('room-banner-count');
+    if (count) count.textContent = `${players.filter(playerHasSubmitted).length}/${players.length} submitted`;
+    for (const p of players) {
+        const row = document.createElement('div'); row.className = 'room-status-row';
+        const name = document.createElement('span'); name.className = 'rs-name'; name.textContent = p.name;
+        const status = document.createElement('span'); status.className = 'rs-state'; status.textContent = playerHasSubmitted(p) ? '✓ submitted' : 'waiting';
+        const button = document.createElement('button'); button.className = 'btn secondary'; button.textContent = 'Copy player link'; button.onclick = () => copyPlayerLink(p.id);
+        row.append(name, status, button); container.appendChild(row);
     }
 }
 
-// ---------------------------------------------------------------------------
-// Guest: join a room and submit picks
-// ---------------------------------------------------------------------------
-function parseRoomFromUrl() {
-    const params = new URLSearchParams(location.search);
-    const code = params.get('room');
-    return code ? code.trim().toUpperCase() : null;
-}
-
+function parseRoomFromUrl() { return new URLSearchParams(location.search).get('room')?.trim().toUpperCase() || null; }
 function showGuestError(message) {
-    document.body.classList.add('guest-mode');
-    switchView('view-guest');
-    get('guest-name-wrap').style.display = 'none';
-    get('guest-pick-area').style.display = 'none';
-    get('guest-banner').style.display = 'none';
-    const err = get('guest-error');
-    err.textContent = message;
-    err.style.display = 'block';
+    document.body.classList.add('guest-mode'); switchView('view-guest');
+    get('guest-name-wrap').style.display = 'none'; get('guest-pick-area').style.display = 'none'; get('guest-banner').style.display = 'none';
+    get('guest-error').textContent = message; get('guest-error').style.display = 'block';
 }
-
-async function enterRoomGuestMode(code) {
-    isGuestMode = true;
-    document.body.classList.add('guest-mode');
-    switchView('view-guest');
-
-    const sb = getSupabaseClient();
-    if (!sb) {
-        showGuestError('This room link needs Supabase configured to work.');
-        return;
-    }
-
-    const { data: rows, error } = await sb.from('sessions').select('*').eq('room_code', code).limit(1);
-    const session = rows && rows[0];
-    if (error || !session) {
-        showGuestError('Room not found. Ask the organizer for a fresh link.');
-        return;
-    }
-
-    guestSession = {
-        code,
-        factions: session.factions || [],
-        players: session.players || [],
-        roster: (session.players || []).map(p => p.name),
-        sessionName: session.session_name || '',
-        gameTitle: session.game_title || '',
-        results: session.results || null
-    };
-    state.factions = [...guestSession.factions]; // Lets the shared list/drag helpers work unchanged.
-
-    renderGuestRoster(); // who's submitted so far (nudges stragglers)
-
-    // Banner with session name + game.
-    const banner = get('guest-banner');
-    const sessionName = (guestSession.sessionName || '').trim();
-    const gameTitle = (guestSession.gameTitle || '').trim();
-    if (sessionName || gameTitle) {
-        get('guest-session-name').textContent = sessionName;
-        get('guest-game-title').textContent = gameTitle ? `🎲 ${gameTitle}` : '';
-        banner.style.display = 'block';
-    } else {
-        banner.style.display = 'none';
-    }
-
-    // Name dropdown from the roster + drag wiring — always set up so we can
-    // toggle between picks and results live as the organizer optimizes/reopens.
-    const select = get('guest-name-select');
-    guestSession.roster.forEach(name => {
-        const opt = document.createElement('option');
-        opt.value = name;
-        opt.textContent = name;
-        select.appendChild(opt);
+async function guestRequest(action = 'read', payload = {}) {
+    const { data, error } = await getSupabaseClient().rpc('sp_room', {
+        room: guestSession.code, player: guestAccess.player, credential: guestAccess.token, action, payload
     });
-    setupDragAndDrop(get('guest-available'), get('guest-preference'), get('guest-banned'), guestPick);
-
-    // Stay in sync: flip between picks and results as the organizer optimizes/reopens.
-    subscribeGuestToSession(code);
-
-    if (guestResultsReady(guestSession.results)) {
-        guestShowingResults = true;
-        enterSharedResultsMode(guestSession.results);
-    } else {
-        guestShowingResults = false;
-        renderGuestPicks(); // nothing shown until a name is picked
-    }
+    if (error) throw error; return data;
 }
-
-function guestResultsReady(results) {
-    return validateResultsPayload(results) !== null;
+async function enterRoomGuestMode(code) {
+    isGuestMode = true; document.body.classList.add('guest-mode'); switchView('view-guest');
+    try {
+        guestAccess = parsePlayerLink(location.hash); const storageKey = `side_picker_guest_${code}`;
+        if (location.hash && !guestAccess) throw new Error('Invalid invitation');
+        if (guestAccess) sessionStorage.setItem(storageKey, JSON.stringify(guestAccess));
+        else guestAccess = JSON.parse(sessionStorage.getItem(storageKey) || 'null');
+        history.replaceState(null, '', location.pathname + location.search);
+        if (!guestAccess || !PRIVATE_TOKEN_PATTERN.test(guestAccess.token)) throw new Error('Missing link');
+        guestSession = { code }; const data = await guestRequest();
+        guestPick.id = guestAccess.player || 'guest'; guestPick.name = data.player_name || '';
+        guestPick.preferences = data.mine?.preferences || []; guestPick.bans = data.mine?.bans || []; guestPick.noPreference = !!data.mine?.no_preference;
+        guestSavedChoices = data.mine ? pickSignature(guestPick) : '';
+        get('guest-name-wrap').style.display = 'block';
+        setupDragAndDrop(get('guest-available'), get('guest-preference'), get('guest-banned'), guestPick); applyGuestRoom(data);
+        startRoomPolling(async epoch => { const fresh = await guestRequest(); if (epoch === roomEpoch) applyGuestRoom(fresh); });
+    } catch { showGuestError('This room link is incomplete, expired, or unavailable. Ask the organizer for a fresh personal invitation.'); }
 }
-
-// Show players a live "who's submitted" list so stragglers know to send picks.
-// Derived from the session's players (same source the host uses), so it counts
-// both self-submitted picks and any the host fills in.
+function applyGuestRoom(data) {
+    const previous = guestSession?.lastResponse;
+    const response = JSON.stringify(data);
+    if (response === previous) return;
+    guestSession = { ...guestSession, ...data }; state.factions = data.factions;
+    guestSession.lastResponse = response;
+    get('guest-banner').style.display = 'block'; get('guest-session-name').textContent = data.session_name || ''; get('guest-game-title').textContent = data.game_title || '';
+    guestPick.name = data.player_name || '';
+    get('guest-player-name').textContent = guestPick.name || 'Viewing only — ask the organizer for your personal player link to submit picks.';
+    guestPick.preferences = guestPick.preferences.filter(f => data.factions.includes(f)); guestPick.bans = guestPick.bans.filter(f => data.factions.includes(f));
+    renderGuestRoster();
+    if (guestResultsReady(data.results)) { guestShowingResults = true; enterSharedResultsMode(data.results); }
+    else { if (guestShowingResults) { guestShowingResults = false; showGuestPicks(); } renderGuestPicks(); }
+}
+function guestResultsReady(results) { return validateResultsPayload(results) !== null; }
 function renderGuestRoster() {
-    const el = get('guest-roster');
-    if (!el || !guestSession) return;
-
-    const players = guestSession.players || [];
-    const factions = guestSession.factions || [];
-    if (players.length === 0) {
-        el.style.display = 'none';
-        return;
-    }
-
-    const done = players.filter(p => playerHasSubmitted(p, factions)).length;
-    const chips = players.map(p => {
-        const ok = playerHasSubmitted(p, factions);
-        return `<span class="gr-chip ${ok ? 'done' : ''}">${ok ? '✓ ' : ''}${escapeHtml(p.name)}</span>`;
-    }).join('');
-
-    el.innerHTML = `<div class="gr-head">${done}/${players.length} submitted</div><div class="gr-chips">${chips}</div>`;
-    el.style.display = 'block';
+    const el = get('guest-roster'), players = guestSession?.players || [];
+    el.innerHTML = `<div class="gr-head">${players.filter(playerHasSubmitted).length}/${players.length} submitted</div><div class="gr-chips">${players.map(p => `<span class="gr-chip ${p.submitted ? 'done' : ''}">${p.submitted ? '✓ ' : ''}${escapeHtml(p.name)}</span>`).join('')}</div>`;
+    el.style.display = players.length ? 'block' : 'none';
 }
-
-// Switch the guest back to the pick UI (e.g. when the organizer reopens the room).
-function showGuestPicks() {
-    isSharedMode = false;
-    document.body.classList.remove('shared-mode');
-    switchView('view-guest');
-    renderGuestPicks();
-}
-
-// Guests watch their session row so results appear/clear live.
-function subscribeGuestToSession(code) {
-    const sb = getSupabaseClient();
-    if (!sb) return;
-    if (roomChannel) { sb.removeChannel(roomChannel); roomChannel = null; }
-    roomChannel = sb.channel(`guest-${code}`)
-        .on('postgres_changes',
-            { event: '*', schema: 'public', table: 'sessions', filter: `room_code=eq.${code}` },
-            payload => {
-                // Keep the "who's submitted" roster current as picks land.
-                if (payload.new && guestSession) {
-                    if (payload.new.players) guestSession.players = payload.new.players;
-                    if (payload.new.factions) guestSession.factions = payload.new.factions;
-                    renderGuestRoster();
-                }
-
-                const results = payload.new && payload.new.results;
-                if (guestResultsReady(results)) {
-                    guestShowingResults = true;
-                    enterSharedResultsMode(results); // show/refresh results
-                } else if (guestShowingResults) {
-                    guestShowingResults = false;
-                    showGuestPicks(); // organizer reopened the room for changes
-                }
-            })
-        .subscribe();
-}
-
-async function onGuestNameChange() {
-    const name = get('guest-name-select').value;
-    guestPick.name = name;
-    get('guest-submitted').style.display = 'none';
-
-    if (!name) {
-        guestPick.preferences = [];
-        guestPick.bans = [];
-        guestPick.noPreference = false;
-        renderGuestPicks();
-        return;
-    }
-
-    // Load this player's current submission from the database so a returning
-    // player sees and can change what they last submitted.
-    const sb = getSupabaseClient();
-    let saved = null;
-    if (sb && guestSession) {
-        const { data } = await sb.from('submissions').select('*')
-            .eq('room_code', guestSession.code).eq('player_name', name).maybeSingle();
-        saved = data;
-    }
-
-    const isValid = f => guestSession.factions.includes(f);
-    guestPick.preferences = saved ? (saved.preferences || []).filter(isValid) : [];
-    guestPick.bans = saved ? (saved.bans || []).filter(isValid) : [];
-    guestPick.noPreference = saved ? !!saved.no_preference : false;
-
-    get('guest-no-preference').checked = !!guestPick.noPreference;
-    renderGuestPicks();
-}
-
-function onGuestNoPreferenceChange() {
-    guestPick.noPreference = get('guest-no-preference').checked;
-}
-
+function showGuestPicks() { isSharedMode = false; document.body.classList.remove('shared-mode'); switchView('view-guest'); renderGuestPicks(); }
+function onGuestNoPreferenceChange() { guestPick.noPreference = get('guest-no-preference').checked; updateGuestSubmitted(); }
+function updateGuestSubmitted() { get('guest-submitted').style.display = guestSavedChoices && guestSavedChoices === pickSignature(guestPick) ? 'block' : 'none'; }
 function renderGuestPicks() {
-    const area = get('guest-pick-area');
-    if (!guestPick.name) {
-        area.style.display = 'none';
-        return;
-    }
-    area.style.display = 'block';
-    get('guest-no-preference').checked = !!guestPick.noPreference;
-    refreshListsForCard(guestPick, get('guest-available'), get('guest-preference'), get('guest-banned'));
+    get('guest-pick-area').style.display = guestPick.name ? 'block' : 'none'; get('guest-no-preference').checked = !!guestPick.noPreference;
+    if (guestPick.name) refreshListsForCard(guestPick, get('guest-available'), get('guest-preference'), get('guest-banned')); updateGuestSubmitted();
 }
-
 async function submitMyPicks() {
-    if (!guestPick.name) {
-        showToast('error', 'Pick Your Name', 'Select your name first.');
-        return;
-    }
-    const sb = getSupabaseClient();
-    if (!sb || !guestSession) {
-        showToast('error', 'Not Connected', 'Cannot reach the room right now.');
-        return;
-    }
-
-    const { error } = await sb.from('submissions').upsert({
-        room_code: guestSession.code,
-        player_name: guestPick.name,
-        preferences: guestPick.preferences,
-        bans: guestPick.bans,
-        no_preference: guestPick.noPreference,
-        updated_at: new Date().toISOString()
-    }, { onConflict: 'room_code,player_name' });
-
-    if (error) {
-        showToast('error', 'Submit Failed', error.message);
-        return;
-    }
-
-    get('guest-submitted').style.display = 'block';
-    showToast('success', 'Submitted', 'Your picks were sent. You can change them and submit again.');
+    if (!guestPick.name || !guestAccess?.player) return;
+    const signature = pickSignature(guestPick), payload = JSON.parse(JSON.stringify({ preferences: guestPick.preferences, bans: guestPick.bans, no_preference: guestPick.noPreference }));
+    get('guest-submit-button').disabled = true;
+    try {
+        const data = await guestRequest('submit', payload); guestSavedChoices = signature; applyGuestRoom(data); updateGuestSubmitted();
+        showToast('success', 'Submitted', 'Your choices were saved. You can edit and submit again until results are published.');
+    } catch (error) { accessError(error, 'Could not submit picks'); }
+    finally { get('guest-submit-button').disabled = false; }
 }

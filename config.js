@@ -1,7 +1,7 @@
 // Supabase project configuration for live rooms.
 //
 // The anon (public) key is SAFE to expose in client-side code — access is
-// controlled by the row-level security policies in supabase/schema.sql.
+// controlled by the scoped RPCs and grants in supabase/migrations/.
 //
 // Fill these in from your Supabase dashboard (Settings -> API):
 //   Project URL       => url

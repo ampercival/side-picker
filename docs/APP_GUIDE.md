@@ -8,17 +8,17 @@ This describes the existing application, not the proposed future design. See [th
 
 Side Picker assigns distinct board-game factions to players using their ranked preferences, neutral choices, and bans. An organizer can enter everyone's choices or collect them through a live room, then optimize and share the assignments.
 
-**Product direction confirmed 2026-09-26:** this is a public app that anyone should be able to use immediately. Required Google/email sign-in is not the planned entry flow. The proposed security work will protect individual games with private organizer links and separate guest permissions; it has not yet been implemented. See SEC-02 in the plan. Do not confuse the current public workspace label with a secure editing credential.
+**Product direction confirmed 2026-09-26:** this is a public app that anyone should be able to use immediately. Required Google/email sign-in is not the planned entry flow. Private organizer links and personal player invitations now provide the access model. See SEC-02 in the plan for deployment status and PRIVATE_LINKS.md for operations. Optional accounts remain a future feature.
 
 ## Current user journeys
 
 ### Organizer
 
-1. Enter a workspace key to load saved sessions and game presets. This is a shared label, not authentication.
+1. Start immediately in a new private workspace, or open a saved organizer link to recover an existing one. Save the private link for another device or browser recovery.
 2. Create a named session or resume an existing one.
 3. Enter session/game details and add factions, or choose a saved game preset.
 4. Add players and arrange each player's factions into Preferences, Available, and Banned.
-5. Optionally open a live room and share its link with players.
+5. Optionally open a live room and send each player their personal invitation. A separate viewing link is read-only.
 6. Choose Highest Group Score or Fairest for Everyone, then optimize.
 7. View results, share a results snapshot, or clear results and reopen picking.
 
@@ -26,7 +26,7 @@ Game presets are named faction lists. A session contains the game-night setup, p
 
 ### Guest
 
-A URL with `?room=CODE` opens guest mode. Guests select a name from the organizer's roster, rank or ban factions, and submit. They can revisit and resubmit. The name selector does not currently prove player identity. Published results appear through Realtime, and clearing results returns guests to picking.
+A room invitation uses `?room=CODE` plus a player ID and private token in the fragment. The app remembers the invitation within that tab and removes the fragment from the address bar. It opens that player's choices directly; there is no name selector. A viewing link shows the room without permitting submissions. Old room links without capabilities require replacement. Scoped polling refreshes room status and published results. No guest account is required.
 
 ### Shared results
 
@@ -45,16 +45,17 @@ If both URL forms are present, room mode takes precedence at startup.
 | `script.js` | Organizer UI, state, ranking controls, optimizer, saving orchestration, presets, result links |
 | `results.js` | Snapshot validation, bounded decoding, safe result card rendering; also testable under Node |
 | `optimizer.js` | Pure scoring, input validation, conflict detection, strict-ban assignment solver |
-| `rooms.js` | Supabase client, database operations, workspace key, host/guest room synchronization |
+| `rooms.js` | Capability-authorized RPC calls, private workspaces, scoped host/guest polling |
+| `access.js` | Secure token generation, fragment parsing, safe link construction |
 | `config.js` | Public Supabase project URL and publishable key |
-| `supabase/schema.sql` | Current schema and legacy migration instructions |
+| `supabase/schema.sql` | Historical fresh-install baseline; refuses rerun after private links |
 | `supabase/migrations/` | Additive versioned migrations; the public health sentinel is deployed |
 | `supabase/tests/health_permissions.sql` | Transactional health-table role/permission checks |
 | `.claude/launch.json` | Local static-server launch configuration on port 8753 |
 | `scripts/keep-supabase-active.ps1` | Daily local read-only database check, bounded retries, logging and status |
 | `scripts/register-keepalive-task.ps1` | Registers the daily Windows task and sign-in catch-up |
 
-The scripts are classic browser scripts sharing globals, not ES modules. Loading order is Supabase's CDN client, `config.js`, `results.js`, `optimizer.js`, `script.js`, then `rooms.js`. Much of initialization runs at `DOMContentLoaded`, after the application scripts are available.
+The scripts are classic browser scripts sharing globals, not ES modules. Loading order is Supabase's CDN client, `config.js`, `access.js`, `results.js`, `optimizer.js`, `script.js`, then `rooms.js`. Much of initialization runs at `DOMContentLoaded`, after the application scripts are available.
 
 There is no application server, framework, bundler, or package manifest. Focused Node tests now live in `tests/`. Supabase JS is loaded from a floating major-version CDN URL (`@supabase/supabase-js@2`). Google Fonts supplies Outfit.
 
@@ -65,8 +66,8 @@ There is no application server, framework, bundler, or package manifest. Focused
 - `activeSessionName`: the original saved-session identity used by database operations.
 - `sessionsCache` and `presetsCache` in `rooms.js`: in-memory database copies.
 - `currentSessionObject()` builds a session snapshot; `sessionRow()` maps it to database column names.
-- `autoSave()` updates the memory cache and schedules a database upsert after 1,200 ms. `flushSession()` attempts an immediate save during `beforeunload`.
-- Supabase is the current source of truth. There is no durable local working-session copy or offline save queue. Local storage keeps the workspace key and theme only.
+- `autoSave()` captures an immutable snapshot and organizer credential, then schedules an RPC after 1,200 ms. Writes are serialized. Navigation flushes before switching sessions/workspaces; `beforeunload` remains best-effort. Failed writes are signalled, but durable offline recovery and concurrent-host conflict handling are still pending.
+- Supabase is the current source of truth. There is no durable local working-session copy or offline save queue. Local storage keeps the private organizer credential/workspace and theme. Guest invitation credentials are kept in per-tab session storage. Pending offline edits are still not durable.
 - Some comments still mention an old localStorage session blob. Those comments are stale; use the actual persistence code as evidence.
 
 ### Database model
@@ -76,23 +77,26 @@ There is no application server, framework, bundler, or package manifest. Focused
 | `users` | UUID; unique `owner_key` | Workspace registry/scaffolding, not Supabase Auth identities |
 | `sessions` | `(owner_key, name)` | Display name, game title, JSON factions and players, unique optional room code, JSON results, timestamp |
 | `presets` | `(owner_key, name)` | JSON faction list and timestamp |
-| `submissions` | `(room_code, player_name)` | JSON preferences/bans, unranked flag, timestamp |
+| `submissions` | Legacy `(room_code, player_name)` | Retained for recovery; new client does not use it |
+| `side_picker_private.workspaces` | Existing workspace label, unique token hash | Hashed organizer capability |
+| `side_picker_private.rooms` | Session UUID | Private seed for viewing/player links |
+| `side_picker_private.picks` | `(session_id, player_id)` | Validated private submissions and timestamp |
 | `app_health` | Single constrained `status = 'ok'` row | Non-sensitive read-only sentinel for the daily check |
 
-Submissions reference `sessions.room_code` with cascading deletion. There is no separate rooms table in the current model. The schema file deletes orphan submissions and drops the old rooms table as part of migration; it is not a harmless diagnostic script.
+Legacy submissions reference `sessions.room_code` with cascading deletion. Private rooms and picks now reference the stable session UUID. The historical schema file contains cleanup statements; it is not a harmless diagnostic script.
 
-RLS is enabled, but the policies grant unrestricted anonymous select/insert/update/delete on all four tables. Workspace filters in JavaScript do not enforce authorization. Read-only dashboard inspection on 2026-09-26 confirmed the deployed policies match the checked-in rules. At inspection there were 3 sessions across 1 session workspace, 2 presets, 0 submissions, and 0 Auth users. No production mutation tests were performed.
+Private links use two capability-checked functions, `sp_workspace` and `sp_room`. The stage-two migration revokes direct anonymous/authenticated access to the four legacy game tables and removes permissive policies while leaving RLS enabled. The private schema and helper functions are inaccessible to public roles. See [PRIVATE_LINKS.md](PRIVATE_LINKS.md) for the exact boundary, rollout stages, token handling, and recovery. Check the plan for actual deployment status.
 
-The separate `app_health` table was added afterward using migration `202609260001_public_health.sql`. It exposes only its sentinel to anonymous/authenticated readers and denies their writes. Live role checks and the updated scheduled script passed. This does not resolve the four game tables' outstanding access issue.
+`app_health` is separate and publicly readable with no public writes; game permissions do not affect the daily check.
 
 ### Live-room data flow
 
-1. Host saves the session with a generated six-character room code.
-2. Guest reads the session by code, then upserts a submission using the selected player name.
-3. Host subscribes to submission changes, merges them into its player state, and saves the session again.
-4. Guests subscribe to the session row for roster status and published results.
+1. Host saves a session and opens its room; the server generates a random code and private seed.
+2. Host obtains a personal invitation for each stable player ID, or a read-only viewing link.
+3. Guest submits through `sp_room`; the backend checks the capability, membership, faction choices, and published status, then stores the submission in the private schema.
+4. The host polls new submissions and merges them by player ID and timestamp. Guests poll minimal room data and published results. Polling runs every three seconds while the page is visible, avoids overlapping requests, and reports connection interruptions.
 
-The host browser currently bridges submissions into the session's player snapshot. If it is disconnected, guest roster status can lag until the host reloads submissions. Host edits and guest submissions are separate copies that can conflict. Channel subscription status and catch-up after reconnect are not explicitly handled.
+The host still bridges submitted picks into the working session. The guest roster uses explicit backend submission status, including neutral submissions, even when the host is offline. A submitted acknowledgement disappears when the guest edits their choices. Full concurrent-host reconciliation and durable offline edits remain outstanding.
 
 ## Assignment rules and implementation
 
@@ -116,12 +120,12 @@ Results use the payload `{v, t, gm, g, pct, r}`: version, session title, game, g
 
 | Area | Finding | Plan task |
 | --- | --- | --- |
-| Access | Checked-in policies allow unrestricted anonymous access; player names are not identities | SEC-02 |
+| Access | Capability RPCs and personal invitations implemented; see plan for cutover verification | SEC-02 |
 | Shared links | Fixed: payloads validated and card fields rendered with text nodes; invalid-link recovery added | SEC-01 complete |
-| Saving | Database helpers toast errors without signalling failure to callers; success messages can follow failed operations | REL-01 |
-| Saving | Reloading the session cache during a pending save can replace the intended data; unload saves are not guaranteed | REL-01 |
-| Submissions | Submitted status requires every faction to be ranked or banned, despite neutral choices being valid | ROOM-01 |
-| Live rooms | Reconnection, stale requests, roster changes, and host/guest copy conflicts need handling | ROOM-01 |
+| Saving | Helpers now signal failure and writes capture identity/snapshots; durable offline recovery and concurrent-host conflicts remain | REL-01 |
+| Saving | Navigation flushes before reloading the cache; unload saves are still not guaranteed | REL-01 |
+| Submissions | Explicit submissions now include neutral choices; full collecting/locked/published lifecycle remains | ROOM-01 |
+| Live rooms | Scoped polling retries and stable IDs are in place; host/guest conflict handling still needs work | ROOM-01 |
 | Optimizer | Strict bans/conflict explanations and snapshot guard implemented; tied solutions still consume unbounded memory | OPT-01 complete; OPT-02 outstanding |
 | Mobile | Add Player text is clipped at 390px; ranking controls are 26px; view changes retain scroll position | UX-01 |
 | Operations | Local daily check installed and timer-triggered run verified; computer must be on/signed in. Broader app checks remain outstanding | OPS-01 complete; ENG-01 ongoing |
@@ -150,13 +154,14 @@ node --check rooms.js
 node --check config.js
 node --check results.js
 node --check optimizer.js
-node --test --test-isolation=none tests/results.test.cjs tests/optimizer.test.cjs
+node --check access.js
+node --test --test-isolation=none tests/results.test.cjs tests/optimizer.test.cjs tests/access.test.cjs
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/keepalive.Tests.ps1
 ```
 
-For a repeatable host browser fixture with no production database connection, run `node tests/serve-fixture.cjs` and open `http://127.0.0.1:8754/`. Resume the sample session, optimize to see its ban conflict, then unban B for Jordan and optimize to obtain one first choice plus one neutral assignment (50%). Reload resets the in-browser data. This mock does not simulate Realtime or backend permissions.
+For a repeatable host browser fixture with no production database connection, run `node tests/serve-fixture.cjs` and open `http://127.0.0.1:8754/`. Resume the sample session, optimize to see its ban conflict, then unban B for Jordan and optimize to obtain one first choice plus one neutral assignment (50%). Restarting the fixture server resets its shared in-memory data. It supports host/guest tabs and exact-width phone previews; it does not prove database permissions. Use the rolled-back SQL permission tests for that.
 
-The initial review included source/schema inspection, syntax checks, isolated function probes, and mocked browser checks. Subsequent work verified deployed RLS read-only and a real timer-triggered keep-alive. Production multi-device Realtime and end-to-end save recovery remain unverified.
+The initial review included source/schema inspection, syntax checks, isolated function probes, and mocked browser checks. Subsequent work verified deployed permissions and a real timer-triggered keep-alive. See the plan for private-link rollout evidence. Durable save recovery and full concurrent-host behavior remain unverified.
 
 ## Maintaining this guide
 

@@ -16,11 +16,11 @@ Read [APP_GUIDE.md](APP_GUIDE.md) for current behavior. Follow [AGENTS.md](../AG
 
 - **Completed:** initial review and durable documentation.
 - **Implementation tasks completed:** SEC-01 (safe result links), OPS-01 (local daily database check), and OPT-01 (strict bans, conflict explanations, consistent input snapshots, result summaries).
-- **Next action:** continue SEC-02 for a public app with immediate use and no required email/Google sign-in. The proposed approach is an unguessable private organizer link plus separate guest links, with permissions enforced by the backend. Do not resume account setup or bind all application use to the owner's email. Dashboard access is available; read-only inspection confirms unrestricted anonymous policies on all four game tables, with 3 sessions in 1 workspace, 2 presets, 0 submissions, and 0 Auth users. Preserve existing saved games through an administrator-controlled migration; public workspace labels cannot establish ownership. The health check is now independent of these tables. Optional accounts are deferred under FEATURE-04.
-- **Recommended first release:** SEC-01, OPS-01, SEC-02, REL-01, OPT-01, ROOM-01, UX-01, and the supporting ENG-01 checks.
-- **Dependencies:** SEC-02's ownership and player-identity decisions affect REL-01 and ROOM-01. Coordinate schema changes instead of migrating the same identities repeatedly. ENG-01 should grow alongside fixes, not wait until the end.
-- **External state:** SEC-01 pushed as `2c72a21`, OPS-01 as `ce280b0`, OPT-01 as `27bbdd6`. GitHub Pages reports the optimizer commit built; live invalid-link recovery and the new result summary verified. Windows task `Side Picker Supabase Keepalive` is installed. Additive health-table migration `202609260001_public_health.sql` is applied, and live role checks passed. The existing scheduled task completed three reads of the new sentinel on 2026-09-26 at 18:09:24 Atlantic. Next daily run: 2026-09-27 at 09:17 Atlantic. Game permissions have not yet been migrated.
-- **Working state:** all three improvements committed and pushed separately; final rollout notes recorded. Signed-out keep-alive execution is not supported by the selected Interactive principal.
+- **Next action:** finish SEC-02 deployment: stage-one capability API, legacy binding, and transactional permission tests are applied/passing. Deploy the new client, verify the existing organizer recovery links, then apply `202609260003_lock_game_tables.sql` and run direct-table negative checks. Do not leave the old table grants enabled after a successful client rollout. Optional accounts remain FEATURE-04.
+- **Scope:** no required sign-in. Private organizer links control one workspace; personal invitations control one player; viewing links are read-only. Three existing sessions and two presets belong to two separate workspaces and have separate recovery links.
+- **External state:** SEC-01 `2c72a21`, OPS-01 `ce280b0`, OPT-01 `27bbdd6`, independent health access `ac3f649` are pushed. Stage-one private API and administrator-controlled bindings are applied. Old game table permissions remain open until stage two. The keep-alive remains daily at 09:17 Atlantic and at sign-in; this computer must be on and signed in.
+- **Recovery:** `.local/private-organizer-links.html` contains private buttons for the original games and presets. Keep this ignored local file; never commit it. Database-local pre-upgrade snapshot: `side_picker_private.before_private_links`.
+- **After SEC-02:** REL-01 durable pending edits, visible save state, and concurrent-host handling. Some save and room groundwork is included in SEC-02; neither REL-01 nor ROOM-01 is complete.
 
 ## Decisions to settle during planning
 
@@ -29,8 +29,8 @@ Read [APP_GUIDE.md](APP_GUIDE.md) for current behavior. Follow [AGENTS.md](../AG
 | Daily scheduler | Local PowerShell script with Windows Task Scheduler, daily plus sign-in catch-up | User selected local script on 2026-09-26; requires this computer on, signed in, and connected |
 | Public access | Anyone can create and use a game without an account setup requirement | User clarified on 2026-09-26; supersedes email/Google onboarding work |
 | Optional accounts later | Let people manage saved games across devices and recover access, with a safe way to attach existing games | User requested a future TODO on 2026-09-26; FEATURE-04. Do not block current work on provider setup |
-| Organizer permissions | Private organizer link using an unguessable capability checked by the backend; preserve saved games through a deliberate migration | Proposed design; no required email/Google sign-in. Define game/workspace scope, recovery, revocation, and safe link handling before implementation |
-| Guest permissions | Players join by link without an account; separate guest access from organizer access and scope submissions to the authorized player | Proposed; room/individual invitation mechanism to be designed |
+| Organizer permissions | Private organizer link using an unguessable capability checked by the backend; preserve saved games through a deliberate migration | Implemented workspace scope, cryptographic token hashes, replacement, and private recovery links; deployment status above |
+| Guest permissions | Players join by link without an account; separate guest access from organizer access and scope submissions to the authorized player | Implemented stable player identity and per-player invitations, plus viewing links; no account required |
 | Bans | Hard exclusions; explain infeasible assignments rather than silently forcing a ban | Implemented in OPT-01 |
 | Unsaved edits | Small durable pending-edit store with visible sync status; database remains authoritative for acknowledged saves | Proposed; do not silently replace the cloud model with local-only storage |
 | Room stages | Collecting, locked, published, with explicit reopen | Proposed |
@@ -73,12 +73,12 @@ Routine implementation choices can be resolved from the user's instructions and 
 
 - [x] Inspect actual deployed tables/policies and inventory legacy workspaces before designing the migration.
 - [x] Move the keep-alive to an independent public, read-only health sentinel before restricting game tables; deploy and verify allowed reads/denied writes.
-- [ ] Design private organizer links and a safe transfer process for existing data, preserving immediate public use without required email/Google sign-in. Knowledge of a publicly readable workspace label alone must not establish ownership.
-- [ ] Define organizer-link scope, secure generation, server-side verification, storage, revocation, recovery, and sharing warnings. Treat the link as an editing credential; never include it in guest/result links, logs, or public database reads.
-- [ ] Introduce stable session/player identifiers where needed, retaining display names as editable labels.
+- [x] Design private organizer links and a safe transfer process for existing data, preserving immediate public use without required email/Google sign-in. Knowledge of a publicly readable workspace label alone must not establish ownership.
+- [x] Define organizer-link scope, secure generation, server-side verification, storage, revocation, recovery, and sharing warnings. Treat the link as an editing credential; never include it in guest/result links, logs, or public database reads.
+- [x] Introduce stable session/player identifiers where needed, retaining display names as editable labels.
 - [ ] Replace unrestricted anonymous table access with enforced organizer ownership and narrow guest access.
-- [ ] Restrict a guest to authorized room data and their permitted submission; prevent arbitrary player impersonation, room enumeration, and unauthorized result edits/deletes.
-- [ ] Validate submission membership, allowed factions, duplicate/overlapping choices, room state, and payload limits on the backend.
+- [x] Restrict a guest to authorized room data and their permitted submission; prevent arbitrary player impersonation, room enumeration, and unauthorized result edits/deletes.
+- [x] Validate submission membership, allowed factions, duplicate/overlapping choices, room state, and payload limits on the backend.
 - [ ] Apply a versioned, recoverable migration with backup and compatibility checks for existing sessions and room links.
 
 **Acceptance:** two separate organizers cannot read or mutate each other's private data through direct API calls; guests cannot change another player's picks or host data; intended room/result sharing still works. Test negative permission cases using isolated fixtures. Record migration application and deployment separately from code completion.
@@ -260,3 +260,13 @@ At the end of each implementation session, update Current handoff and append a d
 - Validation: Windows PowerShell 5.1 regression checks passed, including malformed/empty/surplus fields, retry bounds, log redaction, old-marker transition, deduplication, and recovery. Deployed transactional role checks passed for anonymous reads and rejected insert/update/delete/truncate, plus authenticated reads and absence of mutation grants.
 - Launched the existing Windows scheduled task through Task Scheduler. It completed three real sentinel reads at 18:09:24 Atlantic with `LastTaskResult = 0`; next daily run remains 09:17. This was a scheduler-launched verification, not another observed daily timer recurrence.
 - SEC-02 is still in progress. Remaining work is the private organizer/player access model, data-preserving cutover, browser flows, and negative permission tests for game records. No sign-in requirement added.
+
+### 2026-09-26 — SEC-02 prepared and stage-one API applied
+
+- Implemented private organizer workspaces, personal player invitations, viewing links, replacement/revocation, and account-free creation. Links use random capabilities in fragments; backend stores hashes/seeds in an inaccessible private schema. Full architecture and recovery are in PRIVATE_LINKS.md.
+- Deployed stage-one migration and created a database-local snapshot. Bound two legacy workspaces through administrator-selected hashes: three sessions in one, two presets in the other. Raw recovery tokens exist only in ignored local files. Old public room links require fresh personal invitations.
+- Deployed rolled-back SQL tests passed organizer isolation, player impersonation denial, viewer write denial, unknown rooms, input validation, neutral submissions, stable identity through rename, published locking, removal, and token/link replacement. Real recovery RPCs returned only the expected 3 sessions / 2 presets.
+- Isolated browser checks exercised host and two guests through invitations, neutral submission, edited acknowledgement, shared picks, optimization and published results. Exact-width iframe previews checked organizer controls at 390px and successful guest ranking/submission at 360px. Remaining general mobile issues stay UX-01.
+- All 15 Node regressions and JavaScript syntax/diff checks passed. New tests cover link parsing/credential separation, queued immutable saves, denied writes, and cross-tab workspace identity. Browser mocks do not establish database permissions.
+- Switched room synchronization to capability-scoped polling every three seconds while visible. Added serialized writes, navigation flushes, failure returns and safer preset rename; durable offline recovery and concurrent-host resolution remain incomplete.
+- Next release step is client deployment followed by stage-two removal of old table grants, post-cutover checks, and final rollout evidence.

@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer">
     <title>Side Picker - Faction Allocator</title>
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -265,19 +266,15 @@
                     </div>
 
                     <h2>Make Your Picks</h2>
-                    <p class="subtitle">Pick your name, rank the factions, then submit them to the organizer.</p>
+                    <p class="subtitle">Rank the factions, then submit your choices to the organizer.</p>
+                    <p id="guest-connection" role="status" class="subtitle">Connecting…</p>
 
                     <div id="guest-error" class="guest-error" style="display: none;"></div>
 
                     <div id="guest-roster" class="guest-roster" style="display: none;"></div>
 
                     <div id="guest-name-wrap" style="margin-bottom: 1.5rem;">
-                        <label for="guest-name-select"
-                            style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.9rem;">Who
-                            are you?</label>
-                        <select id="guest-name-select" class="game-select" onchange="onGuestNameChange()">
-                            <option value="">— Select your name —</option>
-                        </select>
+                        <strong id="guest-player-name"></strong>
                     </div>
 
                     <div id="guest-pick-area" style="display: none;">
@@ -306,11 +303,11 @@
                         </div>
 
                         <div class="actions center">
-                            <button class="btn accent" onclick="submitMyPicks()">Submit My Picks</button>
+                            <button id="guest-submit-button" class="btn accent" onclick="submitMyPicks()">Submit My Picks</button>
                         </div>
 
                         <div id="guest-submitted" class="guest-submitted" style="display: none;">
-                            ✓ Submitted! You can change your picks above and submit again anytime.
+                            ✓ Submitted! You can edit and submit again until results are published.
                         </div>
                     </div>
                 </div>
@@ -421,7 +418,7 @@
                 <br>• Leave the rest in <strong>Available</strong>.
             </p>
             <p style="margin-bottom: 1rem;"><strong>4. Collect picks live (optional):</strong> Click <strong>Live
-                    Room</strong> and share the link. Players rank their own factions on their phones and submit — their
+                    Room</strong> and send each person their private player link. Players rank their own factions on their phones and submit — their
                 picks appear here in real time.</p>
             <p style="margin-bottom: 1rem;"><strong>5. Optimize:</strong> Click <strong>Optimize &amp; Assign</strong>
                 and choose a goal — <em>Highest Group Score</em> (best total) or <em>Fairest for Everyone</em> (lifts the
@@ -489,29 +486,39 @@
     </div>
 
     <div id="workspace-modal" class="modal">
-        <h3>Your Workspace Key</h3>
-        <p style="color: var(--text-muted); line-height: 1.5; font-size: 0.9rem; margin-bottom: 1rem;">
-            Enter a key to load your saved sessions. Use the same key on any device to see the same sessions
-            (e.g. <em>aaron-gamenight</em>). It's a shared label, not a password.
+        <h3>Your Saved Games</h3>
+        <p id="workspace-help" style="color: var(--text-muted); line-height: 1.5; font-size: 0.9rem; margin-bottom: 1rem;">
+            Save your private organizer link to reopen these games on another device. Anyone with it can edit all games in this workspace. Keep it private; use player invitations for your group.
         </p>
-        <input type="text" id="workspace-input" placeholder="e.g. aaron-gamenight"
-            onkeypress="handleEnter(event, confirmWorkspaceKey)">
+        <div id="organizer-link-wrap">
+            <label for="organizer-link">Your private organizer link</label>
+            <input type="text" id="organizer-link" readonly onclick="this.select()">
+            <div class="actions"><button class="btn primary" onclick="copyOrganizerLink()">Copy organizer link</button>
+            <button class="btn text" onclick="replaceOrganizerLink()">Replace link</button></div>
+        </div>
+        <label for="workspace-input">Open a different organizer link</label>
+        <input type="text" id="workspace-input" placeholder="Paste a private organizer link" autocomplete="off"
+            onkeypress="handleEnter(event, importOrganizerLink)">
         <div class="actions right">
-            <button class="btn" onclick="closeModals()">Cancel</button>
-            <button class="btn primary" onclick="confirmWorkspaceKey()">Use Workspace</button>
+            <button class="btn" onclick="closeModals()">Close</button>
+            <button class="btn secondary" onclick="createPrivateWorkspace()">Start separate workspace</button>
+            <button class="btn primary" onclick="importOrganizerLink()">Open link</button>
         </div>
     </div>
 
     <div id="room-modal" class="modal">
         <h3>Live Room <span id="room-code-label" class="room-code-pill"></span></h3>
         <p style="color: var(--text-muted); line-height: 1.5; font-size: 0.9rem; margin-bottom: 1rem;">
-            Share this link. Players pick their name and submit — their picks fill in here live.
+            Send each person their own player link below. It lets them edit only their choices. The viewing link shows progress and results without allowing edits.
         </p>
+        <p id="room-connection" role="status" class="subtitle">Connecting…</p>
+        <label for="room-link-input">Invitation link</label>
         <input type="text" id="room-link-input" readonly onclick="this.select()">
         <div id="room-status-list" class="room-status" style="margin-bottom: 1.5rem;"></div>
         <div class="actions right">
             <button class="btn" onclick="closeModals()">Done</button>
-            <button class="btn primary" onclick="copyRoomLink()">Copy Link</button>
+            <button class="btn secondary" onclick="replaceRoomLinks()">Replace player links</button>
+            <button class="btn primary" onclick="copyRoomLink()">Copy viewing link</button>
         </div>
     </div>
 
@@ -541,6 +548,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="config.js"></script>
+    <script src="access.js"></script>
     <script src="results.js"></script>
     <script src="optimizer.js"></script>
     <script src="script.js"></script>
