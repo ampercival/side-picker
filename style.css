@@ -52,6 +52,13 @@
 #room-modal .rs-name { overflow-wrap: anywhere; min-width: 0; }
 #organizer-link-wrap[hidden] { display: none; }
 #room-code-label:empty { display: none; }
+.save-status { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; margin-bottom: 1rem; padding: 1rem; background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; }
+.save-status[hidden], .save-status button[hidden], .guest-mode .save-status, .shared-mode .save-status { display: none; }
+.save-status span { flex: 1 1 220px; }
+.save-status button, .draft-row button { min-height: 44px; }
+.draft-row { padding: 1rem 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.draft-row button { margin: .25rem; white-space: normal; }
+#draft-modal { max-height: 85vh; overflow-y: auto; }
 
 [data-theme="light"] {
     /* Light Mode - Clean, Airy, Trustworthy */

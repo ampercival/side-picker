@@ -1,10 +1,17 @@
 // Account-free workspaces. Every operation is authorized by the database RPC.
 let _supabase = null;
+async function databaseFetch(input, options = {}) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    try { return await fetch(input, { ...options, signal: controller.signal }); }
+    finally { clearTimeout(timer); }
+}
 function getSupabaseClient() {
     const cfg = window.SUPABASE_CONFIG;
     if (!window.supabase || !cfg?.url || cfg.url.startsWith('YOUR_')) return null;
     return _supabase ||= window.supabase.createClient(cfg.url, cfg.publishableKey, {
-        auth: { persistSession: false, detectSessionInUrl: false, autoRefreshToken: false }
+        auth: { persistSession: false, detectSessionInUrl: false, autoRefreshToken: false },
+        global: { fetch: databaseFetch }
     });
 }
 function isSupabaseConfigured() { return getSupabaseClient() !== null; }
@@ -24,7 +31,7 @@ function storeWorkspace(credential, ownerKey) {
 }
 function accessError(error, title = 'Could not save') {
     showToast('error', title, error?.code === '42501' ? 'This private link is no longer valid, or picking is closed. Open a current link or ask the organizer to reopen picking.'
-        : error?.code === '22023' ? error.message : 'Check your connection and try again. Changes have not been confirmed saved.');
+        : error?.code === '40001' ? 'A newer saved version exists. Reload it before trying this action again.' : error?.code === '22023' ? error.message : 'Check your connection and try again. Changes have not been confirmed saved.');
 }
 async function workspaceRequest(action, payload = {}, credential = privateWorkspace().credential) {
     const sb = getSupabaseClient(); if (!sb) throw new Error('Unavailable');
@@ -32,44 +39,107 @@ async function workspaceRequest(action, payload = {}, credential = privateWorksp
     if (error) throw error; return data;
 }
 let sessionsCache = Object.create(null), presetsCache = Object.create(null);
-let pendingWrites = Promise.resolve(true);
+let journal = null, sessionVersions = Object.create(null), presetVersions = Object.create(null);
+let loadGeneration = 0, workspaceLoadFailed = false;
 function mapRowToSession(row) {
     return { id: row.id, factions: row.factions || [], players: row.players || [], sessionName: row.session_name || row.name,
         gameTitle: row.game_title || '', roomCode: row.room_code || '', results: row.results || null, date: row.updated_at };
 }
 function sessionRow(name, s) {
-    return { name, session_name: s.sessionName || name, game_title: s.gameTitle || '', factions: s.factions || [], players: s.players || [], results: s.results || null };
+    const factions = s.factions || [];
+    return { name, session_name: s.sessionName || name, game_title: s.gameTitle || '', factions,
+        players: (s.players || []).map(p => ({ ...p, preferences: p.preferences.filter(f => factions.includes(f)), bans: p.bans.filter(f => factions.includes(f)) })), results: s.results || null };
+}
+function ensureJournal() {
+    const owner = getWorkspaceKey(), credential = privateWorkspace().credential;
+    if (!owner || !credential) return null;
+    if (journal?.workspace === owner) return journal;
+    journal = new SaveJournal({ storage: localStorage, workspace: owner,
+        send: (action, payload) => workspaceRequest(action, payload, getWorkspaceKey() === owner ? privateWorkspace().credential : credential),
+        changed: () => renderSaveStatus(),
+        acknowledged: (key, row, req) => {
+            if (getWorkspaceKey() !== owner) return;
+            if (key.startsWith('session:')) {
+                sessionVersions[req.payload.name] = row.save_version;
+                if (sessionsCache[req.payload.name]) {
+                    sessionsCache[req.payload.name].id = row.id;
+                    sessionsCache[req.payload.name].roomCode = row.room_code || '';
+                }
+            } else {
+                presetVersions[req.payload.name] = row.save_version;
+                presetsCache[req.payload.name] = req.payload.factions;
+                if (req.payload.original_name) {
+                    delete presetVersions[req.payload.original_name]; delete presetsCache[req.payload.original_name];
+                }
+                if (typeof renderPresetOptions === 'function') renderPresetOptions();
+            }
+        }
+    });
+    return journal;
 }
 function applyWorkspaceData(data) {
+    workspaceLoadFailed = false;
+    const j = ensureJournal();
     sessionsCache = Object.create(null); presetsCache = Object.create(null);
-    (data.sessions || []).forEach(row => { sessionsCache[row.name] = mapRowToSession(row); });
-    (data.presets || []).forEach(row => { presetsCache[row.name] = row.factions || []; });
+    sessionVersions = Object.create(null); presetVersions = Object.create(null);
+    (data.sessions || []).forEach(row => {
+        sessionsCache[row.name] = mapRowToSession(row); sessionVersions[row.name] = row.save_version;
+        if (!j?.entries.has('session:' + row.name)) j?.remember('session:' + row.name, row.save_version, sessionRow(row.name, sessionsCache[row.name]));
+    });
+    (data.presets || []).forEach(row => {
+        presetsCache[row.name] = row.factions || []; presetVersions[row.name] = row.save_version;
+        if (!j?.entries.has('preset:' + row.name)) j?.remember('preset:' + row.name, row.save_version, { name: row.name, factions: row.factions });
+    });
+    // Cloud refreshes cannot erase this tab's unsaved snapshots.
+    for (const e of j?.entries.values() || []) if (e.key.startsWith('session:')) {
+        const name = e.latest.payload.name, saved = sessionsCache[name];
+        sessionsCache[name] = mapRowToSession({ ...e.latest.payload, id: saved?.id, room_code: saved?.roomCode, updated_at: e.updatedAt });
+    }
+    renderSaveStatus();
 }
 async function loadSessionsFromDb() {
-    const credential = privateWorkspace().credential;
-    try { const data = await workspaceRequest('load', {}, credential); if (credential === privateWorkspace().credential) applyWorkspaceData(data); }
-    catch (error) { accessError(error, 'Could not load games'); }
-    return sessionsCache;
+    const credential = privateWorkspace().credential, generation = ++loadGeneration;
+    try {
+        const data = await workspaceRequest('load', {}, credential);
+        if (generation === loadGeneration && credential === privateWorkspace().credential) applyWorkspaceData(data);
+        return true;
+    } catch (error) { workspaceLoadFailed = true; renderSaveStatus(); accessError(error, 'Could not load games'); return false; }
 }
 async function loadPresetsFromDb() { return presetsCache; }
-function upsertSessionToDb(name, s, credential = privateWorkspace().credential) {
-    const snapshot = JSON.parse(JSON.stringify(sessionRow(name, s)));
-    pendingWrites = pendingWrites.then(async () => {
-        try { await workspaceRequest('save_session', snapshot, credential); return true; }
-        catch (error) { accessError(error); return false; }
-    });
-    return pendingWrites;
+function stageSessionSave(name, s) {
+    const j = ensureJournal(); if (!j) return null;
+    return j.stage('session:' + name, 'save_session', sessionRow(name, s), sessionVersions[name] ?? null);
+}
+async function upsertSessionToDb(name, s) {
+    stageSessionSave(name, s); return await journal.flush('session:' + name);
+}
+const pendingActions = new Map();
+async function checkedAction(action, payload) {
+    const credential = privateWorkspace().credential;
+    const key = JSON.stringify([credential,action,payload]);
+    const request = pendingActions.get(key) || { ...payload, operation_id: crypto.randomUUID() };
+    pendingActions.set(key, request);
+    try { const result = await workspaceRequest(action, request, credential); pendingActions.delete(key); return result; }
+    catch (error) { accessError(error, error?.code === '40001' ? 'Changed on another device' : 'Could not save'); return null; }
 }
 async function deleteSessionFromDb(name) {
-    await pendingWrites;
-    try { await workspaceRequest('delete_session', { name }); return true; }
-    catch (error) { accessError(error, 'Could not delete game'); return false; }
+    if (!(await journal.flush('session:' + name))) return false;
+    const result = await checkedAction('delete_session', { name, expected_version: sessionVersions[name] ?? null });
+    if (!result) return false;
+    journal.bases.delete('session:' + name); delete sessionVersions[name]; return true;
 }
-async function upsertPresetToDb(name, factions) {
-    try { await workspaceRequest('save_preset', { name, factions }); return true; } catch (error) { accessError(error); return false; }
+async function upsertPresetToDb(name, factions, original = null) {
+    const j = ensureJournal(), identity = original || name;
+    const rename = original && original !== name;
+    const payload = { name, factions, ...(rename ? { original_name: original, target_version: presetVersions[name] ?? null } : {}) };
+    j.stage('preset:' + identity, rename ? 'rename_preset' : 'save_preset', payload, presetVersions[identity] ?? null);
+    return await j.flush('preset:' + identity);
 }
 async function deletePresetFromDb(name) {
-    try { await workspaceRequest('delete_preset', { name }); return true; } catch (error) { accessError(error); return false; }
+    const j = ensureJournal(); if (!(await j.flush('preset:' + name))) return false;
+    const result = await checkedAction('delete_preset', { name, expected_version: presetVersions[name] ?? null });
+    if (!result) return false;
+    j.bases.delete('preset:' + name); delete presetVersions[name]; return true;
 }
 async function initializePrivateWorkspace() {
     if (new URLSearchParams(location.hash.slice(1)).has('organizer')) {
@@ -100,21 +170,23 @@ async function createPrivateWorkspace(confirmed = false) {
         showConfirm('Start a separate workspace?', 'Save your current organizer link first so you can return to these games. A separate workspace starts empty.', () => createPrivateWorkspace(true), 'Start workspace');
         return;
     }
-    if (activeSessionName && !(await flushSession())) return;
+    await flushSession();
+    if (journal?.storageError) return;
     const credential = localStorage.getItem(PRIVATE_WORKSPACE_KEY + '_new') || newPrivateToken();
     localStorage.setItem(PRIVATE_WORKSPACE_KEY + '_new', credential);
     try {
         const data = await workspaceRequest('create', {}, credential);
         storeWorkspace(credential, data.owner_key); localStorage.removeItem(PRIVATE_WORKSPACE_KEY + '_new');
         activeSessionName = null; state.roomCode = ''; deactivateRoomSync();
-        sessionsCache = Object.create(null); presetsCache = Object.create(null);
+        applyWorkspaceData({ sessions: [], presets: [] });
         closeModals(); updateWorkspaceIndicator(); renderHomeSessions(); renderPresetOptions();
     } catch (error) { accessError(error, 'Could not start workspace'); }
 }
 async function importOrganizerLink() {
     try {
         const credential = parseOrganizerLink(get('workspace-input').value);
-        if (!(await flushSession())) return;
+        await flushSession();
+        if (journal?.storageError) return;
         const data = await workspaceRequest('load', {}, credential);
         deactivateRoomSync(); activeSessionName = null; state.roomCode = '';
         storeWorkspace(credential, data.owner_key); applyWorkspaceData(data);
@@ -128,6 +200,7 @@ async function copyOrganizerLink() {
 function replaceOrganizerLink() {
     showConfirm('Replace organizer link?', 'The old organizer link will stop working on every device. Save the replacement link afterward. Player links stay valid.', async () => {
         if (!(await flushSession())) return;
+        if (!(await ensureJournal().flushAll())) return;
         const saved = privateWorkspace(), credential = newPrivateToken();
         localStorage.setItem(PRIVATE_WORKSPACE_KEY, JSON.stringify({ ...saved, pendingCredential: credential }));
         try {

@@ -21,10 +21,10 @@ test('rejects shortened tokens, unrelated origins and ambiguous organizer links'
 test('save requests capture immutable data and workspace credentials before queued writes', async () => {
     const requests = [], storage = new Map(); let resolveFirst;
     storage.set('side_picker_private_workspace_v1', JSON.stringify({credential:'a'.repeat(64),ownerKey:'A'}));
-    const ctx = vm.createContext({console, setTimeout, clearTimeout, URL, URLSearchParams,
+    const ctx = vm.createContext({console, crypto:require("node:crypto").webcrypto, renderSaveStatus(){}, setTimeout, clearTimeout, URL, URLSearchParams,
         localStorage:{getItem:k=>storage.get(k)}, showToast(){}, window:{SUPABASE_CONFIG:{url:'https://fixture.invalid',publishableKey:'x'},
         supabase:{createClient:()=>({rpc:async (_,args)=>{ requests.push(args); if(requests.length===1)await new Promise(r=>resolveFirst=r); return {data:{},error:null}; }})}}});
-    vm.runInContext(fs.readFileSync('access.js','utf8')+'\n'+fs.readFileSync('rooms.js','utf8'),ctx);
+    vm.runInContext(fs.readFileSync('access.js','utf8')+'\n'+fs.readFileSync('save-journal.js','utf8')+'\n'+fs.readFileSync('rooms.js','utf8'),ctx);
     const s = {players:[],factions:['A'],sessionName:'Before'}; ctx.s = s;
     const first = vm.runInContext("upsertSessionToDb('one',s)",ctx);
     const second = vm.runInContext("upsertSessionToDb('two',s)",ctx);
@@ -38,9 +38,9 @@ test('save requests capture immutable data and workspace credentials before queu
     assert.equal(requests[2].credential,'a'.repeat(64));
 });
 test('revoked capability and network errors cannot report successful saves', async () => {
-    const ctx = vm.createContext({setTimeout,clearTimeout,localStorage:{getItem:()=>JSON.stringify({credential:'a'.repeat(64)})},showToast(){},
+    const ctx = vm.createContext({crypto:require('node:crypto').webcrypto,renderSaveStatus(){},setTimeout,clearTimeout,localStorage:{getItem:()=>JSON.stringify({credential:'a'.repeat(64),ownerKey:'A'})},showToast(){},
         window:{SUPABASE_CONFIG:{url:'https://fixture.invalid'},supabase:{createClient:()=>({rpc:async()=>({data:null,error:{code:'42501'}})})}}});
-    vm.runInContext(fs.readFileSync('access.js','utf8')+'\n'+fs.readFileSync('rooms.js','utf8'),ctx);
+    vm.runInContext(fs.readFileSync('access.js','utf8')+'\n'+fs.readFileSync('save-journal.js','utf8')+'\n'+fs.readFileSync('rooms.js','utf8'),ctx);
     assert.equal(await vm.runInContext("upsertSessionToDb('one',{factions:[],players:[]})",ctx),false);
     assert.equal(await vm.runInContext("deleteSessionFromDb('one')",ctx),false);
 });

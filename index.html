@@ -61,6 +61,11 @@
             </div>
         </header>
 
+        <div id="save-status" class="save-status" hidden>
+            <span id="save-status-text" role="status" aria-live="polite"></span>
+            <button id="retry-saves" class="btn-sm" onclick="retrySaves()" hidden>Retry saving</button>
+            <button id="review-drafts" class="btn-sm" onclick="openDrafts()" hidden>Review drafts</button>
+        </div>
         <main>
             <!-- View 0: Sessions Home -->
             <section id="view-home" class="view active">
@@ -485,6 +490,12 @@
         </div>
     </div>
 
+    <div id="draft-modal" class="modal">
+        <h3>Recover unsaved edits</h3>
+        <p>Your edits are stored only in this browser. Save a separate copy to keep them without replacing a game changed elsewhere. If this draft is open in another tab, finish there first.</p>
+        <div id="draft-list"></div>
+        <button class="btn primary" onclick="closeModals()">Close</button>
+    </div>
     <div id="workspace-modal" class="modal">
         <h3>Your Saved Games</h3>
         <p id="workspace-help" style="color: var(--text-muted); line-height: 1.5; font-size: 0.9rem; margin-bottom: 1rem;">
@@ -549,10 +560,12 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="config.js"></script>
     <script src="access.js"></script>
+    <script src="save-journal.js"></script>
     <script src="results.js"></script>
     <script src="optimizer.js"></script>
     <script src="script.js"></script>
     <script src="rooms.js"></script>
+    <script src="persistence.js"></script>
 </body>
 
 </html>

@@ -1053,9 +1053,7 @@ async function calculateOptimization() {
             state.results = lastResults;
             autoSave();
             if (activeSessionName) {
-                // Push immediately so the room flips to results without waiting for the debounce.
-                sessionsCache[activeSessionName] = currentSessionObject();
-                upsertSessionToDb(activeSessionName, sessionsCache[activeSessionName]);
+                if (!(await flushSession())) showToast('info', 'Results not published yet', 'These results are local. Guests will see them after saving succeeds.');
             }
         } else {
             showToast('error', 'No Valid Assignment', result.reason || 'No assignment respects all bans. Add factions or revise the conflicting choices.');
@@ -1076,13 +1074,11 @@ function reopenForChanges() {
     showConfirm(
         'Clear Results?',
         'This clears the current results and reopens the picker so players can change their picks. You can optimize again afterward.',
-        () => {
+        async () => {
             state.results = null;
             autoSave();
             if (activeSessionName) {
-                // Push immediately so the room flips back to the picker without waiting for the debounce.
-                sessionsCache[activeSessionName] = currentSessionObject();
-                upsertSessionToDb(activeSessionName, sessionsCache[activeSessionName]);
+                if (!(await flushSession())) showToast('info', 'Reopen not saved yet', 'Guests can change picks after saving succeeds.');
             }
             switchView('view-players');
         },
@@ -1136,9 +1132,8 @@ function displayResults(result, input = state) {
 
 // --- Session Management ---
 // Named sessions live in Supabase (scoped by workspace key); see rooms.js.
-// Supabase is the single source of truth — there is no localStorage copy of the
-// working state. The home screen lists sessions from the DB and resuming loads
-// the full session from the DB.
+// Acknowledged saves live in Supabase. Pending edits are backed up before
+// debounce and can be recovered as separate copies after a refresh.
 
 // Name of the saved session currently being worked on, if any. Changes are
 // persisted back into it live (debounced), so imported picks etc. need no manual save.
@@ -1167,9 +1162,9 @@ function autoSave() {
         sessionsCache[activeSessionName] = currentSessionObject();
         clearTimeout(_sessionSyncTimer);
         const name = activeSessionName;
-        const credential = privateWorkspace().credential;
-        const snapshot = JSON.parse(JSON.stringify(sessionsCache[name]));
-        _sessionSyncTimer = setTimeout(() => { _sessionSyncTimer = null; upsertSessionToDb(name, snapshot, credential); }, 1200);
+        stageSessionSave(name, sessionsCache[name]);
+        const target = journal;
+        _sessionSyncTimer = setTimeout(() => { _sessionSyncTimer = null; target.flush('session:' + name); }, 1200);
     }
 
     // Keep explicit submission status current when the room is open.
@@ -1187,7 +1182,7 @@ async function flushSession() {
         sessionsCache[activeSessionName] = currentSessionObject();
         return await upsertSessionToDb(activeSessionName, sessionsCache[activeSessionName]);
     }
-    return await pendingWrites;
+    return true;
 }
 
 // Initialize
@@ -1214,8 +1209,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateWorkspaceIndicator();
     initWorkspaceAndSessions(); // async: load sessions from DB (prompts for a workspace key if needed)
 
-    // Don't lose an edit made within the debounce window if the page is closed.
-    window.addEventListener('beforeunload', flushSession);
+    // autoSave backs up synchronously; unload delivery is not required.
 });
 
 async function initWorkspaceAndSessions() {
@@ -1224,7 +1218,7 @@ async function initWorkspaceAndSessions() {
         return;
     }
     try { await initializePrivateWorkspace(); }
-    catch (error) { accessError(error, 'Could not open saved games'); openWorkspaceModal(); }
+    catch (error) { workspaceLoadFailed = true; accessError(error, 'Could not open saved games'); ensureJournal(); if (!hasWorkspaceKey()) openWorkspaceModal(); renderSaveStatus(); }
     renderPresetOptions();
     renderHomeSessions();
 }
@@ -1257,7 +1251,8 @@ async function createNewSession(name) {
     if (!isSupabaseConfigured()) return showToast('error', 'Not Configured', 'Sessions need Supabase set up.');
     if (!hasWorkspaceKey()) { openWorkspaceModal(); return; }
     if (sessionsCache[name]) return showToast('error', 'Name Taken', `A session named "${name}" already exists.`);
-    if (!(await flushSession())) return;
+    await flushSession();
+    if (journal?.storageError) return;
 
     state.factions = [];
     state.players = [];
@@ -1269,8 +1264,7 @@ async function createNewSession(name) {
 
     const obj = currentSessionObject();
     sessionsCache[name] = obj;
-    if (!(await upsertSessionToDb(name, obj))) return;
-    autoSave();
+    const saved = await upsertSessionToDb(name, obj);
 
     get('game-select').value = 'custom';
     renderFactions();
@@ -1279,7 +1273,8 @@ async function createNewSession(name) {
     deactivateRoomSync();
     closeModals();
     switchView('view-factions');
-    showToast('success', 'Session Created', `"${name}" is ready.`);
+    if (saved) showToast('success', 'Session Created', `"${name}" is ready.`);
+    else showToast('info', 'Game not saved yet', 'You can keep editing here. Use the save status above to retry or recover your work.');
 }
 
 function deleteSession(name, onSuccess) {
@@ -1309,7 +1304,9 @@ function deleteSession(name, onSuccess) {
 
 // --- Sessions Home ---
 async function goHome() {
-    if (!(await flushSession())) return;
+    await flushSession();
+    if (journal?.storageError) return;
+    activeSessionName = null;
     deactivateRoomSync();
     switchView('view-home');
     updateWorkspaceIndicator();
@@ -1369,7 +1366,8 @@ function renderHomeSessions() {
 }
 
 async function resumeSession(name) {
-    if (!(await flushSession())) return;
+    await flushSession();
+    if (journal?.storageError) return;
     const sessions = getSessions();
     const data = sessions[name];
     if (!data) {
@@ -1389,7 +1387,6 @@ async function resumeSession(name) {
     renderFactions();
     updateAllPlayerFactions(); // Cleans stale faction refs and re-renders player cards.
     syncSessionMetaInputs();
-    autoSave();
     syncRoomForCurrentSession();
 
     // Invariant: results present -> show results; otherwise the picker.
@@ -1594,10 +1591,9 @@ function savePreset() {
 
     const doSave = async () => {
         const factions = [...presetEditState.factions];
-        if (!(await upsertPresetToDb(name, factions))) return;
+        if (!(await upsertPresetToDb(name, factions, original))) return;
         presets[name] = factions;
         if (original && original !== name) {
-            if (!(await deletePresetFromDb(original))) return;
             delete presets[original];
         }
         renderPresetOptions();

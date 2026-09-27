@@ -47,6 +47,8 @@ If both URL forms are present, room mode takes precedence at startup.
 | `optimizer.js` | Pure scoring, input validation, conflict detection, strict-ban assignment solver |
 | `rooms.js` | Capability-authorized RPC calls, private workspaces, scoped host/guest polling |
 | `access.js` | Secure token generation, fragment parsing, safe link construction |
+| `save-journal.js` | Durable draft queue, immutable retry requests, save states |
+| `persistence.js` | Save-status and recovery UI, connection retries |
 | `config.js` | Public Supabase project URL and publishable key |
 | `supabase/schema.sql` | Historical fresh-install baseline; refuses rerun after private links |
 | `supabase/migrations/` | Versioned migrations; health sentinel and both private-link stages are deployed |
@@ -55,7 +57,7 @@ If both URL forms are present, room mode takes precedence at startup.
 | `scripts/keep-supabase-active.ps1` | Daily local read-only database check, bounded retries, logging and status |
 | `scripts/register-keepalive-task.ps1` | Registers the daily Windows task and sign-in catch-up |
 
-The scripts are classic browser scripts sharing globals, not ES modules. Loading order is Supabase's CDN client, `config.js`, `access.js`, `results.js`, `optimizer.js`, `script.js`, then `rooms.js`. Much of initialization runs at `DOMContentLoaded`, after the application scripts are available.
+The scripts are classic browser scripts sharing globals, not ES modules. Loading order is Supabase's CDN client, `config.js`, `access.js`, `save-journal.js`, `results.js`, `optimizer.js`, `script.js`, `rooms.js`, then `persistence.js`. Much of initialization runs at `DOMContentLoaded`, after the application scripts are available.
 
 There is no application server, framework, bundler, or package manifest. Focused Node tests now live in `tests/`. Supabase JS is loaded from a floating major-version CDN URL (`@supabase/supabase-js@2`). Google Fonts supplies Outfit.
 
@@ -66,9 +68,12 @@ There is no application server, framework, bundler, or package manifest. Focused
 - `activeSessionName`: the original saved-session identity used by database operations.
 - `sessionsCache` and `presetsCache` in `rooms.js`: in-memory database copies.
 - `currentSessionObject()` builds a session snapshot; `sessionRow()` maps it to database column names.
-- `autoSave()` captures an immutable snapshot and organizer credential, then schedules an RPC after 1,200 ms. Writes are serialized. Navigation flushes before switching sessions/workspaces; `beforeunload` remains best-effort. Failed writes are signalled, but durable offline recovery and concurrent-host conflict handling are still pending.
-- Supabase is the current source of truth. There is no durable local working-session copy or offline save queue. Local storage keeps the private organizer credential/workspace and theme. Guest invitation credentials are kept in per-tab session storage. Pending offline edits are still not durable.
-- Some comments still mention an old localStorage session blob. Those comments are stale; use the actual persistence code as evidence.
+- `autoSave()` synchronously backs up an immutable draft in local storage before its 1,200 ms save delay. Each tab has independent draft IDs, scoped to the workspace, with no credential copied into drafts.
+- The save journal freezes in-flight requests and retries the same operation ID after uncertain network outcomes. Later edits remain backed up until separately acknowledged. Requests time out after 15 seconds. Retry occurs when online, every 15 seconds while visible, or through Retry saving.
+- Database saves/deletes require the last acknowledged `save_version`; concurrent changes reject stale writes. A conflict retains the draft and offers a separate recovery copy or explicit discard. There is no silent merge or force-overwrite option. Preset renames check both source and destination versions in one transaction.
+- After refreshing, pending drafts are listed for explicit recovery as new games/presets. They are not blindly replayed because another tab may still be editing them. Saved cloud originals remain authoritative; recovery copies have new names and no live-room link.
+- Navigation flushes where possible and otherwise retains durable drafts. Browser-storage failure is prominently reported, blocks navigation that would discard the working editor, and adds an unload warning until safe. Closing delivery is not required for recovery.
+- Local storage also holds the organizer credential/workspace and theme; guest invitations use per-tab session storage. Clearing browser storage removes local drafts. Unsaved text in the preset editor is backed up when Save is pressed, not on each keystroke. See [SAVING.md](SAVING.md) for the boundary, tests, and migration.
 
 ### Database model
 
@@ -81,6 +86,7 @@ There is no application server, framework, bundler, or package manifest. Focused
 | `side_picker_private.workspaces` | Existing workspace label, unique token hash | Hashed organizer capability |
 | `side_picker_private.rooms` | Session UUID | Private seed for viewing/player links |
 | `side_picker_private.picks` | `(session_id, player_id)` | Validated private submissions and timestamp |
+| `side_picker_private.save_receipts` | Workspace + operation UUID | Idempotent save replies, retained for 30 days per active workspace |
 | `app_health` | Single constrained `status = 'ok'` row | Non-sensitive read-only sentinel for the daily check |
 
 Legacy submissions reference `sessions.room_code` with cascading deletion. Private rooms and picks now reference the stable session UUID. The historical schema file contains cleanup statements; it is not a harmless diagnostic script.
@@ -96,7 +102,7 @@ Private links use two capability-checked functions, `sp_workspace` and `sp_room`
 3. Guest submits through `sp_room`; the backend checks the capability, membership, faction choices, and published status, then stores the submission in the private schema.
 4. The host polls new submissions and merges them by player ID and timestamp. Guests poll minimal room data and published results. Polling runs every three seconds while the page is visible, avoids overlapping requests, and reports connection interruptions.
 
-The host still bridges submitted picks into the working session. The guest roster uses explicit backend submission status, including neutral submissions, even when the host is offline. A submitted acknowledgement disappears when the guest edits their choices. Full concurrent-host reconciliation and durable offline edits remain outstanding.
+The host still bridges submitted picks into the working session. The guest roster uses explicit backend submission status, including neutral submissions, even when the host is offline. A submitted acknowledgement disappears when the guest edits their choices. Concurrent organizer saves are version-checked and conflicts preserve local drafts. Guest-versus-host choice reconciliation and the full room lifecycle remain ROOM-01 work.
 
 ## Assignment rules and implementation
 
@@ -122,8 +128,8 @@ Results use the payload `{v, t, gm, g, pct, r}`: version, session title, game, g
 | --- | --- | --- |
 | Access | Capability RPCs and personal invitations deployed; direct game access denied | SEC-02 complete |
 | Shared links | Fixed: payloads validated and card fields rendered with text nodes; invalid-link recovery added | SEC-01 complete |
-| Saving | Helpers now signal failure and writes capture identity/snapshots; durable offline recovery and concurrent-host conflicts remain | REL-01 |
-| Saving | Navigation flushes before reloading the cache; unload saves are still not guaranteed | REL-01 |
+| Saving | Durable drafts, truthful status, idempotent retries, and explicit conflict recovery implemented; see plan for deployment status | REL-01 |
+| Saving | Navigation preserves backed-up edits; recovery does not depend on unload delivery | REL-01 |
 | Submissions | Explicit submissions now include neutral choices; full collecting/locked/published lifecycle remains | ROOM-01 |
 | Live rooms | Scoped polling retries and stable IDs are in place; host/guest conflict handling still needs work | ROOM-01 |
 | Optimizer | Strict bans/conflict explanations and snapshot guard implemented; tied solutions still consume unbounded memory | OPT-01 complete; OPT-02 outstanding |
@@ -155,13 +161,13 @@ node --check config.js
 node --check results.js
 node --check optimizer.js
 node --check access.js
-node --test --test-isolation=none tests/results.test.cjs tests/optimizer.test.cjs tests/access.test.cjs
+node --test --test-isolation=none tests/results.test.cjs tests/optimizer.test.cjs tests/access.test.cjs tests/saves.test.cjs
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/keepalive.Tests.ps1
 ```
 
 For a repeatable host browser fixture with no production database connection, run `node tests/serve-fixture.cjs` and open `http://127.0.0.1:8754/`. Resume the sample session, optimize to see its ban conflict, then unban B for Jordan and optimize to obtain one first choice plus one neutral assignment (50%). Restarting the fixture server resets its shared in-memory data. It supports host/guest tabs and exact-width phone previews; it does not prove database permissions. Use the rolled-back SQL permission tests for that.
 
-The initial review included source/schema inspection, syntax checks, isolated function probes, and mocked browser checks. Subsequent work verified deployed permissions and a real timer-triggered keep-alive. See the plan for private-link rollout evidence. Durable save recovery and full concurrent-host behavior remain unverified.
+The initial review included source/schema inspection, syntax checks, isolated function probes, and mocked browser checks. Subsequent work verified deployed permissions and a real timer-triggered keep-alive. See the plan for private-link rollout evidence. The plan records REL-01 failure/recovery evidence separately from ROOM-01 guest/host reconciliation.
 
 ## Maintaining this guide
 
