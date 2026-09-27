@@ -15,12 +15,12 @@ Read [APP_GUIDE.md](APP_GUIDE.md) for current behavior. Follow [AGENTS.md](../AG
 ## Current handoff
 
 - **Completed:** initial review and durable documentation.
-- **Implementation tasks completed:** SEC-01 (safe result links), OPS-01 (local daily database check), and OPT-01 (strict bans, conflict explanations, consistent input snapshots, result summaries).
-- **Next action:** finish SEC-02 deployment: stage-one capability API, legacy binding, and transactional permission tests are applied/passing. Deploy the new client, verify the existing organizer recovery links, then apply `202609260003_lock_game_tables.sql` and run direct-table negative checks. Do not leave the old table grants enabled after a successful client rollout. Optional accounts remain FEATURE-04.
-- **Scope:** no required sign-in. Private organizer links control one workspace; personal invitations control one player; viewing links are read-only. Three existing sessions and two presets belong to two separate workspaces and have separate recovery links.
-- **External state:** SEC-01 `2c72a21`, OPS-01 `ce280b0`, OPT-01 `27bbdd6`, independent health access `ac3f649` are pushed. Stage-one private API and administrator-controlled bindings are applied. Old game table permissions remain open until stage two. The keep-alive remains daily at 09:17 Atlantic and at sign-in; this computer must be on and signed in.
-- **Recovery:** `.local/private-organizer-links.html` contains private buttons for the original games and presets. Keep this ignored local file; never commit it. Database-local pre-upgrade snapshot: `side_picker_private.before_private_links`.
-- **After SEC-02:** REL-01 durable pending edits, visible save state, and concurrent-host handling. Some save and room groundwork is included in SEC-02; neither REL-01 nor ROOM-01 is complete.
+- **Implementation tasks completed:** SEC-01 (safe result links), OPS-01 (local daily database check), OPT-01 (strict bans, conflict explanations, consistent input snapshots, result summaries), and SEC-02 (private organizer/player links and enforced database access).
+- **Next action:** REL-01: add durable pending edits, visible saving/saved/failed state, retry/recovery after refresh or lost connectivity, and an explicit concurrent-host conflict policy. Start with save/navigation failures and preserve private workspace/session identity throughout. No account setup is needed.
+- **Scope:** no required sign-in. Private organizer links control one workspace; personal invitations control one player; viewing links are read-only. Three existing sessions and two presets belong to two separate workspaces and have separate recovery links. Optional accounts remain FEATURE-04.
+- **External state:** SEC-01 `2c72a21`, OPS-01 `ce280b0`, OPT-01 `27bbdd6`, independent health access `ac3f649`, and SEC-02 `b5cbd3a` are pushed. Pages reports SEC-02 built. Both private-link migrations and legacy bindings are applied; public game-table access is revoked. The live original-game link and post-cutover API/permission checks passed. The local check completed three validated health reads at 22:35:44 Atlantic on 2026-09-26. Daily schedule remains 09:17 plus sign-in catch-up; this computer must be on and signed in.
+- **Recovery:** `.local/private-organizer-links.html` contains private buttons for the original games and presets. Keep this ignored local file; never commit it. Database-local pre-upgrade snapshot: `side_picker_private.before_private_links`. Old room invitations require fresh personal/viewing links; public result snapshots still work.
+- **Working state:** SEC-02 implemented, deployed, activated, and verified. Some save/room groundwork is included, but REL-01 and ROOM-01 remain incomplete. Future work should use the isolated fixture for write-heavy browser tests and transactional SQL fixtures for authorization checks.
 
 ## Decisions to settle during planning
 
@@ -76,10 +76,10 @@ Routine implementation choices can be resolved from the user's instructions and 
 - [x] Design private organizer links and a safe transfer process for existing data, preserving immediate public use without required email/Google sign-in. Knowledge of a publicly readable workspace label alone must not establish ownership.
 - [x] Define organizer-link scope, secure generation, server-side verification, storage, revocation, recovery, and sharing warnings. Treat the link as an editing credential; never include it in guest/result links, logs, or public database reads.
 - [x] Introduce stable session/player identifiers where needed, retaining display names as editable labels.
-- [ ] Replace unrestricted anonymous table access with enforced organizer ownership and narrow guest access.
+- [x] Replace unrestricted anonymous table access with enforced organizer ownership and narrow guest access.
 - [x] Restrict a guest to authorized room data and their permitted submission; prevent arbitrary player impersonation, room enumeration, and unauthorized result edits/deletes.
 - [x] Validate submission membership, allowed factions, duplicate/overlapping choices, room state, and payload limits on the backend.
-- [ ] Apply a versioned, recoverable migration with backup and compatibility checks for existing sessions and room links.
+- [x] Apply a versioned, recoverable migration with backup and compatibility checks for existing sessions and room links.
 
 **Acceptance:** two separate organizers cannot read or mutate each other's private data through direct API calls; guests cannot change another player's picks or host data; intended room/result sharing still works. Test negative permission cases using isolated fixtures. Record migration application and deployment separately from code completion.
 
@@ -270,3 +270,13 @@ At the end of each implementation session, update Current handoff and append a d
 - All 15 Node regressions and JavaScript syntax/diff checks passed. New tests cover link parsing/credential separation, queued immutable saves, denied writes, and cross-tab workspace identity. Browser mocks do not establish database permissions.
 - Switched room synchronization to capability-scoped polling every three seconds while visible. Added serialized writes, navigation flushes, failure returns and safer preset rename; durable offline recovery and concurrent-host resolution remain incomplete.
 - Next release step is client deployment followed by stage-two removal of old table grants, post-cutover checks, and final rollout evidence.
+
+### 2026-09-26 — SEC-02 deployed and activated
+
+- Committed/pushed `b5cbd3a`; GitHub Pages reports built. The deployed app imported the original organizer recovery link and displayed all three existing games. Reload after restricting tables still displayed those games.
+- Before cutover, a read-only database assertion validated every legacy session against the new input rules and compared all saved sessions/presets against the pre-upgrade snapshot (ignoring only the new session UUID). Passed: 3 sessions, 2 presets, 2 bound workspaces.
+- Applied `202609260003_lock_game_tables.sql`: all direct grants revoked from public/anon/authenticated on users, sessions, presets, submissions; permissive policies removed; RLS retained. No saved records deleted or rewritten during the cutover.
+- Re-ran transactional private-link fixtures after cutover and added `supabase/tests/game_permissions.sql`. Passed: public roles have no direct read/write/truncate grants, private schema is hidden, RLS is on, scoped RPCs remain available. All isolated test records rolled back.
+- Independent HTTP checks returned permission-denied for all four game tables and an invalid organizer token. Both real legacy capabilities returned only their expected data (0 sessions/2 presets; 3 sessions/0 presets). The independent health sentinel passed, followed by a manual forced local-script run with three validated reads at 22:35:44 Atlantic.
+- Isolated browser also confirmed a viewing link has no submission controls and a separate workspace starts empty without sign-in. Existing private recovery links are in the ignored local HTML file; preserve it or save the links privately. New tokens were not committed.
+- SEC-02 is complete. Next: REL-01. Save recovery, multi-host conflict handling, full room lifecycle, and remaining phone controls are deliberately still unchecked.

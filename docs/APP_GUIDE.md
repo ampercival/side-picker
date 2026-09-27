@@ -49,7 +49,7 @@ If both URL forms are present, room mode takes precedence at startup.
 | `access.js` | Secure token generation, fragment parsing, safe link construction |
 | `config.js` | Public Supabase project URL and publishable key |
 | `supabase/schema.sql` | Historical fresh-install baseline; refuses rerun after private links |
-| `supabase/migrations/` | Additive versioned migrations; the public health sentinel is deployed |
+| `supabase/migrations/` | Versioned migrations; health sentinel and both private-link stages are deployed |
 | `supabase/tests/health_permissions.sql` | Transactional health-table role/permission checks |
 | `.claude/launch.json` | Local static-server launch configuration on port 8753 |
 | `scripts/keep-supabase-active.ps1` | Daily local read-only database check, bounded retries, logging and status |
@@ -120,7 +120,7 @@ Results use the payload `{v, t, gm, g, pct, r}`: version, session title, game, g
 
 | Area | Finding | Plan task |
 | --- | --- | --- |
-| Access | Capability RPCs and personal invitations implemented; see plan for cutover verification | SEC-02 |
+| Access | Capability RPCs and personal invitations deployed; direct game access denied | SEC-02 complete |
 | Shared links | Fixed: payloads validated and card fields rendered with text nodes; invalid-link recovery added | SEC-01 complete |
 | Saving | Helpers now signal failure and writes capture identity/snapshots; durable offline recovery and concurrent-host conflicts remain | REL-01 |
 | Saving | Navigation flushes before reloading the cache; unload saves are still not guaranteed | REL-01 |
@@ -135,7 +135,7 @@ Results use the payload `{v, t, gm, g, pct, r}`: version, session title, game, g
 - Repository: [ampercival/side-picker](https://github.com/ampercival/side-picker).
 - Live site: [Side Picker](https://ampercival.github.io/side-picker/).
 - On 2026-09-26, GitHub reported a public repository with Pages publishing from the root of `main`.
-- On that date, a read-only Supabase REST request selecting zero session rows returned HTTP 200. This establishes reachability at that time, not the deployed authorization rules or future availability.
+- After SEC-02 cutover on 2026-09-26, direct reads of all four game tables return permission denied. Scoped organizer reads and the independent health sentinel passed. See the plan for detailed deployment evidence.
 - A local Windows task now runs three validated database reads daily at 09:17 Atlantic local time, with sign-in catch-up. A real timer-triggered run succeeded on 2026-09-26. See [the operational guide](SUPABASE_KEEPALIVE.md) for manual commands, log paths, limitations, and registration.
 
 From the repository root, run:

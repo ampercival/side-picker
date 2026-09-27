@@ -35,7 +35,7 @@ The browser polls scoped RPCs every three seconds while visible. This replaces d
 3. Generate independent organizer tokens locally. Store only their hashes in `side_picker_private.workspaces`, matching existing workspace labels through an administrator-controlled binding. Never allow public claiming by label. Verify each token reads only its intended data.
 4. Keep the raw recovery links in an ignored local file. For this installation: `.local/private-organizer-links.html`, with separate buttons for the three saved games and two saved presets. No credentials appear in tracked migrations or documentation.
 5. Run `supabase/tests/private_links.sql`: isolated fixtures, rollback, organizer isolation, guest scope, malformed submissions, published locking, stable IDs, and link replacement. Run the Node regressions and isolated host/guest browser fixture.
-6. Deploy the client and verify the new build, then apply `202609260003_lock_game_tables.sql`. Its guard refuses activation if any saved workspace is unbound. Verify direct anonymous table requests fail and both organizer recovery links still work. Verify the independent health query.
+6. Deploy the client and verify the new build, then apply `202609260003_lock_game_tables.sql`. Its guard refuses activation if any saved workspace is unbound. Run `supabase/tests/game_permissions.sql`, verify direct anonymous table requests fail, and verify both organizer recovery links still work. Verify the independent health query.
 
 Legacy room codes are retained, but old room URLs lack the new capabilities and must be replaced with personal invitations/viewing links. Existing result snapshots remain readable. Public labels no longer recover a workspace. Do not restore the old permissive policies as a routine troubleshooting step.
 
@@ -53,3 +53,5 @@ node tests/serve-fixture.cjs
 ```
 
 Open `http://127.0.0.1:8754/` for isolated browser checks. This fixture has shared in-memory data for host/guest tabs; restarting resets it. `/phone.html?width=390` and `?width=360` provide exact-width iframe previews. Browser mocks are not evidence of database authorization; the rolled-back SQL tests and post-activation direct API checks provide that evidence.
+
+Deployment status (2026-09-26): both migrations are applied; client `b5cbd3a` is live; preservation, scoped access, direct-table denial, and keep-alive checks passed. The improvement plan contains the complete rollout evidence.
