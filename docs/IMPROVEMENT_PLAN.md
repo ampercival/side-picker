@@ -356,3 +356,8 @@ At the end of each implementation session, update Current handoff and append a d
 - Reloaded the live site, confirmed the exact Supabase 2.117.2 UMD script, all three original games and unchanged timestamps, and the live comparison/bulk/room-stage controls through read-only resume. Returned to Sessions. Browser error log was empty.
 - Local scheduler readback: Ready, last scheduled result 0, next run 2026-09-27 09:17 Atlantic. The health status file reports the prior real successful read, distinct from simulated checks in CI.
 - All selected core work is complete. Future sessions should use APP_GUIDE.md and RELEASE.md; deferred accounts, player groups, and history/rotation remain intentionally unchecked. Final documentation commit records this evidence; its Pages run is expected to repeat the same gates without changing app assets.
+
+### 2026-09-27 — Release action runtime maintenance
+
+- Final handoff commit `cbe9a36` passed checks and deployed in run `36310370466`. GitHub reported Node 20 action-runtime deprecations, though the application checks used Node 24 successfully.
+- Updated action pins to verified official releases declaring Node 24: checkout 7.0.1, setup-node 7.0.0, configure-pages 6.0.0, upload-pages-artifact 5.0.0, deploy-pages 5.0.1. Upload now also pins its underlying artifact action. Workflow permissions, check gate, and application assets are unchanged. The new push must pass the same CI/deployment gates before calling this maintenance deployed.
