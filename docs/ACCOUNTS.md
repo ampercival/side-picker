@@ -1,6 +1,6 @@
 # Optional accounts
 
-Status (2026-09-27): migration 006 is **applied and verified** on production, which was reset to a clean slate at the user's request. **Google is enabled**: Google Cloud project "Side Picker", External audience, published to production with basic scopes, and listed in `config.js`. **GitHub is enabled**: OAuth app "Side Picker" with the Supabase callback, listed in `config.js`. Discord is not configured yet. Migration 007 (account games on every device, saved player invitations) is applied and verified; its client is deployed with it. See the improvement plan (FEATURE-04) for current status.
+Status (2026-09-27): migration 006 is **applied and verified** on production, which was reset to a clean slate at the user's request. **Google is enabled**: Google Cloud project "Side Picker", External audience, published to production with basic scopes, and listed in `config.js`. **GitHub is enabled**: OAuth app "Side Picker" with the Supabase callback, listed in `config.js`. **Discord is enabled**: application "Side Picker" with the Supabase callback redirect, listed in `config.js`. Migration 007 (account games on every device, saved player invitations) is applied and verified; its client is deployed with it. See the improvement plan (FEATURE-04) for current status.
 
 Accounts are optional and cost nothing to run. Nobody needs one to create a game, use an organizer link, or join as a player. Sign-in uses Google, Discord, and GitHub through Supabase Auth. It sends no email, and the providers handle passwords and recovery.
 
