@@ -23,7 +23,7 @@ create or replace function public.sp_account(action text,payload jsonb default '
 language plpgsql security definer set search_path='' as $$
 declare uid uuid := auth.uid(); h text; w text; b text; k side_picker_private.workspaces; key_id uuid; label text;
   item record; new_name text; n int; moved_sessions int := 0; moved_presets int := 0;
-  s public.sessions; r side_picker_private.rooms; sid uuid; pid text; token text;
+  game public.sessions; room_row side_picker_private.rooms; sid uuid; pid text; token text;
 begin
  if uid is null or coalesce((auth.jwt()->>'is_anonymous')::boolean,false) then
   raise exception 'Sign in to use your account' using errcode='42501';
@@ -59,17 +59,17 @@ begin
   if coalesce(payload->>'token','') !~ '^[0-9a-f]{64}$' or length(pid) not between 1 and 100 or length(coalesce(payload->>'room','')) not between 1 and 100 then
    raise exception 'Only a personal player invitation can be saved' using errcode='22023';
   end if;
-  select * into s from public.sessions where room_code=payload->>'room';
-  select * into r from side_picker_private.rooms where session_id=s.id;
-  if r.seed is null or encode(extensions.hmac(convert_to(pid,'UTF8'),r.seed,'sha256'),'hex')<>payload->>'token'
-     or not exists(select 1 from jsonb_array_elements(s.players) p where p->>'id'=pid) then
+  select * into game from public.sessions where room_code=payload->>'room';
+  select * into room_row from side_picker_private.rooms where session_id=game.id;
+  if room_row.seed is null or encode(extensions.hmac(convert_to(pid,'UTF8'),room_row.seed,'sha256'),'hex')<>payload->>'token'
+     or not exists(select 1 from jsonb_array_elements(game.players) p where p->>'id'=pid) then
    raise exception 'Room link is invalid or expired' using errcode='42501';
   end if;
-  if (select count(*) from side_picker_private.account_invitations where user_id=uid and not (session_id=s.id and player_id=pid))>=200 then
+  if (select count(*) from side_picker_private.account_invitations where user_id=uid and not (session_id=game.id and player_id=pid))>=200 then
    raise exception 'An account can keep up to 200 invitations. Remove an old one first.' using errcode='22023';
   end if;
   insert into side_picker_private.account_invitations(user_id,session_id,player_id,token_hash)
-  values(uid,s.id,pid,encode(extensions.digest(payload->>'token','sha256'),'hex'))
+  values(uid,game.id,pid,encode(extensions.digest(payload->>'token','sha256'),'hex'))
   on conflict(user_id,session_id,player_id) do update set token_hash=excluded.token_hash,saved_at=now();
   return jsonb_build_object('saved',true);
  elsif action in ('open_invite','forget_invite') then
@@ -80,17 +80,17 @@ begin
    delete from side_picker_private.account_invitations where user_id=uid and session_id=sid and player_id=pid;
    return '{}'::jsonb;
   end if;
-  select x.* into s from side_picker_private.account_invitations i join public.sessions x on x.id=i.session_id
+  select x.* into game from side_picker_private.account_invitations i join public.sessions x on x.id=i.session_id
    where i.user_id=uid and i.session_id=sid and i.player_id=pid;
-  if s.id is null then raise exception 'Invitation not found' using errcode='42501'; end if;
-  select * into r from side_picker_private.rooms where session_id=s.id;
-  token := encode(extensions.hmac(convert_to(pid,'UTF8'),r.seed,'sha256'),'hex');
-  if token is null or not exists(select 1 from jsonb_array_elements(s.players) p where p->>'id'=pid)
+  if game.id is null then raise exception 'Invitation not found' using errcode='42501'; end if;
+  select * into room_row from side_picker_private.rooms where session_id=game.id;
+  token := encode(extensions.hmac(convert_to(pid,'UTF8'),room_row.seed,'sha256'),'hex');
+  if token is null or not exists(select 1 from jsonb_array_elements(game.players) p where p->>'id'=pid)
      or encode(extensions.digest(token,'sha256'),'hex') is distinct from
         (select token_hash from side_picker_private.account_invitations where user_id=uid and session_id=sid and player_id=pid) then
    raise exception 'This invitation was replaced or you were removed from the game. Ask the organizer for a new one.' using errcode='42501';
   end if;
-  return jsonb_build_object('room_code',s.room_code,'player_id',pid,'token',token);
+  return jsonb_build_object('room_code',game.room_code,'player_id',pid,'token',token);
  elsif action='start' then
   -- One call per account at a time, so two devices cannot both start games.
   perform pg_advisory_xact_lock(hashtextextended('account:'||uid::text,0));
