@@ -142,7 +142,7 @@ Results use the payload `{v, t, gm, g, pct, r}`: version, session title, game, g
 | Optimizer | Exact objectives with bounded matching, randomized tie traversal, and cancellable workers | OPT-01 and OPT-02 complete |
 | Mobile | Flexible inputs, 44px controls, wrapping names, compact empty lists, view focus/scroll reset | UX-01 complete |
 | Operations | Local daily check installed and timer-triggered run verified; computer must be on/signed in. Release checks now gate Pages deployment | OPS-01 and ENG-01 complete |
-| Accounts | Optional Discord/Google accounts prepared and fixture-verified; migration 006 and provider setup pending | FEATURE-04 in progress |
+| Accounts | Optional Discord/Google accounts: migration 006 applied and verified; provider setup and live sign-in pending | FEATURE-04 in progress |
 
 ## Hosting, local use, and validation
 

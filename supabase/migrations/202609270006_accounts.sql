@@ -30,6 +30,10 @@ create table side_picker_private.account_workspaces (
 );
 create index account_workspaces_user_idx on side_picker_private.account_workspaces(user_id);
 revoke all on all tables in schema side_picker_private from public,anon,authenticated;
+-- Defense in depth, matching production: no policies, so only the owning
+-- security-definer functions below can read or write these rows.
+alter table side_picker_private.before_accounts enable row level security;
+alter table side_picker_private.account_workspaces enable row level security;
 
 -- Serialize every request for a workspace, whichever of its keys is used, so
 -- first saves and version checks behave as they did with a single key.

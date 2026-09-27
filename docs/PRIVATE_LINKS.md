@@ -41,7 +41,7 @@ Legacy room codes are retained, but old room URLs lack the new capabilities and 
 
 ## Recovery and validation
 
-The snapshot is `side_picker_private.before_private_links` (`source`, `record`). Original submissions are also retained in the old table. Keep backups private. Prefer fixing forward: deploy a corrected client/RPC without reopening public table access. An administrator can recover damaged records selectively from the snapshot and replace a workspace hash with one generated from a new private organizer token. Preserve newer data; do not blindly restore all snapshots. Changing a hash revokes the old link.
+The rollout snapshot `side_picker_private.before_private_links` was dropped when production was reset to a clean slate on 2026-09-27 at the user's request; that reset also removed all earlier games and workspaces. Keep backups private. Prefer fixing forward: deploy a corrected client/RPC without reopening public table access. An administrator can recover damaged records selectively from the snapshot and replace a workspace hash with one generated from a new private organizer token. Preserve newer data; do not blindly restore all snapshots. Changing a hash revokes the old link.
 
 Fresh installations apply the legacy baseline only once, then all versioned migrations in order. The legacy baseline now refuses to run after private links are installed, preventing accidental restoration of public policies.
 

@@ -1,6 +1,6 @@
 # Optional accounts
 
-Status (2026-09-27): client, migration, and tests prepared; fixture-verified; migration 006 passed a rolled-back trial on production with all six SQL suites. It is **not applied**, no sign-in provider is configured, and `accountProviders` in `config.js` is empty, so the live app does not show accounts yet. See the improvement plan (FEATURE-04) for current status.
+Status (2026-09-27): migration 006 is **applied and verified** on production, which was reset to a clean slate at the user's request. The client is deployed but dormant: no sign-in provider is configured and `accountProviders` in `config.js` is empty, so the live app does not show accounts yet. See the improvement plan (FEATURE-04) for current status.
 
 Accounts are optional and cost nothing to run. Nobody needs one to create a game, use an organizer link, or join as a player. Sign-in uses Discord and Google through Supabase Auth. It sends no email, and the providers handle passwords and recovery.
 
