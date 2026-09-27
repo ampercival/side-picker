@@ -103,7 +103,12 @@ async function loadSessionsFromDb() {
         const data = await workspaceRequest('load', {}, credential);
         if (generation === loadGeneration && credential === privateWorkspace().credential) applyWorkspaceData(data);
         return true;
-    } catch (error) { workspaceLoadFailed = true; renderSaveStatus(); accessError(error, 'Could not load games'); return false; }
+    } catch (error) {
+        if (generation === loadGeneration && credential === privateWorkspace().credential) {
+            workspaceLoadFailed = true; renderSaveStatus(); accessError(error, 'Could not load games');
+        }
+        return false;
+    }
 }
 async function loadPresetsFromDb() { return presetsCache; }
 function stageSessionSave(name, s) {
@@ -142,10 +147,12 @@ async function deletePresetFromDb(name) {
     j.bases.delete('preset:' + name); delete presetVersions[name]; return true;
 }
 async function initializePrivateWorkspace() {
+    const generation = ++loadGeneration;
     if (new URLSearchParams(location.hash.slice(1)).has('organizer')) {
         const credential = parseOrganizerLink(location.href);
         history.replaceState(null, '', location.pathname);
         const data = await workspaceRequest('load', {}, credential);
+        if (generation !== loadGeneration) return;
         storeWorkspace(credential, data.owner_key); applyWorkspaceData(data); return;
     }
     const saved = privateWorkspace();
@@ -156,6 +163,7 @@ async function initializePrivateWorkspace() {
             if (!saved.pendingCredential) throw error;
             credential = saved.pendingCredential; data = await workspaceRequest('load', {}, credential);
         }
+        if (generation !== loadGeneration) return;
         storeWorkspace(credential, data.owner_key); applyWorkspaceData(data); return;
     }
     if (localStorage.getItem(WORKSPACE_KEY_LS)) {
@@ -174,8 +182,10 @@ async function createPrivateWorkspace(confirmed = false) {
     if (journal?.storageError) return;
     const credential = localStorage.getItem(PRIVATE_WORKSPACE_KEY + '_new') || newPrivateToken();
     localStorage.setItem(PRIVATE_WORKSPACE_KEY + '_new', credential);
+    const generation = ++loadGeneration;
     try {
         const data = await workspaceRequest('create', {}, credential);
+        if (generation !== loadGeneration) return;
         storeWorkspace(credential, data.owner_key); localStorage.removeItem(PRIVATE_WORKSPACE_KEY + '_new');
         activeSessionName = null; state.roomCode = ''; deactivateRoomSync();
         applyWorkspaceData({ sessions: [], presets: [] });
@@ -187,7 +197,9 @@ async function importOrganizerLink() {
         const credential = parseOrganizerLink(get('workspace-input').value);
         await flushSession();
         if (journal?.storageError) return;
+        const generation = ++loadGeneration;
         const data = await workspaceRequest('load', {}, credential);
+        if (generation !== loadGeneration) return;
         deactivateRoomSync(); activeSessionName = null; state.roomCode = '';
         storeWorkspace(credential, data.owner_key); applyWorkspaceData(data);
         closeModals(); renderHomeSessions(); renderPresetOptions(); switchView('view-home');

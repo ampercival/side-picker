@@ -44,3 +44,20 @@ test('revoked capability and network errors cannot report successful saves', asy
     assert.equal(await vm.runInContext("upsertSessionToDb('one',{factions:[],players:[]})",ctx),false);
     assert.equal(await vm.runInContext("deleteSessionFromDb('one')",ctx),false);
 });
+test('a slow startup response cannot replace a workspace opened afterward', async () => {
+    const storage=new Map([['side_picker_private_workspace_v1',JSON.stringify({credential:'a'.repeat(64),ownerKey:'A'})]]);
+    let release;
+    const ctx=vm.createContext({crypto:require('node:crypto').webcrypto,URL,URLSearchParams,setTimeout,clearTimeout,
+        location:{hash:'',href:base},activeSessionName:null,state:{},flushSession:async()=>true,
+        localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},renderSaveStatus(){},renderHomeSessions(){},renderPresetOptions(){},closeModals(){},switchView(){},showToast(){},
+        get:()=>({value:base+'#organizer='+'b'.repeat(64)}),
+        window:{SUPABASE_CONFIG:{url:'https://fixture.invalid'},supabase:{createClient:()=>({rpc:async(_,args)=>{
+            if(args.credential==='a'.repeat(64))await new Promise(r=>release=r);
+            return {data:{owner_key:args.credential[0].toUpperCase(),sessions:[],presets:[]},error:null};
+        }})}}});
+    vm.runInContext(fs.readFileSync('access.js','utf8')+'\n'+fs.readFileSync('save-journal.js','utf8')+'\n'+fs.readFileSync('rooms.js','utf8'),ctx);
+    const startup=vm.runInContext('initializePrivateWorkspace()',ctx);
+    await vm.runInContext('importOrganizerLink()',ctx);release();await startup;
+    assert.equal(vm.runInContext('getWorkspaceKey()',ctx),'B');
+    assert.equal(JSON.parse(storage.get('side_picker_private_workspace_v1')).ownerKey,'B');
+});
