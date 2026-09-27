@@ -2,11 +2,11 @@
 
 Status (2026-09-27): migration 006 is **applied and verified** on production, which was reset to a clean slate at the user's request. The client is deployed but dormant: no sign-in provider is configured and `accountProviders` in `config.js` is empty, so the live app does not show accounts yet. See the improvement plan (FEATURE-04) for current status.
 
-Accounts are optional and cost nothing to run. Nobody needs one to create a game, use an organizer link, or join as a player. Sign-in uses Discord and Google through Supabase Auth. It sends no email, and the providers handle passwords and recovery.
+Accounts are optional and cost nothing to run. Nobody needs one to create a game, use an organizer link, or join as a player. Sign-in uses Google, Discord, and GitHub through Supabase Auth. It sends no email, and the providers handle passwords and recovery.
 
 ## What people see
 
-- **Account** in the header appears only when at least one provider is listed in `config.js`. Signed out, it explains that accounts are optional and offers **Continue with Google/Discord**. A checkbox, off by default, adds the games in this browser after sign-in. Its label warns against using it on someone else's device.
+- **Account** in the header appears only when at least one provider is listed in `config.js`. Signed out, it explains that accounts are optional and offers **Continue with Google/Discord/GitHub**. A checkbox, off by default, adds the games in this browser after sign-in. Its label warns against using it on someone else's device.
 - Signed in, **My games** lists each workspace in the account: game and preset counts, recent game names, **Open in this browser**, **Remove from account**, and **Devices and links** with a **Remove** button for each key.
 - **Sign out** removes this browser's device key, forgets account games in this browser, and starts an empty workspace. Games in an unlinked workspace stay in the browser.
 - **Delete account** deletes the sign-in and its list. Games are not deleted: organizer links and open devices keep working.
@@ -41,7 +41,7 @@ The raw organizer key sent to `attach`/`forget_device` is proof only and is neve
 
 ## Cost and limits
 
-- Supabase Free includes 50,000 monthly active sign-ins and social providers. Discord and Google sign-in are free. No email service is needed.
+- Supabase Free includes 50,000 monthly active sign-ins and social providers. Google, Discord, and GitHub sign-in are free. No email service is needed.
 - Without a paid custom auth domain, Google's sign-in screen names `gghixlqrgwwfgramgvon.supabase.co`. Google's free brand verification can improve this; it may take a few business days.
 - A paused Free project also blocks sign-in. The local keep-alive task still matters.
 - Apple sign-in requires Apple's paid developer program and email sign-in requires a sending domain, so neither is included.
@@ -58,17 +58,18 @@ Do these in order. Keep client secrets only in the Supabase dashboard, never in 
       where w.owner_key = b.record->>'owner_key' and w.token_hash = b.record->>'token_hash' and w.kind = 'link');
     ```
 
-2. **Supabase URL configuration** (Authentication → URL Configuration). Site URL `https://ampercival.github.io/side-picker/`. Add redirect URLs `https://ampercival.github.io/side-picker/` and, for local checks, `http://127.0.0.1:8753/`. Local serving still uses production data.
+2. **Supabase URL configuration** (Authentication → URL Configuration). Site URL `https://ampercival.github.io/side-picker/`, and the same address as the only redirect URL. *Done 2026-09-27.* No localhost redirect is allowed: local account checks use the isolated fixture's fake sign-in, not production.
 3. **Discord.** In the Discord Developer Portal, create an application named Side Picker. Under OAuth2, add the redirect `https://gghixlqrgwwfgramgvon.supabase.co/auth/v1/callback`. In Supabase (Authentication → Sign In / Providers → Discord), enable it and paste the client ID and secret.
 4. **Google.** In Google Cloud Console, create a project and configure Google Auth Platform: External audience, app name Side Picker, support email, privacy policy `https://ampercival.github.io/side-picker/privacy.html`, and only the `openid`, `email`, and `profile` scopes. While publishing status is Testing, only listed test users can sign in; publish it for general use. Create an OAuth client of type Web application with JavaScript origin `https://ampercival.github.io` and redirect URI `https://gghixlqrgwwfgramgvon.supabase.co/auth/v1/callback`. Enable Google in Supabase with that client ID and secret.
-5. **Unused sign-in methods.** Leave anonymous sign-ins and phone disabled. The app never uses email sign-in; disabling the Email provider avoids unused sign-up paths.
-6. **Turn it on.** Set `accountProviders: ['discord', 'google']` in `config.js` (only providers that are enabled), run `node scripts/check.cjs`, commit, push, and wait for Checks and Pages.
-7. **Live verification.** With a new test workspace, not the original games: sign in with each provider, add the workspace, open it in a second browser, save a change there, sign out of one browser, remove a device, and delete a test account. Confirm guest invitations still work signed out, and that existing organizer links still open their workspaces.
+5. **GitHub.** In GitHub, open Settings → Developer settings → OAuth Apps → New OAuth App. Use application name Side Picker, homepage `https://ampercival.github.io/side-picker/`, and authorization callback URL `https://gghixlqrgwwfgramgvon.supabase.co/auth/v1/callback`. Generate a client secret, then enable GitHub in Supabase with the client ID and secret. Supabase asks GitHub only for the account's profile and email addresses.
+6. **Unused sign-in methods.** Leave anonymous sign-ins and phone disabled. The app never uses email sign-in; disabling the Email provider avoids unused sign-up paths.
+7. **Turn it on.** Set `accountProviders: ['google', 'discord', 'github']` in `config.js` (only providers that are enabled), run `node scripts/check.cjs`, commit, push, and wait for Checks and Pages.
+8. **Live verification.** With a new test workspace, not the original games: sign in with each provider, add the workspace, open it in a second browser, save a change there, sign out of one browser, remove a device, and delete a test account. Confirm guest invitations still work signed out, and that existing organizer links still open their workspaces.
 
 ## Checks
 
 - `node scripts/check.cjs` includes `tests/accounts.test.cjs`: callback parsing and URL cleanup, provider gating, hash-only device keys, failed-open safety, sign-out forgetting only confirmed account workspaces, and explicit attach intent.
-- `node tests/serve-fixture.cjs` provides a fake sign-in. **Continue with Google/Discord** returns immediately as `fixture-google-user` or `fixture-discord-user`, backed by an in-memory account API that follows migration 006. Use Discord as the second account for claim-refusal checks. Restarting the fixture resets it. It does not prove database permissions.
+- `node tests/serve-fixture.cjs` provides a fake sign-in. **Continue with Google/Discord/GitHub** returns immediately as `fixture-<provider>-user`, backed by an in-memory account API that follows migration 006. Use Discord as the second account for claim-refusal checks. Restarting the fixture resets it. It does not prove database permissions.
 - `supabase/tests/accounts.sql` rolls back two sample auth users and their workspaces. It checks proof of control, single ownership, cross-account denial, device keys and version checks across keys, per-key replacement, revocation, sign-out, unlink, deletion, anonymous refusal, and grants.
 
 ## Recovery

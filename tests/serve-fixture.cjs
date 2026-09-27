@@ -23,7 +23,7 @@ let offline=false, loseNext=false, delay=0, roomsOffline=false;
 const fixture = `window.SUPABASE_CONFIG={url:'https://fixture.invalid',publishableKey:'fixture'};
 localStorage.removeItem('side_picker_workspace_key');
 if(!localStorage.getItem('side_picker_private_workspace_v1'))localStorage.setItem('side_picker_private_workspace_v1',JSON.stringify({credential:'${'a'.repeat(64)}',ownerKey:'fixture'}));
-window.SUPABASE_CONFIG.accountProviders=['google','discord'];
+window.SUPABASE_CONFIG.accountProviders=['google','discord','github'];
 // Fake sign-in: the provider "redirect" returns straight here with a fixture code.
 const fixtureSession=()=>{try{return JSON.parse(localStorage.getItem('fixture_auth'))}catch{return null}};
 const fixtureAuth={listeners:[],
