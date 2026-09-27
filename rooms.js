@@ -64,6 +64,20 @@ function ensureJournal() {
                 if (sessionsCache[req.payload.name]) {
                     sessionsCache[req.payload.name].id = row.id;
                     sessionsCache[req.payload.name].roomCode = row.room_code || '';
+                    // Apply server reconciliation only to choices this tab has not edited again.
+                    let choicesChanged = false;
+                    for (const saved of row.players || []) {
+                        const sent = req.payload.players.find(p => p.id === saved.id);
+                        const current = sessionsCache[req.payload.name].players.find(p => p.id === saved.id);
+                        if (sent && current && pickSignature(current) === pickSignature(sent)) {
+                            choicesChanged ||= pickSignature(current) !== pickSignature(saved);
+                            for (const field of ['preferences','bans','noPreference','submittedAt','submittedSource','submittedChoices']) current[field] = saved[field];
+                        }
+                    }
+                    if (typeof activeSessionName !== 'undefined' && activeSessionName === req.payload.name) {
+                        if (choicesChanged) renderPlayers();
+                        renderRoomStatus();
+                    }
                 }
             } else {
                 presetVersions[req.payload.name] = row.save_version;
@@ -225,44 +239,85 @@ function replaceOrganizerLink() {
 
 let guestPick = { id: 'guest', name: '', preferences: [], bans: [], noPreference: false };
 let guestSession = null, guestShowingResults = false, guestAccess = null, guestSavedChoices = '';
-let roomTimer = null, roomEpoch = 0;
+let guestDirtyConflict = false, guestSubmitting = false;
+let roomTimer = null, roomEpoch = 0, resumeRoomPolling = null;
 function pickSignature(p) { return JSON.stringify([p.preferences, p.bans, !!p.noPreference]); }
-function playerHasSubmitted(player) { return Boolean(player?.submitted || player?.submittedAt); }
+function playerHasSubmitted(player) { return Boolean(player?.submitted || (player?.submittedAt && player.submittedSource !== 'organizer' && (!player.submittedChoices || JSON.stringify(player.submittedChoices) === pickSignature(player)))); }
+function playerSubmissionLabel(p) {
+    if (playerHasSubmitted(p)) return 'Submitted';
+    if (p.submittedAt) return p.submittedSource === 'organizer' ? 'Organizer updated' : 'Edited since submission';
+    return 'Waiting for player';
+}
 function updateRoomBanner() {
     const banner = get('room-banner'); if (!banner) return;
-    banner.style.display = state.roomCode ? 'flex' : 'none'; get('room-banner-code').textContent = state.roomCode ? 'Active' : '';
+    banner.style.display = state.roomCode ? 'flex' : 'none'; get('room-banner-code').textContent = state.roomCode ? (state.results ? 'Published' : state.roomStage === 'locked' ? 'Picking closed' : state.roomStage === 'collecting' ? 'Collecting picks' : 'Checking…') : '';
+    const toggle = get('room-stage-button');
+    if (toggle) { toggle.hidden = !state.roomCode || !!state.results; toggle.textContent = state.roomStage === 'locked' ? 'Reopen picking' : 'Close picking'; }
     renderRoomStatus();
 }
-function deactivateRoomSync() { ++roomEpoch; clearTimeout(roomTimer); roomTimer = null; }
+function deactivateRoomSync() { ++roomEpoch; clearTimeout(roomTimer); roomTimer = null; resumeRoomPolling = null; }
 function startRoomPolling(work) {
     deactivateRoomSync(); const epoch = roomEpoch;
+    resumeRoomPolling = () => startRoomPolling(work);
     async function tick() {
         if (epoch !== roomEpoch) return;
         if (!document.hidden) {
             try { await work(epoch); if (epoch === roomEpoch) setRoomConnection(true); }
-            catch { if (epoch === roomEpoch) setRoomConnection(false); }
+            catch (error) {
+                if (epoch === roomEpoch) {
+                    setRoomConnection(false);
+                    if (isGuestMode && error?.code === '42501') {
+                        deactivateRoomSync(); showGuestError('This invitation has been replaced or your player was removed. Ask the organizer for a new invitation.');
+                    }
+                }
+            }
         }
         if (epoch === roomEpoch) roomTimer = setTimeout(tick, 3000);
     }
     tick();
 }
+if (typeof window.addEventListener === 'function') {
+    window.addEventListener('online', () => resumeRoomPolling?.());
+    window.addEventListener('offline', () => setRoomConnection(false));
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) resumeRoomPolling?.(); });
+}
 function setRoomConnection(ok) {
     const el = get(isGuestMode ? 'guest-connection' : 'room-connection');
-    if (el) el.textContent = ok ? 'Live updates connected' : 'Connection interrupted — retrying…';
+    if (el) el.textContent = ok ? 'Live updates connected' : navigator.onLine === false ? 'Offline — reconnect to update' : 'Connection interrupted — retrying…';
 }
 async function refreshRoomSubmissions(epoch = roomEpoch) {
     const name = activeSessionName, workspace = getWorkspaceKey();
-    const rows = await workspaceRequest('submissions', { name });
+    const data = await workspaceRequest('room_status', { name });
     if (epoch !== roomEpoch || name !== activeSessionName || workspace !== getWorkspaceKey()) return;
+    state.roomStage = data.stage; updateRoomBanner();
+    // Do not overwrite a durable local edit. The server reconciles the frozen save.
+    if (journal?.entries.has('session:' + name)) return;
     let changed = false;
-    for (const row of rows) {
+    for (const row of data.picks) {
         const player = state.players.find(p => p.id === row.player_id);
         if (!player || player.submittedAt === row.updated_at) continue;
         player.preferences = row.preferences.filter(f => state.factions.includes(f)); player.bans = row.bans.filter(f => state.factions.includes(f));
-        player.noPreference = row.no_preference; player.submittedAt = row.updated_at; changed = true;
+        player.noPreference = row.no_preference; player.submittedAt = row.updated_at; player.submittedSource = row.source;
+        player.submittedChoices = [player.preferences.slice(),player.bans.slice(),player.noPreference]; changed = true;
     }
     if (changed) { autoSave(); renderPlayers(); renderRoomStatus(); }
 }
+async function setRoomStage(stage) {
+    const name = activeSessionName, owner = getWorkspaceKey(), epoch = roomEpoch;
+    if (!(await flushSession())) return false;
+    if (name !== activeSessionName || owner !== getWorkspaceKey() || epoch !== roomEpoch) return false;
+    try {
+        const data = await workspaceRequest('set_room_stage', { name, stage, expected_version: sessionVersions[name] });
+        if (name !== activeSessionName || owner !== getWorkspaceKey() || epoch !== roomEpoch) return false;
+        state.roomStage = data.stage;
+        await refreshRoomSubmissions(epoch);
+        if (name !== activeSessionName || owner !== getWorkspaceKey() || epoch !== roomEpoch) return false;
+        if (!(await flushSession())) return false;
+        if (name !== activeSessionName || owner !== getWorkspaceKey() || epoch !== roomEpoch) return false;
+        updateRoomBanner(); return true;
+    } catch (error) { accessError(error, 'Could not change picking'); return false; }
+}
+async function toggleRoomStage() { await setRoomStage(state.roomStage === 'locked' ? 'collecting' : 'locked'); }
 function syncRoomForCurrentSession() {
     if (state.roomCode) startRoomPolling(refreshRoomSubmissions); else deactivateRoomSync(); updateRoomBanner();
 }
@@ -314,7 +369,7 @@ function renderRoomStatus() {
     for (const p of players) {
         const row = document.createElement('div'); row.className = 'room-status-row';
         const name = document.createElement('span'); name.className = 'rs-name'; name.textContent = p.name;
-        const status = document.createElement('span'); status.className = 'rs-state'; status.textContent = playerHasSubmitted(p) ? '✓ submitted' : 'waiting';
+        const status = document.createElement('span'); status.className = 'rs-state'; status.textContent = playerSubmissionLabel(p);
         const button = document.createElement('button'); button.className = 'btn secondary'; button.textContent = 'Copy player link'; button.onclick = () => copyPlayerLink(p.id);
         row.append(name, status, button); container.appendChild(row);
     }
@@ -322,6 +377,7 @@ function renderRoomStatus() {
 
 function parseRoomFromUrl() { return new URLSearchParams(location.search).get('room')?.trim().toUpperCase() || null; }
 function showGuestError(message) {
+    isSharedMode = false; document.body.classList.remove('shared-mode');
     document.body.classList.add('guest-mode'); switchView('view-guest');
     get('guest-name-wrap').style.display = 'none'; get('guest-pick-area').style.display = 'none'; get('guest-banner').style.display = 'none';
     get('guest-error').textContent = message; get('guest-error').style.display = 'block';
@@ -343,8 +399,8 @@ async function enterRoomGuestMode(code) {
         if (!guestAccess || !PRIVATE_TOKEN_PATTERN.test(guestAccess.token)) throw new Error('Missing link');
         guestSession = { code }; const data = await guestRequest();
         guestPick.id = guestAccess.player || 'guest'; guestPick.name = data.player_name || '';
-        guestPick.preferences = data.mine?.preferences || []; guestPick.bans = data.mine?.bans || []; guestPick.noPreference = !!data.mine?.no_preference;
-        guestSavedChoices = data.mine ? pickSignature(guestPick) : '';
+        setGuestChoices(data.mine || data.initial_choices);
+        guestSavedChoices = pickSignature(guestPick);
         get('guest-name-wrap').style.display = 'block';
         setupDragAndDrop(get('guest-available'), get('guest-preference'), get('guest-banned'), guestPick); applyGuestRoom(data);
         startRoomPolling(async epoch => { const fresh = await guestRequest(); if (epoch === roomEpoch) applyGuestRoom(fresh); });
@@ -354,6 +410,10 @@ function applyGuestRoom(data) {
     const previous = guestSession?.lastResponse;
     const response = JSON.stringify(data);
     if (response === previous) return;
+    const dirty = guestSavedChoices !== pickSignature(guestPick);
+    const changed = guestSession?.mine?.updated_at !== data.mine?.updated_at;
+    if (changed && dirty) guestDirtyConflict = true;
+    else if (!dirty) { setGuestChoices(data.mine || data.initial_choices); guestSavedChoices = pickSignature(guestPick); guestDirtyConflict = false; }
     guestSession = { ...guestSession, ...data }; state.factions = data.factions;
     guestSession.lastResponse = response;
     get('guest-banner').style.display = 'block'; get('guest-session-name').textContent = data.session_name || ''; get('guest-game-title').textContent = data.game_title || '';
@@ -371,19 +431,43 @@ function renderGuestRoster() {
     el.style.display = players.length ? 'block' : 'none';
 }
 function showGuestPicks() { isSharedMode = false; document.body.classList.remove('shared-mode'); switchView('view-guest'); renderGuestPicks(); }
+function setGuestChoices(p) {
+    guestPick.preferences = [...(p?.preferences || [])]; guestPick.bans = [...(p?.bans || [])]; guestPick.noPreference = !!(p?.no_preference ?? p?.noPreference);
+}
+function useLatestGuestChoices() {
+    setGuestChoices(guestSession.mine || guestSession.initial_choices); guestSavedChoices = pickSignature(guestPick); guestDirtyConflict = false; renderGuestPicks();
+}
+function keepGuestChoices() { guestDirtyConflict = false; updateGuestSubmitted(); }
 function onGuestNoPreferenceChange() { guestPick.noPreference = get('guest-no-preference').checked; updateGuestSubmitted(); }
-function updateGuestSubmitted() { get('guest-submitted').style.display = guestSavedChoices && guestSavedChoices === pickSignature(guestPick) ? 'block' : 'none'; }
+function updateGuestSubmitted() {
+    const status = get('guest-submitted'), closed = guestSession?.stage !== 'collecting';
+    status.style.display = 'block';
+    status.textContent = guestDirtyConflict ? 'Saved choices changed elsewhere. Your edits are still here; choose which version to use.'
+        : closed ? 'Picking is closed. Your edits stay here until the organizer reopens it.'
+        : guestSavedChoices !== pickSignature(guestPick) ? 'Edits not submitted yet'
+        : guestSession?.mine?.source === 'organizer' ? 'Organizer updated your saved choices'
+        : guestSession?.mine ? 'Submitted — you can edit and submit again while picking is open.' : 'Ready when you are — neutral choices are valid too.';
+    get('guest-conflict-actions').hidden = !guestDirtyConflict;
+    get('guest-submit-button').disabled = closed || guestDirtyConflict || guestSubmitting;
+}
 function renderGuestPicks() {
     get('guest-pick-area').style.display = guestPick.name ? 'block' : 'none'; get('guest-no-preference').checked = !!guestPick.noPreference;
     if (guestPick.name) refreshListsForCard(guestPick, get('guest-available'), get('guest-preference'), get('guest-banned')); updateGuestSubmitted();
 }
 async function submitMyPicks() {
-    if (!guestPick.name || !guestAccess?.player) return;
-    const signature = pickSignature(guestPick), payload = JSON.parse(JSON.stringify({ preferences: guestPick.preferences, bans: guestPick.bans, no_preference: guestPick.noPreference }));
-    get('guest-submit-button').disabled = true;
+    if (!guestPick.name || !guestAccess?.player || guestSession.stage !== 'collecting' || guestDirtyConflict || guestSubmitting) return;
+    const epoch = roomEpoch, signature = pickSignature(guestPick), payload = JSON.parse(JSON.stringify({ preferences: guestPick.preferences, bans: guestPick.bans, no_preference: guestPick.noPreference,
+        expected_pick: guestSession.mine?.updated_at || null, expected_room: guestSession.revision }));
+    guestSubmitting = true; updateGuestSubmitted();
     try {
-        const data = await guestRequest('submit', payload); guestSavedChoices = signature; applyGuestRoom(data); updateGuestSubmitted();
-        showToast('success', 'Submitted', 'Your choices were saved. You can edit and submit again until results are published.');
-    } catch (error) { accessError(error, 'Could not submit picks'); }
-    finally { get('guest-submit-button').disabled = false; }
+        const data = await guestRequest('submit', payload);
+        if (epoch !== roomEpoch) return;
+        // The reply acknowledges this request, not any edits made while it was in flight.
+        guestSession.mine = data.mine; guestSavedChoices = signature; guestDirtyConflict = false; applyGuestRoom(data); updateGuestSubmitted();
+        showToast('success', 'Submitted', 'Your choices were saved.');
+    } catch (error) {
+        if (epoch !== roomEpoch) return;
+        accessError(error, 'Could not submit picks');
+        try { const fresh = await guestRequest(); if (epoch === roomEpoch) applyGuestRoom(fresh); } catch { setRoomConnection(false); }
+    } finally { guestSubmitting = false; if (epoch === roomEpoch) updateGuestSubmitted(); }
 }

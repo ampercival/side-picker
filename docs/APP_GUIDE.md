@@ -19,7 +19,7 @@ Side Picker assigns distinct board-game factions to players using their ranked p
 3. Enter session/game details and add factions, or choose a saved game preset.
 4. Add players and arrange each player's factions into Preferences, Available, and Banned.
 5. Optionally open a live room and send each player their personal invitation. A separate viewing link is read-only.
-6. Choose Highest Group Score or Fairest for Everyone, then optimize.
+6. Close picking when ready, or optimize to close it automatically. Choose Highest Group Score or Fairest for Everyone; the app synchronizes the final submissions before solving. Cancellation leaves picking closed until you reopen it.
 7. View results, share a results snapshot, or clear results and reopen picking.
 
 Game presets are named faction lists. A session contains the game-night setup, players, room code, and optional results. Editing the displayed session name does not change its original database identity.
@@ -130,8 +130,8 @@ Results use the payload `{v, t, gm, g, pct, r}`: version, session title, game, g
 | Shared links | Fixed: payloads validated and card fields rendered with text nodes; invalid-link recovery added | SEC-01 complete |
 | Saving | Durable drafts, truthful status, idempotent retries, and explicit conflict recovery deployed | REL-01 complete |
 | Saving | Navigation preserves backed-up edits; recovery does not depend on unload delivery | REL-01 complete |
-| Submissions | Explicit submissions now include neutral choices; full collecting/locked/published lifecycle remains | ROOM-01 |
-| Live rooms | Scoped polling retries and stable IDs are in place; host/guest conflict handling still needs work | ROOM-01 |
+| Submissions | Neutral submissions, edited/organizer-updated status, and enforced collecting/locked/published stages | ROOM-01 complete |
+| Live rooms | Stable IDs, reconnect refresh, guest conflict choices, and preserved host conflicts | ROOM-01 complete |
 | Optimizer | Strict bans/conflict explanations and snapshot guard implemented; tied solutions still consume unbounded memory | OPT-01 complete; OPT-02 outstanding |
 | Mobile | Add Player text is clipped at 390px; ranking controls are 26px; view changes retain scroll position | UX-01 |
 | Operations | Local daily check installed and timer-triggered run verified; computer must be on/signed in. Broader app checks remain outstanding | OPS-01 complete; ENG-01 ongoing |
@@ -161,7 +161,7 @@ node --check config.js
 node --check results.js
 node --check optimizer.js
 node --check access.js
-node --test --test-isolation=none tests/results.test.cjs tests/optimizer.test.cjs tests/access.test.cjs tests/saves.test.cjs tests/text-encoding.test.cjs
+node --test --test-isolation=none tests/results.test.cjs tests/optimizer.test.cjs tests/access.test.cjs tests/saves.test.cjs tests/rooms.test.cjs tests/text-encoding.test.cjs
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/keepalive.Tests.ps1
 ```
 
@@ -172,3 +172,13 @@ The initial review included source/schema inspection, syntax checks, isolated fu
 ## Maintaining this guide
 
 After relevant implementation, update the current behavior, data model, known-issue table, and validation instructions. Put proposals and outstanding decisions in the improvement plan so future sessions can distinguish implemented features from intentions.
+
+## Room synchronization and release notes
+
+Migration 005 follows migrations 001–004 and must run once. It adds a private room lock and revision, submission source, a reconciliation trigger, and room control operations; it keeps the versioned save wrapper private and accessible only through the public capability API. `side_picker_private.before_room_lifecycle` preserves the pre-migration sessions, rooms, and picks. Reload older browser tabs after this release: guest writes now require the room and pick revisions returned by a fresh read.
+
+A submitted player may leave every faction neutral. Host status distinguishes waiting, submitted, edited since submission, and organizer updated. Guest updates merge into untouched choices when the host saves. Competing edits are rejected rather than silently choosing a winner; recover a host draft as a separate game or explicitly choose which guest choices to keep. Guest drafts remain in the open tab only; they are not durable across refresh until submitted.
+
+Polling runs every three seconds while visible and refreshes when connectivity or visibility returns. Room locks and publication are enforced by the database, even if a guest tab is stale. A closed room still allows drafting choices locally but disables submission. Organizer setup changes invalidate old requests; removed players and replaced invitations stop working. Private player IDs survive renaming.
+
+Run `supabase/tests/room_lifecycle.sql` in the SQL editor after migration 005, alongside `private_links.sql`, `reliable_saves.sql`, and `game_permissions.sql`. The first three use isolated transactions that roll back their sample data. Never rerun an old migration over the newer API wrappers.

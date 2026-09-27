@@ -15,12 +15,12 @@ Read [APP_GUIDE.md](APP_GUIDE.md) for current behavior. Follow [AGENTS.md](../AG
 ## Current handoff
 
 - **Completed:** initial review and durable documentation.
-- **Implementation tasks completed:** SEC-01 (safe result links), OPS-01 (local daily database check), OPT-01 (strict bans, conflict explanations, consistent input snapshots, result summaries), SEC-02 (private organizer/player links and enforced database access), and REL-01 (durable drafts, truthful status, safe retries, version-checked saves, and explicit conflict recovery).
-- **Next action:** ROOM-01. Review the existing submission-status/stable-ID groundwork, then finish the collecting/locked/published lifecycle, guest-versus-host reconciliation, reconnect behavior, and setup-change handling. Preserve the new save-version checks and durable journal. No account setup is needed.
+- **Implementation tasks completed:** SEC-01 (safe result links), OPS-01 (local daily database check), OPT-01 (strict bans, conflict explanations, consistent input snapshots, result summaries), SEC-02 (private organizer/player links and enforced database access), REL-01 (durable drafts, truthful status, safe retries, version-checked saves, and explicit conflict recovery), and ROOM-01 (room stages and safe submission reconciliation).
+- **Next action:** OPT-02. Replace factorial assignment enumeration, preserve both objectives, document tie selection and measured limits, and retain worker cancellation. Then continue UX-01. Accounts remain deferred.
 - **Scope:** no required sign-in. Private organizer links control one workspace; personal invitations control one player; viewing links are read-only. Three existing sessions and two presets belong to two separate workspaces and have separate recovery links. Optional accounts remain FEATURE-04.
 - **External state:** SEC-01 `2c72a21`, OPS-01 `ce280b0`, OPT-01 `27bbdd6`, independent health access `ac3f649`, and SEC-02 `b5cbd3a` are pushed. Pages reports SEC-02 built. Both private-link migrations and legacy bindings are applied; public game-table access is revoked. The live original-game link and post-cutover API/permission checks passed. The local check completed three validated health reads at 22:35:44 Atlantic on 2026-09-26. Daily schedule remains 09:17 plus sign-in catch-up; this computer must be on and signed in.
 - **Recovery:** `.local/private-organizer-links.html` contains private buttons for the original games and presets. Keep this ignored local file; never commit it. Database-local pre-upgrade snapshot: `side_picker_private.before_private_links`. Old room invitations require fresh personal/viewing links; public result snapshots still work.
-- **Working state:** REL-01 is implemented, migration applied, deployed, and verified. Main implementation `2fcab52`; release/navigation correction `d4087bc` built successfully. Live home shows the new save status and all three original games. Database tests verify both presets and all original fields are preserved. ROOM-01 remains incomplete; use isolated browser fixtures for write-heavy checks.
+- **Working state:** ROOM-01 implementation and migration are complete; release verification is in progress. REL-01 remains deployed. Continue to OPT-02 after recording the Pages result.
 
 ## Decisions to settle during planning
 
@@ -33,7 +33,7 @@ Read [APP_GUIDE.md](APP_GUIDE.md) for current behavior. Follow [AGENTS.md](../AG
 | Guest permissions | Players join by link without an account; separate guest access from organizer access and scope submissions to the authorized player | Implemented stable player identity and per-player invitations, plus viewing links; no account required |
 | Bans | Hard exclusions; explain infeasible assignments rather than silently forcing a ban | Implemented in OPT-01 |
 | Unsaved edits | Small durable pending-edit store with visible sync status; database remains authoritative for acknowledged saves | Implemented durable workspace-scoped drafts; cloud saves remain authoritative, stale edits recover as separate copies |
-| Room stages | Collecting, locked, published, with explicit reopen | Proposed |
+| Room stages | Collecting, locked, published, with explicit reopen | Implemented 2026-09-26; optimizing closes picking first; cancellation leaves it closed until the organizer reopens |
 | Expanded features | Prioritize repeat sessions, easier setup, and clearer results after reliability work | Proposed; final selection pending |
 
 Routine implementation choices can be resolved from the user's instructions and current code. Record material choices here with date and rationale.
@@ -113,13 +113,13 @@ Routine implementation choices can be resolved from the user's instructions and 
 
 ### ROOM-01 — Accurate submissions and resilient synchronization
 
-- [ ] Track explicit submission status separately from whether neutral factions remain.
-- [ ] Distinguish unsubmitted, submitted, and edits since submission; clear misleading submitted feedback after editing.
-- [ ] Implement the agreed room lifecycle and enforce submission locking on the backend.
-- [ ] Use stable player IDs instead of names as submission identity; protect against stale responses when switching selected players.
-- [ ] Reconcile host edits and guest submissions consistently, including when the host was offline.
-- [ ] Refresh state after reconnect and show connected/reconnecting/offline states honestly.
-- [ ] Update guest faction lists, roster/name choices, and removed-player handling when the host changes setup.
+- [x] Track explicit submission status separately from whether neutral factions remain.
+- [x] Distinguish unsubmitted, submitted, and edits since submission; clear misleading submitted feedback after editing.
+- [x] Implement the agreed room lifecycle and enforce submission locking on the backend.
+- [x] Use stable player IDs instead of names as submission identity; protect against stale responses when switching selected players.
+- [x] Reconcile host edits and guest submissions consistently, including when the host was offline.
+- [x] Refresh state after reconnect and show connected/reconnecting/offline states honestly.
+- [x] Update guest faction lists, roster/name choices, and removed-player handling when the host changes setup.
 
 **Acceptance:** host and two guest sessions agree on submissions and results; neutral choices do not imply waiting; rename/remove/add operations do not misattribute picks; reconnect catches up; late requests cannot overwrite a different player's selection; published/locked rooms reject disallowed edits.
 
@@ -301,3 +301,11 @@ At the end of each implementation session, update Current handoff and append a d
 - The migration is applied. Reliable-save tests, updated private-link tests, direct-access checks, and pre/post migration data comparisons all passed in Supabase. HTTP checks confirmed both legacy workspaces (3 games and 2 presets), denied direct table access, denied an invalid organizer token, and the independent health sentinel.
 - All 24 focused Node checks pass, including the new delayed-workspace response regression and a strict UTF-8/line-ending guard to prevent another documentation build failure. JavaScript syntax and final diff checks passed. Documentation line endings are normalized.
 - REL-01 is complete. Recoveries intentionally save separate copies; do not replace this with automatic replay/merge without designing conflict handling. Local drafts require retaining browser storage; unsubmitted preset form text is not backed up until Save. Guest-versus-host choice reconciliation remains ROOM-01.
+
+### 2026-09-26 — ROOM-01 implemented
+
+- Added explicit collecting/locked/published room stages; the organizer can close/reopen picking, and optimization locks and synchronizes submissions before taking its snapshot. Clearing published results reopens picking. Cancelling or failing optimization leaves picking closed with a visible reopen control.
+- Migration `202609260005_room_lifecycle.sql` preserves a private snapshot and enforces stage/setup/pick revisions. Neutral submissions are valid. Untouched host choices receive guest updates; competing offline edits fail with a recoverable draft. A deliberate host override is shown to that guest and no longer claims the guest submitted those choices. Private capabilities and save receipts remain enforced.
+- Clean guest editors receive organizer changes; dirty editors preserve local choices and offer Use saved choices / Keep my edits before submission. Late replies are scoped to the current room. Removed/revoked players lose their editor. Reconnect/return-to-tab starts a fresh poll; status distinguishes offline from retrying.
+- Validation: 28 Node checks pass, including four new behavioral room checks. Supabase rolled-back migration trial passed room lifecycle, private links, reliable saves, and permission suites. Isolated host plus two guest tabs verified neutral submission, locking, identical published assignments, reopening, and explicit resolution of competing guest/host edits. Guest layout inspected at 360px.
+- Migration application and all four post-deployment SQL suites succeeded; original three games and two presets are unchanged. Pages verification follows the commit. Browser fixture is a mock; deployed database assertions are separate evidence. No original games were used for write-heavy tests.

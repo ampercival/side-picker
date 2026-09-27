@@ -185,9 +185,10 @@
                     </div>
 
                     <div id="room-banner" class="room-banner" style="display: none;">
-                        <span class="rb-text">🟢 Live room <strong id="room-banner-code"></strong> —
+                        <span class="rb-text">Live room <strong id="room-banner-code"></strong> —
                             <span id="room-banner-count"></span></span>
                         <button class="btn-sm" onclick="showRoomModal()">Manage</button>
+                        <button id="room-stage-button" class="btn-sm" onclick="toggleRoomStage()">Close picking</button>
                     </div>
 
                     <div id="players-container" class="accordion-container">
@@ -313,6 +314,10 @@
 
                         <div id="guest-submitted" class="guest-submitted" style="display: none;">
                             ✓ Submitted! You can edit and submit again until results are published.
+                        </div>
+                        <div id="guest-conflict-actions" class="actions" hidden>
+                            <button class="btn secondary" onclick="useLatestGuestChoices()">Use saved choices</button>
+                            <button class="btn secondary" onclick="keepGuestChoices()">Keep my edits</button>
                         </div>
                     </div>
                 </div>

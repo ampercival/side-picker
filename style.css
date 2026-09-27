@@ -1490,3 +1490,7 @@ input:checked+.slider:before {
         transform: rotate(360deg);
     }
 }
+/* Hidden conflict actions must stay hidden even though .actions uses flex. */
+[hidden] { display: none !important; }
+.room-banner { flex-wrap: wrap; }
+#guest-conflict-actions { flex-wrap: wrap; }

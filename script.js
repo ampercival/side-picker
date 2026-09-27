@@ -1015,6 +1015,7 @@ async function calculateOptimization() {
 
     _optimizing = true;
     try {
+        if (state.roomCode && !(await setRoomStage('locked'))) return;
         // Heads-up before a potentially long search.
         if (estimateSearchCost(state.players.length, state.factions.length) > OPT_WARN_THRESHOLD) {
             const proceed = await confirmAsync(
@@ -1051,6 +1052,7 @@ async function calculateOptimization() {
 
             // Publish results to the session so the room link shows them to players.
             state.results = lastResults;
+            state.roomStage = 'published';
             autoSave();
             if (activeSessionName) {
                 if (!(await flushSession())) showToast('info', 'Results not published yet', 'These results are local. Guests will see them after saving succeeds.');
@@ -1076,10 +1078,12 @@ function reopenForChanges() {
         'This clears the current results and reopens the picker so players can change their picks. You can optimize again afterward.',
         async () => {
             state.results = null;
+            state.roomStage = 'collecting';
             autoSave();
             if (activeSessionName) {
                 if (!(await flushSession())) showToast('info', 'Reopen not saved yet', 'Guests can change picks after saving succeeds.');
             }
+            updateRoomBanner();
             switchView('view-players');
         },
         'Clear & Reopen',
@@ -1259,6 +1263,7 @@ async function createNewSession(name) {
     state.sessionName = name;
     state.gameTitle = '';
     state.roomCode = '';
+    state.roomStage = null;
     state.results = null;
     activeSessionName = name;
 
@@ -1381,6 +1386,7 @@ async function resumeSession(name) {
     state.sessionName = data.sessionName || name;
     state.gameTitle = data.gameTitle || '';
     state.roomCode = data.roomCode || '';
+    state.roomStage = null;
     state.results = data.results || null;
     activeSessionName = name;
 
