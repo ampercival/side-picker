@@ -49,6 +49,7 @@ If both URL forms are present, room mode takes precedence at startup.
 | `access.js` | Secure token generation, fragment parsing, safe link construction |
 | `save-journal.js` | Durable draft queue, immutable retry requests, save states |
 | `persistence.js` | Save-status and recovery UI, connection retries |
+| `repeat-games.js` | Fresh repeat-session setup and bounded bulk-name entry |
 | `accessibility.js` | Dialog focus/keyboard behavior, announcements, and browser view navigation |
 | `config.js` | Public Supabase project URL and publishable key |
 | `supabase/schema.sql` | Historical fresh-install baseline; refuses rerun after private links |
@@ -58,7 +59,7 @@ If both URL forms are present, room mode takes precedence at startup.
 | `scripts/keep-supabase-active.ps1` | Daily local read-only database check, bounded retries, logging and status |
 | `scripts/register-keepalive-task.ps1` | Registers the daily Windows task and sign-in catch-up |
 
-The scripts are classic browser scripts sharing globals, not ES modules. Loading order is Supabase's CDN client, `config.js`, `access.js`, `save-journal.js`, `results.js`, `optimizer.js`, `script.js`, `rooms.js`, then `persistence.js` and `accessibility.js`. Much of initialization runs at `DOMContentLoaded`, after the application scripts are available.
+The scripts are classic browser scripts sharing globals, not ES modules. Loading order is Supabase's CDN client, `config.js`, `access.js`, `save-journal.js`, `results.js`, `optimizer.js`, `repeat-games.js`, `script.js`, `rooms.js`, then `persistence.js` and `accessibility.js`. Much of initialization runs at `DOMContentLoaded`, after the application scripts are available.
 
 There is no application server, framework, bundler, or package manifest. Focused Node tests now live in `tests/`. Supabase JS is loaded from a floating major-version CDN URL (`@supabase/supabase-js@2`). Google Fonts supplies Outfit.
 
@@ -162,7 +163,7 @@ node --check config.js
 node --check results.js
 node --check optimizer.js
 node --check access.js
-node --test --test-isolation=none tests/results.test.cjs tests/optimizer.test.cjs tests/access.test.cjs tests/saves.test.cjs tests/rooms.test.cjs tests/text-encoding.test.cjs
+node --test --test-isolation=none tests/results.test.cjs tests/optimizer.test.cjs tests/access.test.cjs tests/saves.test.cjs tests/rooms.test.cjs tests/repeat-games.test.cjs tests/text-encoding.test.cjs
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/keepalive.Tests.ps1
 ```
 
@@ -195,3 +196,9 @@ Ranking buttons are 44px and provide the complete no-drag workflow. Touch draggi
 Views reset scrolling and focus their heading. Organizer navigation records view/session identity in browser history state, without putting private links in URLs; Back/Forward restore screens and preserve the existing save rules. Modals have accessible names, trap focus, make the background inert, support Escape, and restore focus to their opener. Ranking actions preserve focus and announce their result. Reduced-motion preferences shorten animation. Room polling avoids rebuilding unchanged invitation buttons or repeatedly announcing unchanged connection text.
 
 Validated with isolated 360px/390px iframe previews and a desktop browser: readable Add Player, keyboard ranking/submission, Help focus trap/Escape restoration, browser Back between setup and picks, room dialog, long result names, and reconnect catching up to published results. Both phone previews had no horizontal page overflow. Physical-device touch gestures were not emulated by the browser-control tools; the grip-only gesture path remains a useful real-phone spot check.
+
+## Repeat game nights and bulk entry
+
+Every session card offers **Repeat game**. The name can be changed before creation. It copies the game title, factions, and player display names into an independent saved session; choices, bans, submission metadata, locks, results, room code, and old player IDs are cleared. The new room gets its own invitations. The original session is untouched.
+
+**Paste faction list** and **Paste player list** accept one name per line or comma-separated names. A preview reports additions and duplicates. Names are trimmed; matching is case-insensitive with Unicode normalization. Existing entries are preserved; exceeding 100 entries or 500 characters per name rejects the entire pasted list. This is simple name entry, not a quoted CSV importer. Single-player entry still permits intentionally distinct people with the same display name; each has a unique ID.

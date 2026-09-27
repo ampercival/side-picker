@@ -268,6 +268,7 @@ function syncSessionMetaInputs() {
 function addFaction() {
     const input = get('faction-input');
     const name = input.value.trim();
+    if (name.length > 500 || state.factions.length >= 100) return showToast('error', 'Faction limit', 'Use up to 100 factions, with names at most 500 characters.');
 
     if (name && !state.factions.includes(name)) {
         state.factions.push(name);
@@ -324,6 +325,7 @@ function renderFactions() {
 function addPlayer() {
     const input = get('player-input');
     const name = input.value.trim();
+    if (name.length > 500 || state.players.length >= 100) return showToast('error', 'Player limit', 'Use up to 100 players, with names at most 500 characters.');
 
     if (name) {
         const id = 'player-' + crypto.randomUUID();
@@ -1218,8 +1220,9 @@ function getSessions() {
 
 // Create a brand-new, empty session in the database and open it. Everything
 // after this auto-saves, so there's no separate "Save" step.
-async function createNewSession(name) {
+async function createNewSession(name, repeatSource = null) {
     if (!name) return showToast('error', 'Missing Name', 'Please enter a session name.');
+    if (name.length > 500) return showToast('error', 'Name too long', 'Use at most 500 characters.');
     if (!isSupabaseConfigured()) return showToast('error', 'Not Configured', 'Sessions need Supabase set up.');
     if (!hasWorkspaceKey()) { openWorkspaceModal(); return; }
     if (sessionsCache[name]) return showToast('error', 'Name Taken', `A session named "${name}" already exists.`);
@@ -1233,6 +1236,7 @@ async function createNewSession(name) {
     state.roomCode = '';
     state.roomStage = null;
     state.results = null;
+    if (repeatSource) Object.assign(state, repeatGame(repeatSource, name));
     activeSessionName = name;
 
     const obj = currentSessionObject();
@@ -1329,6 +1333,7 @@ function renderHomeSessions() {
         if (name === activeSessionName) card.classList.add('active-session');
 
         clone.querySelector('.sc-resume').onclick = () => resumeSession(name);
+        clone.querySelector('.sc-repeat').onclick = () => openRepeatSession(name);
         clone.querySelector('.sc-delete').onclick = (e) => {
             e.stopPropagation();
             deleteSession(name, () => renderHomeSessions());
@@ -1404,15 +1409,21 @@ function showHostResults(payload) {
 function startNewSession() {
     if (!isSupabaseConfigured()) return showToast('error', 'Not Configured', 'Sessions need Supabase set up.');
     if (!hasWorkspaceKey()) { openWorkspaceModal(); return; }
+    repeatSessionSource = null;
+    get('new-session-title').textContent = 'New Session';
+    get('new-session-help').textContent = 'Name this game night. Everything you set up afterward saves automatically.';
     get('new-session-input').value = '';
     get('modal-overlay').classList.add('active');
     get('new-session-modal').classList.add('active');
     get('new-session-input').focus();
 }
 
-function confirmNewSession() {
+async function confirmNewSession() {
     const name = get('new-session-input').value.trim();
-    if (name) createNewSession(name);
+    if (!name || creatingSession) return;
+    creatingSession = true;
+    try { await createNewSession(name, repeatSessionSource); }
+    finally { creatingSession = false; }
 }
 
 // --- Preset Management ---

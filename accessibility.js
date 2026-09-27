@@ -70,7 +70,8 @@ async function restoreHistoryView(destination) {
             if(destination.session!==activeSessionName)await resumeSession(destination.session);
             if(destination.session===activeSessionName){
                 const view=destination.sidePickerView;
-                if(view==='view-results' && state.results)showHostResults(state.results);
+                // Published picks stay closed until the explicit reopen action.
+                if(state.results)showHostResults(state.results);
                 else switchView(view==='view-factions'?'view-factions':'view-players');
             }
         }

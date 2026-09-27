@@ -135,6 +135,7 @@
                         <!-- Factions go here -->
                         <div class="empty-state">No factions added yet</div>
                     </div>
+                    <button class="btn-sm" onclick="openBulkEntry('factions')">Paste faction list</button>
 
                     <div class="actions right">
                         <button class="btn secondary" onclick="nextStep('view-players')">Next: Add Players</button>
@@ -156,6 +157,7 @@
 
                     <div class="toolbar"
                         style="margin-bottom: 1rem; display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap;">
+                        <button class="btn secondary" onclick="openBulkEntry('players')">Paste player list</button>
                         <button class="btn secondary" onclick="openLiveRoom()"
                             title="Open a live room players join to submit their picks">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
@@ -442,8 +444,8 @@
     </div>
 
     <div id="new-session-modal" class="modal">
-        <h3>New Session</h3>
-        <p style="color: var(--text-muted); line-height: 1.5; font-size: 0.9rem; margin-bottom: 1rem;">
+        <h3 id="new-session-title">New Session</h3>
+        <p id="new-session-help" style="color: var(--text-muted); line-height: 1.5; font-size: 0.9rem; margin-bottom: 1rem;">
             Name this game night. Everything you set up afterward saves automatically.
         </p>
         <input type="text" id="new-session-input" placeholder="e.g. Friday Game Night"
@@ -454,6 +456,17 @@
         </div>
     </div>
 
+    <div id="bulk-modal" class="modal">
+        <h3 id="bulk-title">Add several names</h3>
+        <p>One name per line, or separated by commas. Extra spaces and duplicate names are skipped. Up to 100 total.</p>
+        <label for="bulk-input">Names to add</label>
+        <textarea id="bulk-input" rows="7" maxlength="60000" oninput="previewBulkEntry()"></textarea>
+        <p id="bulk-preview" role="status"></p>
+        <div class="actions right">
+            <button class="btn secondary" onclick="closeModals()">Cancel</button>
+            <button id="bulk-add" class="btn primary" onclick="applyBulkEntry()">Add names</button>
+        </div>
+    </div>
     <div id="confirm-modal" class="modal">
         <h3 id="confirm-title">Confirm Action</h3>
         <p id="confirm-message" style="margin-bottom: 2rem; line-height: 1.5; color: var(--text-muted);">Are you sure
@@ -559,6 +572,7 @@
             <div class="sc-meta"></div>
             <div class="sc-date"></div>
             <button class="btn primary sc-resume">Resume</button>
+            <button class="btn secondary sc-repeat">Repeat game</button>
         </div>
     </template>
 
@@ -568,6 +582,7 @@
     <script src="save-journal.js"></script>
     <script src="results.js"></script>
     <script src="optimizer.js"></script>
+    <script src="repeat-games.js"></script>
     <script src="script.js"></script>
     <script src="rooms.js"></script>
     <script src="persistence.js"></script>

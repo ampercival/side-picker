@@ -1525,6 +1525,8 @@ input[type="text"], input[type="password"], textarea, select { min-width: 0; max
 .toast-content, .sc-name, .result-card, .tag .name { min-width: 0; overflow-wrap: anywhere; }
 :is(button,a,input,textarea,select,[contenteditable],[tabindex]):focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+#bulk-input { width: 100%; margin-block: .75rem; padding: 12px; background: var(--input-bg); color: var(--text-main); border: 1px solid var(--border); border-radius: 8px; font: inherit; resize: vertical; }
+.sc-repeat { width: 100%; margin-top: 8px; }
 @media (max-width: 600px) {
     .card { padding: 1.25rem; }
     .modal { padding: 1.25rem; }

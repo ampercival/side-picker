@@ -16,11 +16,11 @@ Read [APP_GUIDE.md](APP_GUIDE.md) for current behavior. Follow [AGENTS.md](../AG
 
 - **Completed:** initial review and durable documentation.
 - **Implementation tasks completed:** SEC-01 (safe result links), OPS-01 (local daily database check), OPT-01 (strict bans, conflict explanations, consistent input snapshots, result summaries), SEC-02 (private organizer/player links and enforced database access), REL-01 (durable drafts, truthful status, safe retries, version-checked saves, and explicit conflict recovery), and ROOM-01 (room stages and safe submission reconciliation).
-- **Next action:** FEATURE-01 core repeat sessions: duplicate with fresh identities and cleared choices/results, and bulk faction/player entry. Reusable player groups are optional and not selected. Then finish resolved sharing/engineering improvements; accounts and rotation/history remain deferred.
+- **Next action:** FEATURE-02 sharing and goal comparison, then ENG-01 repeatable checks/release documentation. Optional player groups, accounts, and rotation/history remain deferred.
 - **Scope:** no required sign-in. Private organizer links control one workspace; personal invitations control one player; viewing links are read-only. Three existing sessions and two presets belong to two separate workspaces and have separate recovery links. Optional accounts remain FEATURE-04.
 - **External state:** SEC-01 `2c72a21`, OPS-01 `ce280b0`, OPT-01 `27bbdd6`, independent health access `ac3f649`, and SEC-02 `b5cbd3a` are pushed. Pages reports SEC-02 built. Both private-link migrations and legacy bindings are applied; public game-table access is revoked. The live original-game link and post-cutover API/permission checks passed. The local check completed three validated health reads at 22:35:44 Atlantic on 2026-09-26. Daily schedule remains 09:17 plus sign-in catch-up; this computer must be on and signed in.
 - **Recovery:** `.local/private-organizer-links.html` contains private buttons for the original games and presets. Keep this ignored local file; never commit it. Database-local pre-upgrade snapshot: `side_picker_private.before_private_links`. Old room invitations require fresh personal/viewing links; public result snapshots still work.
-- **Working state:** ROOM-01 `6b7bc0d` and OPT-02 `a458d18` are deployed (Pages runs `36288467602` and `36288680698` succeeded). All three original games remain visible on the live home. UX-01 is implemented and validated; Pages verification follows its commit.
+- **Working state:** ROOM-01 `6b7bc0d`, OPT-02 `a458d18`, and UX-01 `482e0e4` are deployed (latest verified Pages run `36289083762`). FEATURE-01 core duplication/bulk entry is implemented and validated; Pages verification follows its commit.
 
 ## Decisions to settle during planning
 
@@ -146,9 +146,9 @@ Routine implementation choices can be resolved from the user's instructions and 
 
 ### FEATURE-01 — Faster repeat sessions
 
-- [ ] Duplicate a session with the same game/players while clearing picks, results, room code, and submission identities.
-- [ ] Add bulk player/faction entry with trimming and duplicate handling.
-- [ ] Add reusable player groups if selected for scope.
+- [x] Duplicate a session with the same game/players while clearing picks, results, room code, and submission identities.
+- [x] Add bulk player/faction entry with trimming and duplicate handling.
+- [ ] Add reusable player groups if selected for scope. **Deferred: not selected; repeat-game copying supplies the current roster-reuse workflow.**
 
 **Acceptance:** a repeated night is independent of the original, and old guest links cannot submit to the new session.
 
@@ -325,3 +325,11 @@ At the end of each implementation session, update Current handoff and append a d
 - Fixed unchanged room polling rebuilding invitation controls every three seconds, which otherwise disrupted focus. Unchanged connection text is not re-announced.
 - Isolated browser checks: 360px host Add Player/room dialog, 390px guest keyboard ranking/submission and results, desktop long-name rendering, Help dialog Tab/Escape/return focus, and Back between setup/picks. No horizontal overflow in either phone preview. Disconnected room reads showed retrying; reconnect caught up to the renamed player and published result. Physical touch gestures remain a device spot-check limitation.
 - OPT-02 Pages run `36288680698` succeeded. Existing production games were read only.
+
+### 2026-09-26 — FEATURE-01 core repeat setup implemented
+
+- Session cards now offer Repeat game with an editable suggested name. Only game title, factions, and player names carry forward; all player IDs are fresh and choices, bans, submission metadata, locks, room code, and results are cleared. No original data is modified.
+- Added bulk player/faction dialogs with trimming, Unicode/case-insensitive duplicate handling, live count preview, and all-or-nothing size validation. Single-entry player/faction creation also honors the 100-entry/500-character limits. Reusable player groups remain unselected and deferred; repeating a game already reuses its roster.
+- Browser-history navigation now keeps published games on their results until explicitly reopened, preventing editing closed picks through Back.
+- Validation: two helper tests cover fresh identities, source immutability, clearing prior state, duplicate handling, and overflow rejection. Isolated browser duplicated a two-player game, added three unique factions and two unique players, confirmed both originals and copies on home, and inspected the bulk dialog at 360px.
+- UX-01 Pages run `36289083762` succeeded.
