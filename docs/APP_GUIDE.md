@@ -19,7 +19,7 @@ Side Picker assigns distinct board-game factions to players using their ranked p
 3. Enter session/game details and add factions, or choose a saved game preset.
 4. Add players and arrange each player's factions into Preferences, Available, and Banned.
 5. Optionally open a live room and send each player their personal invitation. A separate viewing link is read-only.
-6. Close picking when ready, or optimize to close it automatically. Choose Highest Group Score or Fairest for Everyone; the app synchronizes the final submissions before solving. Cancellation leaves picking closed until you reopen it.
+6. Close picking when ready, or optimize to close it automatically. Compare Highest Group Score and Fairest for Everyone, then explicitly publish one; the app synchronizes final submissions before solving. Cancellation leaves picking closed until you reopen it.
 7. View results, share a results snapshot, or clear results and reopen picking.
 
 Game presets are named faction lists. A session contains the game-night setup, players, room code, and optional results. Editing the displayed session name does not change its original database identity.
@@ -62,7 +62,7 @@ If both URL forms are present, room mode takes precedence at startup.
 
 The scripts are classic browser scripts sharing globals, not ES modules. Loading order is Supabase's CDN client, `config.js`, `access.js`, `save-journal.js`, `results.js`, `optimizer.js`, `repeat-games.js`, the pinned QR encoder, `sharing.js`, `script.js`, `rooms.js`, then `persistence.js` and `accessibility.js`. Much of initialization runs at `DOMContentLoaded`, after the application scripts are available.
 
-There is no application server, framework, bundler, or package manifest. Focused Node tests now live in `tests/`. Supabase JS is loaded from a floating major-version CDN URL (`@supabase/supabase-js@2`). Google Fonts supplies Outfit.
+There is no application server, framework, bundler, or package manifest. Focused Node tests now live in `tests/`. Supabase JS is pinned to version 2.117.2 with integrity verification. Google Fonts supplies Outfit.
 
 ## State and persistence
 
@@ -143,7 +143,7 @@ Results use the payload `{v, t, gm, g, pct, r}`: version, session title, game, g
 
 - Repository: [ampercival/side-picker](https://github.com/ampercival/side-picker).
 - Live site: [Side Picker](https://ampercival.github.io/side-picker/).
-- On 2026-09-26, GitHub reported a public repository with Pages publishing from the root of `main`.
+- Pages publishes application-only assets from `main` through a workflow gated by automated checks; see [RELEASE.md](RELEASE.md).
 - After SEC-02 cutover on 2026-09-26, direct reads of all four game tables return permission denied. Scoped organizer reads and the independent health sentinel passed. See the plan for detailed deployment evidence.
 - A local Windows task now runs three validated database reads daily at 09:17 Atlantic local time, with sign-in catch-up. A real timer-triggered run succeeded on 2026-09-26. See [the operational guide](SUPABASE_KEEPALIVE.md) for manual commands, log paths, limitations, and registration.
 
@@ -213,3 +213,7 @@ The room dialog has a QR disclosure for its viewing invitation. Copying a person
 Share Results provides a read-only snapshot link and a plain-text summary containing the session/game, selected goal, percentage, and each assignment with its explanation and points. Clipboard failure selects the summary for manual copying.
 
 Optional independent QR verification: obtain `dist/jsQR.js` from the npm `jsqr@1.4.0` package, keep it outside tracked files (for example `.local/qr-decoder.cjs`), and run `node tests/qr-roundtrip.cjs .local/qr-decoder.cjs`. It decodes the actual canvas pixel output for viewing/personal/encoded-identity URLs. This decoder is test-only and is not loaded by the app.
+
+## Repeatable release entry point
+
+Run `node scripts/check.cjs` with Node 24 and PowerShell for all offline syntax, regression, and keepalive checks. [RELEASE.md](RELEASE.md) records the repeatable browser acceptance matrix, SQL checks, migration/backups, pinned dependency updates, and gated Pages release procedure. Browser and database checks remain explicit separate steps.

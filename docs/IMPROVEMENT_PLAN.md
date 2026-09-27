@@ -16,11 +16,11 @@ Read [APP_GUIDE.md](APP_GUIDE.md) for current behavior. Follow [AGENTS.md](../AG
 
 - **Completed:** initial review and durable documentation.
 - **Implementation tasks completed:** SEC-01 (safe result links), OPS-01 (local daily database check), OPT-01 (strict bans, conflict explanations, consistent input snapshots, result summaries), SEC-02 (private organizer/player links and enforced database access), REL-01 (durable drafts, truthful status, safe retries, version-checked saves, and explicit conflict recovery), and ROOM-01 (room stages and safe submission reconciliation).
-- **Next action:** ENG-01 repeatable checks and release documentation. Optional player groups, accounts, and rotation/history remain deferred.
+- **Next action:** verify the ENG-01 checks-gated Pages deployment and live read-only smoke test; then the selected core scope is complete. Optional player groups, accounts, and rotation/history remain deferred.
 - **Scope:** no required sign-in. Private organizer links control one workspace; personal invitations control one player; viewing links are read-only. Three existing sessions and two presets belong to two separate workspaces and have separate recovery links. Optional accounts remain FEATURE-04.
 - **External state:** SEC-01 `2c72a21`, OPS-01 `ce280b0`, OPT-01 `27bbdd6`, independent health access `ac3f649`, and SEC-02 `b5cbd3a` are pushed. Pages reports SEC-02 built. Both private-link migrations and legacy bindings are applied; public game-table access is revoked. The live original-game link and post-cutover API/permission checks passed. The local check completed three validated health reads at 22:35:44 Atlantic on 2026-09-26. Daily schedule remains 09:17 plus sign-in catch-up; this computer must be on and signed in.
 - **Recovery:** `.local/private-organizer-links.html` contains private buttons for the original games and presets. Keep this ignored local file; never commit it. Database-local pre-upgrade snapshot: `side_picker_private.before_private_links`. Old room invitations require fresh personal/viewing links; public result snapshots still work.
-- **Working state:** ROOM-01 `6b7bc0d`, OPT-02 `a458d18`, and UX-01 `482e0e4` are deployed (latest verified Pages run `36289083762`). FEATURE-01 `87d3b20` is deployed (Pages run `36289319157`). FEATURE-02 is implemented and validated; deployment follows its commit.
+- **Working state:** ROOM-01 `6b7bc0d`, OPT-02 `a458d18`, and UX-01 `482e0e4` are deployed (latest verified Pages run `36289083762`). FEATURE-01 `87d3b20` is deployed (Pages run `36289319157`). FEATURE-02 `a952f95` is deployed (Pages run `36289726977`). ENG-01 checks and release workflow are prepared; activation/verification follow this commit.
 
 ## Decisions to settle during planning
 
@@ -183,11 +183,11 @@ Routine implementation choices can be resolved from the user's instructions and 
 
 ### ENG-01 — Focused checks and maintainability
 
-- [ ] Add a small, repeatable test entry point for optimizer invariants, payload validation, save races, and permission checks as those areas change.
-- [ ] Add isolated host/guest browser checks for critical workflows and narrow layouts.
-- [ ] Separate solver, storage, and view responsibilities where needed to make changes testable; a framework rewrite is not required.
-- [ ] Pin external runtime dependencies or document the chosen update strategy.
-- [ ] Document setup, migrations, release verification, and backup/recovery. Add automated checks before deployment where appropriate.
+- [x] Add a small, repeatable test entry point for optimizer invariants, payload validation, save races, and permission checks as those areas change.
+- [x] Add isolated host/guest browser checks for critical workflows and narrow layouts.
+- [x] Separate solver, storage, and view responsibilities where needed to make changes testable; a framework rewrite is not required.
+- [x] Pin external runtime dependencies or document the chosen update strategy.
+- [x] Document setup, migrations, release verification, and backup/recovery. Add automated checks before deployment where appropriate.
 
 **Acceptance:** another session can reproduce the relevant checks from documented commands; tests exercise behaviour rather than copy implementation; live verification is recorded separately from mocked tests.
 
@@ -341,3 +341,10 @@ At the end of each implementation session, update Current handoff and append a d
 - Added a plain-text copyable summary with game, chosen goal, preference score, assignments, and explanations.
 - Validation: 37 Node tests pass. Independent jsQR decoder round-tripped viewer, personal, and URL-encoded legacy-player invitations. Isolated desktop/360px browser comparison left the guest on closed picks until explicit publication, then delivered the selected fairness result. Desktop clipboard content matched the displayed summary; phone summary rendering and copy feedback checked (the browser tool clipboard does not expose the iframe clipboard). No production writes.
 - FEATURE-01 Pages run `36289319157` succeeded. Next: ENG-01.
+
+### 2026-09-26 — ENG-01 repeatable release checks prepared
+
+- Added one offline command for syntax, 38 Node regressions, and injected-response PowerShell keepalive checks. All pass locally. Solver/storage/access/result logic is separated into testable files without a framework rewrite.
+- Added an explicit isolated host/guest/phone acceptance matrix and release/migration/backup guide. Manual browser evidence and deployed SQL assertions remain separate from unattended checks. Physical touch and off-project disaster backup remain stated limitations.
+- Pinned the currently resolved Supabase client 2.117.2 to its exact UMD URL and integrity digest; QR bytes remain pinned. Added an application-only asset staging check excluding private local files, SQL, docs, and fixtures.
+- Prepared a pinned-action Pages workflow whose deployment depends on passing Windows checks; PRs only test. Next: activate workflow publishing, commit/push, observe CI/deployment, then verify live original sessions and changed controls. FEATURE-02 Pages run `36289726977` succeeded.

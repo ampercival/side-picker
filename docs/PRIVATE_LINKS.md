@@ -26,7 +26,7 @@ Each session has a stable UUID, alongside its existing stable `(owner_key, name)
 
 The two public RPCs use a fixed empty search path, fully qualified table/function names, and explicit capability checks. Helper functions, hashed organizer credentials, room seeds, submissions, and the migration backup are in `side_picker_private`, with no public schema/table/function access. After activation, direct access to the four legacy game tables is revoked and their permissive policies are removed; RLS remains enabled.
 
-The browser polls scoped RPCs every three seconds while visible. This replaces direct table Realtime subscriptions, which cannot enforce this custom capability model. Polls do not overlap, carry session-generation guards, retry on errors, and skip identical guest responses. Host polling merges new submissions by stable player ID and submission timestamp. REL-01 now adds durable local drafts, version-checked organizer saves, and explicit recovery copies; see [SAVING.md](SAVING.md). Guest-versus-host choice reconciliation remains ROOM-01 work.
+The browser polls scoped RPCs every three seconds while visible. This replaces direct table Realtime subscriptions, which cannot enforce this custom capability model. Polls do not overlap, carry session-generation guards, retry on errors, and skip identical guest responses. Host polling merges new submissions by stable player ID and submission timestamp. REL-01 now adds durable local drafts, version-checked organizer saves, and explicit recovery copies; see [SAVING.md](SAVING.md). Guest-versus-host reconciliation and room stages are implemented by migration 005; see APP_GUIDE.md.
 
 ## Deployment and preservation
 
