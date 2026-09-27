@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="referrer" content="no-referrer">
-    <title>Side Picker - Faction Allocator</title>
+    <title>Side Picker — Assign board game factions</title>
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,7 +16,7 @@
     <div class="app-container">
         <header>
             <h1>Side Picker</h1>
-            <p>Optimize your game night happiness</p>
+            <p>Assign factions fairly from everyone's preferences</p>
             <div class="header-actions">
                 <button class="btn-sm" onclick="goHome()" title="Your sessions" aria-label="Your sessions">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
@@ -43,7 +43,7 @@
                     </svg>
                     Help
                 </button>
-                <button class="btn-sm" onclick="toggleTheme()" id="theme-toggle" aria-label="Toggle Dark Mode">
+                <button class="btn-sm" onclick="toggleTheme()" id="theme-toggle" aria-label="Toggle dark mode">
                     <span class="icon-sun" style="display: none;">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
                             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -78,14 +78,14 @@
             <!-- View 0: Sessions Home -->
             <section id="view-home" class="view active">
                 <div class="card">
-                    <h2>Your Sessions</h2>
-                    <p class="subtitle">Resume a game night to collect picks and optimize, or start a new one.</p>
+                    <h2>Your sessions</h2>
+                    <p class="subtitle">Open a session to collect picks and assign factions, or start a new one.</p>
 
                     <div id="workspace-indicator" class="workspace-indicator"></div>
 
                     <div class="actions" style="margin-bottom: 1.5rem;">
-                        <button class="btn primary" onclick="startNewSession()">+ New Session</button>
-                        <button class="btn secondary" onclick="openPresetModal()">Manage games</button>
+                        <button class="btn primary" onclick="startNewSession()">+ New session</button>
+                        <button class="btn secondary" onclick="openPresetModal()">Saved games</button>
                     </div>
 
                     <div id="home-session-list" class="session-cards">
@@ -93,7 +93,7 @@
                     </div>
                 </div>
                 <div id="home-invitations" class="card" hidden>
-                    <h2>Games you're playing in</h2>
+                    <h2>Sessions you're playing in</h2>
                     <p class="subtitle">Invitations saved to your account. Open one to make or change your picks.</p>
                     <div id="home-invitation-list" class="invitation-list"></div>
                 </div>
@@ -102,17 +102,15 @@
             <!-- View 1: Faction Setup -->
             <section id="view-factions" class="view">
                 <div class="card">
-                    <h2>Step 1: Game &amp; Factions</h2>
-                    <p class="subtitle">Name the night, pick the game, and choose its factions. Players see the name and
-                        game when they join.</p>
+                    <h2>Step 1: Game and factions</h2>
+                    <p class="subtitle">Name the session, choose the game, and list its factions. Players see the session name and game when they join.</p>
 
                     <div class="session-meta"
                         style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 1.5rem;">
                         <div style="flex: 1; min-width: 180px;">
                             <label for="session-name-input"
-                                style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.9rem;">Session
-                                Name</label>
-                            <input type="text" id="session-name-input" placeholder="e.g. Friday Game Night"
+                                style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.9rem;">Session name</label>
+                            <input type="text" id="session-name-input" placeholder="e.g. Saturday at Alex's"
                                 oninput="onSessionMetaInput()">
                         </div>
                         <div style="flex: 1; min-width: 180px;">
@@ -125,18 +123,17 @@
 
                     <div class="preset-selector" style="margin-bottom: 1.5rem;">
                         <label for="game-select"
-                            style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.9rem;">Select
-                            Game</label>
+                            style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.9rem;">Start from a saved game</label>
                         <div style="display: flex; gap: 8px;">
                             <select id="game-select" class="game-select" onchange="loadPreset()">
-                                <option value="custom">Custom (no game)</option>
+                                <option value="custom">None (add factions below)</option>
                             </select>
-                            <button class="btn-sm" onclick="openPresetModal()" title="Add, edit, or delete games"
+                            <button class="btn-sm" onclick="openPresetModal()" title="Add, edit, or delete saved games"
                                 style="white-space: nowrap;">Manage</button>
                         </div>
                         <p id="game-select-hint"
                             style="margin-top: 0.5rem; color: var(--text-muted); font-size: 0.8rem; opacity: 0.85;">
-                            Add or edit games with Manage.</p>
+                            Add or edit saved games with Manage.</p>
                     </div>
 
                     <div class="input-group">
@@ -147,12 +144,12 @@
 
                     <div id="faction-list" class="tag-container">
                         <!-- Factions go here -->
-                        <div class="empty-state">No factions added yet</div>
+                        <div class="empty-state">No factions yet</div>
                     </div>
                     <button class="btn-sm" onclick="openBulkEntry('factions')">Paste faction list</button>
 
                     <div class="actions right">
-                        <button class="btn secondary" onclick="nextStep('view-players')">Next: Add Players</button>
+                        <button class="btn secondary" onclick="nextStep('view-players')">Next: add players</button>
                     </div>
                 </div>
             </section>
@@ -160,20 +157,20 @@
             <!-- View 2: Player Setup -->
             <section id="view-players" class="view">
                 <div class="card">
-                    <h2>Step 2: Add Players</h2>
+                    <h2>Step 2: Add players</h2>
                     <p class="subtitle">Add everyone, then rank each player's factions — drag them or use the buttons.</p>
 
                     <div class="input-group">
-                        <input type="text" id="player-input" placeholder="Player Name"
+                        <input type="text" id="player-input" placeholder="Player name"
                             onkeypress="handleEnter(event, addPlayer)">
-                        <button class="btn primary" onclick="addPlayer()">Add Player</button>
+                        <button class="btn primary" onclick="addPlayer()">Add player</button>
                     </div>
 
                     <div class="toolbar"
                         style="margin-bottom: 1rem; display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap;">
                         <button class="btn secondary" onclick="openBulkEntry('players')">Paste player list</button>
                         <button class="btn secondary" onclick="openLiveRoom()"
-                            title="Open a live room players join to submit their picks">
+                            title="Open a live room where players submit their own picks">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
                                 fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                                 stroke-linejoin="round" style="margin-right: 6px;">
@@ -182,7 +179,7 @@
                                 <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
                                 <line x1="12" y1="20" x2="12.01" y2="20"></line>
                             </svg>
-                            Live Room
+                            Live room
                         </button>
                         <button class="btn secondary" onclick="randomizeAllPreferences()"
                             title="Randomize choices for all players">
@@ -196,7 +193,7 @@
                                 <path d="M16 16h.01"></path>
                                 <path d="M12 12h.01"></path>
                             </svg>
-                            Randomize Choices
+                            Randomize choices
                         </button>
                     </div>
 
@@ -209,7 +206,7 @@
 
                     <div id="players-container" class="accordion-container">
                         <!-- Player cards go here -->
-                        <div class="empty-state">No players added yet</div>
+                        <div class="empty-state">No players yet</div>
                     </div>
 
                     <div class="options-panel">
@@ -219,16 +216,14 @@
 
                                 <div>
                                     <strong>Highest Group Score</strong>
-                                    <p>Adds up everyone's happiness and picks the biggest total. Best on average — but
-                                        one player may get stuck with a low choice if it lifts the group.</p>
+                                    <p>Gets the highest total score across all players. One player may get a low pick if that raises the total.</p>
                                 </div>
                             </div>
                             <div class="opt-choice">
 
                                 <div>
                                     <strong>Fairest for Everyone</strong>
-                                    <p>Makes the least-happy player as happy as possible first, then breaks ties by total
-                                        score. No one is left with a bad pick if it can be avoided.</p>
+                                    <p>Gives the lowest-scoring player the best pick possible first, then the highest total. Use it when no one should be stuck with a bad pick.</p>
                                 </div>
                             </div>
                         </div>
@@ -236,7 +231,7 @@
 
                     <div class="actions space-between">
                         <button class="btn text" onclick="prevStep('view-factions')">Back</button>
-                        <button class="btn accent" onclick="calculateOptimization()">Compare & Assign</button>
+                        <button class="btn accent" onclick="calculateOptimization()">Compare and assign</button>
                     </div>
                 </div>
             </section>
@@ -244,8 +239,8 @@
             <!-- View 3: Results -->
             <section id="view-results" class="view">
                 <div class="card">
-                    <h2>Optimal Assignment</h2>
-                    <p class="subtitle" id="results-subtitle">The happiness algorithm has spoken.</p>
+                    <h2>Assignments</h2>
+                    <p class="subtitle" id="results-subtitle">Final assignments</p>
 
                     <div id="results-container" class="results-grid">
                         <!-- Results go here -->
@@ -253,27 +248,26 @@
 
                     <div class="stats-panel">
                         <div class="stat-item">
-                            <span class="label">Preference Score</span>
+                            <span class="label">Preference score</span>
                             <span class="value" id="total-score">0</span>
                         </div>
                     </div>
 
                     <p id="results-summary" class="subtitle"></p>
-                    <p class="subtitle">Points earned as a share of everyone receiving a top preference. Neutral assignments earn zero points.</p>
+                    <p class="subtitle">Preference score is the total points as a percentage of the best possible result, where everyone gets their first choice. Neutral assignments score 0.</p>
 
                     <div class="actions center">
-                        <button class="btn primary" onclick="openResultsShareModal()">Share Results Link</button>
+                        <button class="btn primary" onclick="openResultsShareModal()">Share results</button>
                         <button class="btn secondary" onclick="goHome()">Sessions</button>
                         <button class="btn text" onclick="reopenForChanges()"
-                            title="Clears these results and reopens the picker so players can change their picks">Clear
-                            Results &amp; Reopen</button>
+                            title="Clear these results and let players change their picks">Clear results and reopen picking</button>
                     </div>
                 </div>
             </section>
 
             <section id="view-invalid-results" class="view">
                 <div class="card">
-                    <h2 id="invalid-results-title" tabindex="-1">This results link cannot be opened</h2>
+                    <h2 id="invalid-results-title" tabindex="-1">This results link can't be opened</h2>
                     <p class="subtitle">The link may be incomplete or use an unsupported format. Ask the organizer for a fresh results link.</p>
                     <a href="./">Go to Side Picker</a>
                 </div>
@@ -287,7 +281,7 @@
                         <div class="gb-game" id="guest-game-title"></div>
                     </div>
 
-                    <h2>Make Your Picks</h2>
+                    <h2>Make your picks</h2>
                     <p class="subtitle">Rank the factions, then submit your choices to the organizer.</p>
                     <p id="guest-connection" role="status" class="subtitle">Connecting…</p>
 
@@ -304,34 +298,34 @@
                     <div id="guest-pick-area" style="display: none;">
                         <div class="player-toolbar"
                             style="display: flex; justify-content: flex-start; align-items: center; margin-bottom: 0.75rem;">
-                            <label class="toggle-switch" title="Treat all your preferences equally (no ranking)">
+                            <label class="toggle-switch" title="Every faction in Preferences counts the same">
                                 <input type="checkbox" id="guest-no-preference" onchange="onGuestNoPreferenceChange()">
                                 <span class="slider"></span>
-                                <span class="label-text">Unranked Preferences</span>
+                                <span class="label-text">Treat preferences equally</span>
                             </label>
                         </div>
 
                         <div class="guest-body">
                             <div class="preference-column">
-                                <h4>Available Factions</h4>
+                                <h4>Available</h4>
                                 <ul class="sortable-list available-list" id="guest-available"></ul>
                             </div>
                             <div class="preference-column">
-                                <h4>Preference Rank (1st = Top)</h4>
+                                <h4>Preferences (top = most wanted)</h4>
                                 <ul class="sortable-list preference-list" id="guest-preference"></ul>
                             </div>
                             <div class="preference-column">
-                                <h4>Banned (Do Not Want)</h4>
+                                <h4>Banned</h4>
                                 <ul class="sortable-list banned-list" id="guest-banned"></ul>
                             </div>
                         </div>
 
                         <div class="actions center">
-                            <button id="guest-submit-button" class="btn accent" onclick="submitMyPicks()">Submit My Picks</button>
+                            <button id="guest-submit-button" class="btn accent" onclick="submitMyPicks()">Submit my picks</button>
                         </div>
 
                         <div id="guest-submitted" class="guest-submitted" style="display: none;">
-                            ✓ Submitted! You can edit and submit again until results are published.
+                            Submitted. You can edit and submit again until results are published.
                         </div>
                         <div id="guest-conflict-actions" class="actions" hidden>
                             <button class="btn secondary" onclick="useLatestGuestChoices()">Use saved choices</button>
@@ -361,7 +355,7 @@
                 <span class="player-name" role="textbox" aria-multiline="false" contenteditable="true" onclick="event.stopPropagation()"
                     onblur="updatePlayerName(this)" onkeydown="handleNameEdit(event, this)">Name</span>
                 <button class="expand-player" onclick="event.stopPropagation(); togglePlayerCard(this)" aria-expanded="false"><span class="expand-icon" aria-hidden="true">▼</span></button>
-                <button class="icon-toggle unlock" onclick="togglePlayerLock(event, this)" title="Lock randomization">
+                <button class="icon-toggle unlock" onclick="togglePlayerLock(event, this)" title="Keep this player's choices when randomizing">
                     <span class="unlocked">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
                             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -383,31 +377,31 @@
                 <div class="player-toolbar"
                     style="grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; padding: 4px 0;">
 
-                    <label class="toggle-switch" title="Treat all preferences equally — no ranking">
+                    <label class="toggle-switch" title="Every faction in Preferences counts the same">
                         <input type="checkbox" class="no-preference-check">
                         <span class="slider"></span>
-                        <span class="label-text">Unranked Preferences</span>
+                        <span class="label-text">Treat preferences equally</span>
                     </label>
 
                     <button class="btn-sm" onclick="clearPlayerChoices(this)"
                         style="font-size: 0.8rem; padding: 4px 10px;">
-                        <span>↺</span> Clear Choices
+                        <span>↺</span> Clear choices
                     </button>
                 </div>
                 <div class="preference-column">
-                    <h4>Available Factions</h4>
+                    <h4>Available</h4>
                     <ul class="sortable-list available-list">
                         <!-- Unassigned factions -->
                     </ul>
                 </div>
                 <div class="preference-column">
-                    <h4>Preference Rank (1st = Top)</h4>
+                    <h4>Preferences (top = most wanted)</h4>
                     <ul class="sortable-list preference-list">
                         <!-- Ranked factions -->
                     </ul>
                 </div>
                 <div class="preference-column">
-                    <h4>Banned (Do Not Want)</h4>
+                    <h4>Banned</h4>
                     <ul class="sortable-list banned-list">
                         <!-- Banned factions -->
                     </ul>
@@ -421,10 +415,10 @@
 
     <!-- Optimizer working overlay -->
     <div id="opt-spinner" class="opt-spinner" style="display: none;" role="alertdialog" aria-busy="true"
-        aria-label="Optimizing">
+        aria-label="Calculating assignments">
         <div class="opt-spinner-box">
             <div class="opt-spinner-ring" aria-hidden="true"></div>
-            <div class="opt-spinner-text">Optimizing…</div>
+            <div class="opt-spinner-text">Calculating assignments…</div>
             <button class="btn text" onclick="cancelOptimization()">Cancel</button>
         </div>
     </div>
@@ -433,10 +427,9 @@
     <div id="modal-overlay" class="modal-overlay" onclick="closeModals()"></div>
 
     <div id="info-modal" class="modal">
-        <h3>How it Works</h3>
+        <h3>How it works</h3>
         <div style="color: var(--text-muted); line-height: 1.6; font-size: 0.95rem;">
-            <p style="margin-bottom: 1rem;"><strong>1. Game &amp; factions:</strong> Pick a saved game or type the
-                faction names yourself.</p>
+            <p style="margin-bottom: 1rem;"><strong>1. Game and factions:</strong> Start from a saved game, or type the faction names yourself.</p>
             <p style="margin-bottom: 1rem;"><strong>2. Add players:</strong> Enter everyone's name. Each one gets a
                 card.</p>
             <p style="margin-bottom: 1rem;"><strong>3. Rank each player's factions</strong> — drag them or use the
@@ -445,14 +438,9 @@
                 <br>• Move factions they don't want into <strong>Banned</strong> (red).
                 <br>• Leave the rest in <strong>Available</strong>.
             </p>
-            <p style="margin-bottom: 1rem;"><strong>4. Collect picks live (optional):</strong> Click <strong>Live
-                    Room</strong> and send each person their private player link. Players rank their own factions on their phones and submit — their
-                picks appear here in real time.</p>
-            <p style="margin-bottom: 1rem;"><strong>5. Optimize:</strong> Click <strong>Compare &amp; Assign</strong>
-                and choose a goal — <em>Highest Group Score</em> (best total) or <em>Fairest for Everyone</em> (lifts the
-                unluckiest player). Use <strong>Share Results Link</strong> to send everyone the final assignments.</p>
-            <p style="font-size: 0.85rem; opacity: 0.7;"><em>Everything saves to your Sessions automatically — reopen a
-                    game night anytime. Tip: "Lock" a player to keep their picks safe when you hit Randomize.</em></p>
+            <p style="margin-bottom: 1rem;"><strong>4. Collect picks live (optional):</strong> Click <strong>Live room</strong> and send each person their own player link. Players rank their factions on their phones and submit; their picks appear here within a few seconds.</p>
+            <p style="margin-bottom: 1rem;"><strong>5. Assign:</strong> Click <strong>Compare and assign</strong> to see both goals: <em>Highest Group Score</em> (best total) or <em>Fairest for Everyone</em> (protects the lowest-scoring player). Publish one, then use <strong>Share results</strong> to send everyone the assignments.</p>
+            <p style="font-size: 0.85rem; opacity: 0.7;"><em>Everything saves automatically, so you can reopen a session anytime. Lock a player to keep their choices when you use Randomize choices.</em></p>
             <p class="account-privacy"><a href="privacy.html" target="_blank" rel="noopener">Privacy and saved data</a></p>
         </div>
         <div class="actions right">
@@ -461,11 +449,11 @@
     </div>
 
     <div id="new-session-modal" class="modal">
-        <h3 id="new-session-title">New Session</h3>
+        <h3 id="new-session-title">New session</h3>
         <p id="new-session-help" style="color: var(--text-muted); line-height: 1.5; font-size: 0.9rem; margin-bottom: 1rem;">
-            Name this game night. Everything you set up afterward saves automatically.
+            Name the session. Everything you set up afterward saves automatically.
         </p>
-        <input type="text" id="new-session-input" placeholder="e.g. Friday Game Night"
+        <input type="text" id="new-session-input" placeholder="e.g. Saturday at Alex's"
             onkeypress="handleEnter(event, confirmNewSession)">
         <div class="actions right">
             <button class="btn" onclick="closeModals()">Cancel</button>
@@ -485,9 +473,8 @@
         </div>
     </div>
     <div id="confirm-modal" class="modal">
-        <h3 id="confirm-title">Confirm Action</h3>
-        <p id="confirm-message" style="margin-bottom: 2rem; line-height: 1.5; color: var(--text-muted);">Are you sure
-            you want to proceed?</p>
+        <h3 id="confirm-title">Confirm</h3>
+        <p id="confirm-message" style="margin-bottom: 2rem; line-height: 1.5; color: var(--text-muted);">Confirm this action.</p>
         <div class="actions right">
             <button class="btn secondary" id="confirm-cancel-btn" onclick="closeModals()">Cancel</button>
             <button class="btn primary" id="confirm-btn">Confirm</button>
@@ -497,21 +484,21 @@
     <div id="preset-modal" class="modal">
         <!-- List View -->
         <div class="preset-list-view">
-            <h3>Manage Games</h3>
+            <h3>Saved games</h3>
             <div id="preset-list" class="load-list">
                 <!-- Items injected by JS -->
             </div>
             <div class="actions space-between">
-                <button class="btn secondary" onclick="openPresetEditor()">+ New Game</button>
+                <button class="btn secondary" onclick="openPresetEditor()">+ New saved game</button>
                 <button class="btn" onclick="closeModals()">Close</button>
             </div>
         </div>
         <!-- Edit View -->
         <div class="preset-edit-view" style="display: none;">
-            <h3 id="preset-edit-title">New Game</h3>
-            <input type="text" id="preset-name-input" placeholder="Game Name (e.g. Twilight Imperium)">
+            <h3 id="preset-edit-title">New saved game</h3>
+            <input type="text" id="preset-name-input" placeholder="Game name (e.g. Twilight Imperium)">
             <div class="input-group" style="margin: 1rem 0 0.75rem;">
-                <input type="text" id="preset-faction-input" placeholder="Add a faction..."
+                <input type="text" id="preset-faction-input" placeholder="Add a faction"
                     onkeypress="handleEnter(event, addPresetFaction)">
                 <button class="btn primary" onclick="addPresetFaction()">Add</button>
             </div>
@@ -520,21 +507,21 @@
             </div>
             <div class="actions space-between">
                 <button class="btn text" onclick="showPresetListView()">Back</button>
-                <button class="btn primary" onclick="savePreset()">Save Game</button>
+                <button class="btn primary" onclick="savePreset()">Save</button>
             </div>
         </div>
     </div>
 
     <div id="draft-modal" class="modal">
         <h3>Recover unsaved edits</h3>
-        <p>Your edits are stored only in this browser. Save a separate copy to keep them without replacing a game changed elsewhere. If this draft is open in another tab, finish there first.</p>
+        <p>Your edits are stored only in this browser. Save a separate copy to keep them without replacing a session changed elsewhere. If this draft is open in another tab, finish there first.</p>
         <div id="draft-list"></div>
         <button class="btn primary" onclick="closeModals()">Close</button>
     </div>
     <div id="workspace-modal" class="modal">
-        <h3>Your Saved Games</h3>
+        <h3>Your organizer link</h3>
         <p id="workspace-help" style="color: var(--text-muted); line-height: 1.5; font-size: 0.9rem; margin-bottom: 1rem;">
-            Save your private organizer link to reopen these games on another device. Anyone with it can edit all games in this workspace. Keep it private; use player invitations for your group.
+            Save your private organizer link to reopen these sessions on another device. Anyone with it can edit every session and saved game in this workspace, so keep it private and send players their own invitations.
         </p>
         <div id="organizer-link-wrap">
             <label for="organizer-link">Your private organizer link</label>
@@ -543,7 +530,7 @@
             <button class="btn text" onclick="replaceOrganizerLink()">Replace link</button></div>
         </div>
         <p id="workspace-account-hint" class="account-note" hidden>Prefer not to keep links?
-            <button class="link-btn" onclick="openAccountModal()">Keep these games in an optional account</button></p>
+            <button class="link-btn" onclick="openAccountModal()">Sign in to keep these sessions in an account</button></p>
         <label for="workspace-input">Open a different organizer link</label>
         <input type="text" id="workspace-input" placeholder="Paste a private organizer link" autocomplete="off"
             onkeypress="handleEnter(event, importOrganizerLink)">
@@ -561,7 +548,7 @@
     </div>
 
     <div id="room-modal" class="modal">
-        <h3>Live Room <span id="room-code-label" class="room-code-pill"></span></h3>
+        <h3>Live room <span id="room-code-label" class="room-code-pill"></span></h3>
         <p style="color: var(--text-muted); line-height: 1.5; font-size: 0.9rem; margin-bottom: 1rem;">
             Send each person their own player link below. It lets them edit only their choices. The viewing link shows progress and results without allowing edits.
         </p>
@@ -583,7 +570,7 @@
     </div>
 
     <div id="results-share-modal" class="modal">
-        <h3>Share Results</h3>
+        <h3>Share results</h3>
         <p style="color: var(--text-muted); line-height: 1.5; font-size: 0.9rem; margin-bottom: 1rem;">
             Send this link to your players so they can see the final assignments. It's read-only.
         </p>
@@ -593,7 +580,7 @@
         <div class="actions right">
             <button class="btn" onclick="closeModals()">Close</button>
             <button class="btn secondary" onclick="copyResultsSummary()">Copy summary</button>
-            <button class="btn primary" onclick="copyResultsLink()">Copy Link</button>
+            <button class="btn primary" onclick="copyResultsLink()">Copy link</button>
         </div>
     </div>
 
@@ -613,8 +600,8 @@
             </div>
             <div class="sc-meta"></div>
             <div class="sc-date"></div>
-            <button class="btn primary sc-resume">Resume</button>
-            <button class="btn secondary sc-repeat">Repeat game</button>
+            <button class="btn primary sc-resume">Open</button>
+            <button class="btn secondary sc-repeat">Repeat session</button>
         </div>
     </template>
 

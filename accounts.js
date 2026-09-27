@@ -99,7 +99,7 @@ function askAboutLocalGames() {
         const observer = modal && typeof MutationObserver === 'function'
             ? new MutationObserver(() => { if (!modal.classList.contains('active')) finish('keep'); }) : null;
         const sessions = Object.keys(sessionsCache).length, presets = Object.keys(presetsCache).length;
-        showConfirm('Add the games in this browser to your account?',
+        showConfirm("Add this browser's sessions to your account?",
             `This browser has ${gameCounts(sessions, presets)} that ${sessions + presets === 1 ? 'is' : 'are'} not in your account. Add them to see them on all your devices. On someone else's device, keep them separate: they come back here when you sign out.`,
             () => finish('add'), 'Add to my account', 'primary', () => finish('keep'), 'Keep separate');
         observer?.observe(modal, { attributes: true, attributeFilter: ['class'] });
@@ -123,17 +123,17 @@ async function runAccountSync() {
         if (!(await settleSaves())) return;
         if (!primary && choice === 'add') {
             await accountRequest('attach', { credential });
-            showToast('success', 'Games added to your account', 'They now appear on every device where you sign in.');
+            showToast('success', 'Added to your account', 'They now appear on every device where you sign in.');
         } else {
             if (choice === 'add') {
                 try {
                     const moved = await accountRequest('merge', { owner_key: primary, credential });
-                    showToast('success', 'Games added to your account', `Moved in ${gameCounts(moved.sessions, moved.presets)}.`);
-                } catch (error) { accountError(error, 'Could not add these games'); parkCurrentWorkspace(); }
+                    showToast('success', 'Added to your account', `Moved in ${gameCounts(moved.sessions, moved.presets)}.`);
+                } catch (error) { accountError(error, 'Could not add these sessions'); parkCurrentWorkspace(); }
             } else if (choice === 'keep') parkCurrentWorkspace();
             if (primary) await openAccountGames(primary); else await startAccountGames();
         }
-    } catch (error) { accountError(error, 'Could not load your account games'); }
+    } catch (error) { accountError(error, 'Could not load your account'); }
     finally { await refreshAccount(true); }
 }
 
@@ -160,7 +160,7 @@ async function beginAccount(callback) {
 async function completeSignIn(callback) {
     if (!accountSession) return;
     await syncAccountGames();
-    if (callback?.code) showToast('success', 'Signed in', `Your games are now on every device where you sign in with ${accountProviderName()}.`);
+    if (callback?.code) showToast('success', 'Signed in', `Your sessions are now on every device where you sign in with ${accountProviderName()}.`);
 }
 // A signed-in browser with no games of its own does not need a throwaway workspace.
 function skipLocalWorkspace() {
@@ -191,14 +191,14 @@ async function refreshAccount(quiet = false) {
 }
 // While signed in, an organizer link adds its games to the account.
 function importIntoAccount(credential) {
-    showConfirm('Add these games to your account?', 'The games from this organizer link move into your account and appear on all your devices. That link stops working, so anyone else using it loses access.', async () => {
+    showConfirm('Add these sessions to your account?', 'The sessions and saved games from this organizer link move into your account and appear on all your devices. That link stops working, so anyone else using it loses access.', async () => {
         if (!(await settleSaves())) return;
         try {
             const moved = await accountRequest('merge', { owner_key: getWorkspaceKey(), credential });
             await loadSessionsFromDb(); closeModals(); renderHomeSessions(); renderPresetOptions(); switchView('view-home');
-            showToast('success', 'Games added to your account', `Moved in ${gameCounts(moved.sessions, moved.presets)}.`);
+            showToast('success', 'Added to your account', `Moved in ${gameCounts(moved.sessions, moved.presets)}.`);
             await refreshAccount(true);
-        } catch (error) { accountError(error, 'Could not add these games'); }
+        } catch (error) { accountError(error, 'Could not add these sessions'); }
     }, 'Add to my account');
 }
 // Forget the local workspace and start an empty one, as for a new visitor.
@@ -234,25 +234,25 @@ async function signOutAccount() {
     closeModals();
     if (forget) await restoreParkedWorkspace();
     renderAccountEntry();
-    showToast('success', 'Signed out', forget ? 'Your games stay in your account and left this browser.' : 'Games in this browser are unchanged.');
+    showToast('success', 'Signed out', forget ? 'Your sessions stay in your account and were removed from this browser.' : 'Sessions in this browser are unchanged.');
 }
 function revokeAccountKey(key) {
     showConfirm('Remove this device?', key.kind === 'device'
-        ? 'That device stops showing your games until it signs in again.'
-        : 'Anyone using this organizer link loses access. Your games stay in your account.', async () => {
+        ? 'That device stops showing your sessions until it signs in again.'
+        : 'Anyone using this organizer link loses access. Your sessions stay in your account.', async () => {
         try { await accountRequest('revoke_key', { id: key.id }); }
         catch (error) { accountError(error, 'Could not remove access'); return; }
         await refreshAccount();
     }, 'Remove', 'danger');
 }
 function deleteAccount() {
-    showConfirm('Delete your account?', 'Your sign-in is deleted. Your games are not: they stay in this browser, and on other devices where they are open, as an ordinary workspace. Delete games first if you want them gone.', async () => {
+    showConfirm('Delete your account?', "Your sign-in is deleted, but your sessions aren't: they stay in this browser, and on other devices where they're open, as an ordinary workspace. Delete sessions first if you want them gone.", async () => {
         try { await accountRequest('delete_account'); }
         catch (error) { accountError(error, 'Could not delete your account'); return; }
         await getSupabaseClient().auth.signOut({ scope: 'local' });
         accountSession = null; accountWorkspaces = null; accountInvitations = [];
         closeModals(); renderAccountEntry();
-        showToast('success', 'Account deleted', 'Games in this browser are unchanged.');
+        showToast('success', 'Account deleted', 'Sessions in this browser are unchanged.');
     }, 'Delete account', 'danger');
 }
 
@@ -293,7 +293,7 @@ function renderAccountBody() {
     const body = get('account-body'); if (!body) return;
     body.replaceChildren();
     if (!accountSession) {
-        body.append(accountElement('p', 'Sign in to keep your games in your account. They appear on every device where you sign in, without saving organizer links. You never need an account to create games or join as a player.', 'account-note'));
+        body.append(accountElement('p', 'Sign in to keep your sessions and saved games in one account. They appear on every device where you sign in, with no organizer links to keep. You never need an account to run a session or join as a player.', 'account-note'));
         const providers = accountElement('div', undefined, 'account-providers');
         for (const provider of accountProviders()) providers.append(accountButton(`Continue with ${ACCOUNT_PROVIDER_NAMES[provider]}`, 'btn primary', () => signInWithProvider(provider)));
         body.append(providers, accountPrivacyLink());
@@ -302,11 +302,11 @@ function renderAccountBody() {
     body.append(accountElement('p', `Signed in as ${accountName()} with ${accountProviderName()}.`, 'account-note'));
     const games = accountGames();
     if (!games) {
-        body.append(accountElement('p', accountLoading || accountSyncing ? 'Loading your games…' : 'Setting up your games…', 'subtitle'));
+        body.append(accountElement('p', accountLoading || accountSyncing ? 'Loading…' : 'Setting up your account…', 'subtitle'));
     } else {
         const summary = accountElement('div', undefined, 'account-workspace');
         summary.append(accountElement('p', `${plural(games.sessions?.length || 0, 'session')} · ${plural(games.presets?.length || 0, 'saved game')}`, 'account-workspace-title'),
-            accountElement('p', 'Your games appear on every device where you are signed in.', 'account-workspace-names'));
+            accountElement('p', "Your sessions and saved games appear on every device where you're signed in.", 'account-workspace-names'));
         body.append(summary, accountElement('h4', 'Signed-in devices and links'));
         for (const key of games.keys || []) {
             const row = accountElement('div', undefined, 'account-key');
@@ -344,7 +344,7 @@ async function saveGuestInvitation() {
     try {
         await accountRequest('save_invite', { room: guestSession.code, player: guestAccess.player, token: guestAccess.token });
         guestInvitationSaved = true;
-    } catch (error) { accountError(error, 'Could not save this game to your account'); }
+    } catch (error) { accountError(error, 'Could not save this session to your account'); }
     renderGuestAccount();
 }
 // Called once the player's room has loaded.
@@ -359,12 +359,12 @@ function renderGuestAccount() {
     if (box.hidden) return;
     if (accountSession) {
         box.append(accountElement('p', guestInvitationSaved
-            ? `Saved to your account. It is listed on your Side Picker home screen wherever you sign in with ${accountProviderName()}.`
-            : 'Saving this game to your account…', 'account-note'),
+            ? `Saved to your account. Find it on your Side Picker home screen wherever you sign in with ${accountProviderName()}.`
+            : 'Saving to your account…', 'account-note'),
             accountButton('Go to my home screen', 'btn secondary', () => location.assign(location.origin + location.pathname)));
         return;
     }
-    box.append(accountElement('p', 'Optional: sign in to keep this game in your account and find it later without this link.', 'account-note'));
+    box.append(accountElement('p', 'Optional: sign in to keep this session in your account and find it later without the link.', 'account-note'));
     const providers = accountElement('div', undefined, 'account-providers');
     for (const provider of accountProviders()) providers.append(accountButton(`Continue with ${ACCOUNT_PROVIDER_NAMES[provider]}`, 'btn secondary', () => signInWithProvider(provider)));
     box.append(providers);
@@ -378,7 +378,7 @@ function renderAccountInvitations() {
         const row = accountElement('div', undefined, 'invitation-row');
         const text = accountElement('div', undefined, 'invitation-text');
         const status = !invite.current ? 'invitation replaced' : invite.stage === 'published' ? 'results ready' : invite.stage === 'locked' ? 'picking closed' : 'picking open';
-        text.append(accountElement('strong', invite.session_name || 'Game night'),
+        text.append(accountElement('strong', invite.session_name || 'Session'),
             accountElement('span', [invite.game_title, invite.player_name ? `as ${invite.player_name}` : '', status].filter(Boolean).join(' · ')));
         row.append(text);
         if (invite.current) row.append(accountButton('Open', 'btn primary', () => openSavedInvitation(invite)));
@@ -390,12 +390,12 @@ async function openSavedInvitation(invite) {
     try {
         const data = await accountRequest('open_invite', { session_id: invite.session_id, player_id: invite.player_id });
         location.assign(makePrivateLink('player', data.token, { room: data.room_code, player: data.player_id }));
-    } catch (error) { accountError(error, 'Could not open this game'); await refreshAccount(true); }
+    } catch (error) { accountError(error, 'Could not open this session'); await refreshAccount(true); }
 }
 function forgetSavedInvitation(invite) {
-    showConfirm('Remove this game from your list?', 'You can still open it from your invitation link.', async () => {
+    showConfirm('Remove this session from your list?', 'You can still open it from your invitation link.', async () => {
         try { await accountRequest('forget_invite', { session_id: invite.session_id, player_id: invite.player_id }); }
-        catch (error) { accountError(error, 'Could not remove this game'); return; }
+        catch (error) { accountError(error, 'Could not remove this session'); return; }
         await refreshAccount(true);
     }, 'Remove');
 }

@@ -186,14 +186,14 @@ async function initializePrivateWorkspace() {
     }
     if (localStorage.getItem(WORKSPACE_KEY_LS)) {
         openWorkspaceModal();
-        get('workspace-help').textContent = 'Your older saved games are preserved. Open the private organizer link supplied during the upgrade, or start a separate workspace below.';
+        get('workspace-help').textContent = 'Your older sessions are preserved. Open the private organizer link from the upgrade, or start a separate workspace below.';
         return;
     }
     await createPrivateWorkspace();
 }
 async function createPrivateWorkspace(confirmed = false) {
     if (hasWorkspaceKey() && !confirmed) {
-        showConfirm('Start a separate workspace?', 'Save your current organizer link first so you can return to these games. A separate workspace starts empty.', () => createPrivateWorkspace(true), 'Start workspace');
+        showConfirm('Start a separate workspace?', 'Save your current organizer link first so you can return to these sessions. The new workspace starts empty.', () => createPrivateWorkspace(true), 'Start workspace');
         return;
     }
     await flushSession();
@@ -226,7 +226,7 @@ async function importOrganizerLink() {
     } catch (error) { accessError(error, 'Could not open organizer link'); }
 }
 async function copyOrganizerLink() {
-    if (await copyToClipboard(get('organizer-link').value)) showToast('success', 'Organizer link copied', 'Keep it private. It can edit all games in this workspace.');
+    if (await copyToClipboard(get('organizer-link').value)) showToast('success', 'Organizer link copied', 'Keep it private. It can edit every session in this workspace.');
     else { get('organizer-link').select(); showToast('info', 'Copy manually', 'Copy the selected private link.'); }
 }
 function replaceOrganizerLink() {
@@ -234,7 +234,7 @@ function replaceOrganizerLink() {
     const owned = typeof currentWorkspaceLinked === 'function' && accountSession && currentWorkspaceLinked();
     showConfirm('Replace organizer link?', owned
         ? 'This link will stop working everywhere it is used. Devices opened from your account keep their own access; manage them under Account. Player links stay valid.'
-        : `The old organizer link will stop working on every device${typeof accountsEnabled === 'function' && accountsEnabled() ? ', and any account holding these games loses them' : ''}. Save the replacement link afterward. Player links stay valid.`, async () => {
+        : `The old organizer link will stop working on every device${typeof accountsEnabled === 'function' && accountsEnabled() ? ', and any account holding these sessions loses them' : ''}. Save the replacement link afterward. Player links stay valid.`, async () => {
         if (!(await flushSession())) return;
         if (!(await ensureJournal().flushAll())) return;
         const saved = privateWorkspace(), credential = newPrivateToken();
@@ -464,7 +464,7 @@ function updateGuestSubmitted() {
         : closed ? 'Picking is closed. Your edits stay here until the organizer reopens it.'
         : guestSavedChoices !== pickSignature(guestPick) ? 'Edits not submitted yet'
         : guestSession?.mine?.source === 'organizer' ? 'Organizer updated your saved choices'
-        : guestSession?.mine ? 'Submitted — you can edit and submit again while picking is open.' : 'Ready when you are — neutral choices are valid too.';
+        : guestSession?.mine ? 'Submitted — you can edit and submit again while picking is open.' : 'Ready to submit. Factions left in Available count as neutral.';
     get('guest-conflict-actions').hidden = !guestDirtyConflict;
     get('guest-submit-button').disabled = closed || guestDirtyConflict || guestSubmitting;
 }

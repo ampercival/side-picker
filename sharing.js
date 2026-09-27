@@ -34,7 +34,7 @@ async function publishGoalComparison(mode) {
         closeModal('comparison-modal');
         displayResults(results[mode],snapshot,GOAL_NAMES[mode]);
         state.results=lastResults;state.roomStage='published';autoSave();switchView('view-results');
-        if(activeSessionName && !(await flushSession()))showToast('info','Results not published yet','These results are local. Guests will see them after saving succeeds.');
+        if(activeSessionName && !(await flushSession()))showToast('info','Results not published yet','Players will see them once saving succeeds. Check the save status above.');
     }finally{publishingComparison=false;}
 }
 function formatResultsSummary(payload) {

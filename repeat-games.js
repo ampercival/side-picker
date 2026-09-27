@@ -16,7 +16,7 @@ function parseBulkNames(text, existing = [], limit = 100) {
         if(seen.has(key)){duplicates++;continue;}
         seen.add(key);names.push(name);
     }
-    if(existing.length+names.length>limit)throw new Error(`Use at most ${limit} entries in one game. Nothing has been added.`);
+    if(existing.length+names.length>limit)throw new Error(`Use at most ${limit} entries in one session. Nothing was added.`);
     return {names,duplicates};
 }
 let repeatSessionSource = null, creatingSession = false, bulkKind = 'players';
@@ -24,10 +24,10 @@ function openRepeatSession(name) {
     const source=sessionsCache[name];if(!source)return;
     startNewSession();
     repeatSessionSource=JSON.parse(JSON.stringify(source));
-    const base=((source.sessionName||name).slice(0,460))+' - next game';
+    const base=((source.sessionName||name).slice(0,460))+' (next)';
     let next=base, index=2;while(sessionsCache[next])next=base+' '+index++;
     get('new-session-input').value=next;
-    get('new-session-title').textContent='Repeat this game';
+    get('new-session-title').textContent='Repeat this session';
     get('new-session-help').textContent='Keep the game, factions, and player names. Start with empty choices, fresh player invitations, and no results. The original stays saved.';
     get('new-session-input').focus();get('new-session-input').select();
 }

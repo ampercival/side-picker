@@ -117,7 +117,7 @@ test('failures leave the browser games and sign-in untouched', async () => {
     await t.run('syncAccountGames()');
     assert.deepEqual(t.local(), { credential: A, ownerKey: 'A' });
     assert.ok(!t.calls.some(c => c.fn === 'sp_workspace'));
-    assert.ok(t.toasts.some(([type, title]) => type === 'error' && title === 'Could not load your account games'));
+    assert.ok(t.toasts.some(([type, title]) => type === 'error' && title === 'Could not load your account'));
 
     const offline = app({ responses: { forget_device: Object.assign(new Error('offline'), { code: 'FETCH_ERROR' }) } });
     await offline.run('signOutAccount()');

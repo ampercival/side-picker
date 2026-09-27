@@ -2,7 +2,7 @@
 const state = {
     factions: [],
     players: [], // { id, name, preferences: [], bans: [] }
-    sessionName: '', // Label for this game night (shown to players)
+    sessionName: '', // Label for this session (shown to players)
     gameTitle: '', // The game being played (shown to players)
     roomCode: '', // Live-room code (Supabase), if a room is open for this session
     results: null // Last optimization snapshot (published to the room)
@@ -50,13 +50,13 @@ function updateThemeIcon(theme) {
     if (theme === 'light') {
         sun.style.display = 'none';
         moon.style.display = 'block';
-        btn.setAttribute('aria-label', 'Switch to Dark Mode');
-        btn.title = 'Switch to Dark Mode';
+        btn.setAttribute('aria-label', 'Switch to dark mode');
+        btn.title = 'Switch to dark mode';
     } else {
         sun.style.display = 'block';
         moon.style.display = 'none';
-        btn.setAttribute('aria-label', 'Switch to Light Mode');
-        btn.title = 'Switch to Light Mode';
+        btn.setAttribute('aria-label', 'Switch to light mode');
+        btn.title = 'Switch to light mode';
     }
 }
 
@@ -118,7 +118,7 @@ function showToast(type, title, message) {
 function nextStep(viewId) {
     if (viewId === 'view-players') {
         if (state.factions.length === 0) {
-            showToast('error', 'No Factions', "Please add at least one faction.");
+            showToast('error', 'Add a faction first', 'Add at least one faction before adding players.');
             return;
         }
     }
@@ -155,7 +155,7 @@ function renderPresetOptions() {
     const presets = getPresets();
     const names = Object.keys(presets).sort((a, b) => a.localeCompare(b));
 
-    select.innerHTML = '<option value="custom">Custom (no game)</option>';
+    select.innerHTML = '<option value="custom">None (add factions below)</option>';
     names.forEach(name => {
         const opt = document.createElement('option');
         opt.value = name;
@@ -169,8 +169,8 @@ function renderPresetOptions() {
     const hint = get('game-select-hint');
     if (hint) {
         hint.textContent = names.length === 0
-            ? 'No games yet — add one with Manage.'
-            : 'Add or edit games with Manage.';
+            ? 'No saved games yet. Add one with Manage.'
+            : 'Add or edit saved games with Manage.';
     }
 }
 
@@ -235,15 +235,15 @@ function loadPreset() {
         autoSave();
         renderFactions();
         updateAllPlayerFactions();
-        showToast('success', 'Preset Loaded', `Loaded ${factions.length} factions.`);
+        showToast('success', 'Saved game loaded', `Loaded ${factions.length} factions from "${name}".`);
     };
 
     if (state.factions.length > 0) {
         showConfirm(
-            'Overwrite Factions?',
-            `Loading "${name}" will replace all current factions. This cannot be undone.`,
+            `Use the factions from "${name}"?`,
+            `This replaces the current faction list and sets the game to "${name}". Players' choices for factions that are no longer listed are cleared.`,
             applyPreset,
-            'Load Preset',
+            'Use saved game',
             'accent',
             () => { select.value = 'custom'; } // Revert the dropdown if cancelled
         );
@@ -282,7 +282,7 @@ function addFaction() {
         input.value = '';
         updateAllPlayerFactions(); // If players exist, update their lists
     } else if (state.factions.includes(name)) {
-        showToast('error', 'Duplicate', "Faction already exists!");
+        showToast('error', 'Already added', `"${name}" is already in the faction list.`);
     }
     input.focus();
 }
@@ -309,7 +309,7 @@ function renderFactions() {
     state.factions.sort((a, b) => a.localeCompare(b));
 
     if (state.factions.length === 0) {
-        container.innerHTML = '<div class="empty-state">No factions added yet</div>';
+        container.innerHTML = '<div class="empty-state">No factions yet</div>';
         return;
     }
 
@@ -390,8 +390,8 @@ function clearPlayerChoices(btn) {
 
     if (player) {
         showConfirm(
-            'Reset Choices?',
-            `Are you sure you want to clear all preferences for ${player.name}?`,
+            `Clear ${player.name}'s choices?`,
+            'Their preferences and bans move back to Available.',
             () => {
                 player.preferences = [];
                 player.bans = [];
@@ -400,9 +400,9 @@ function clearPlayerChoices(btn) {
                 const prefList = card.querySelector('.preference-list');
                 const banList = card.querySelector('.banned-list');
                 refreshListsForCard(player, availableList, prefList, banList);
-                showToast('info', 'Choices Cleared', `Reset for ${player.name}`);
+                showToast('info', 'Choices cleared', `${player.name}'s factions are back in Available.`);
             },
-            'Clear Choices',
+            'Clear choices',
             'secondary' // Not super dangerous
         );
     }
@@ -460,7 +460,7 @@ function renderPlayers() {
     container.innerHTML = '';
 
     if (state.players.length === 0) {
-        container.innerHTML = '<div class="empty-state">No players added yet</div>';
+        container.innerHTML = '<div class="empty-state">No players yet</div>';
         return;
     }
 
@@ -487,12 +487,12 @@ function renderPlayers() {
         if (player.locked) {
             lockBtn.querySelector('.locked').style.display = 'inline';
             lockBtn.querySelector('.unlocked').style.display = 'none';
-            lockBtn.title = "Unlock randomization";
+            lockBtn.title = "Allow randomizing this player's choices";
             card.classList.add('locked-mode');
         } else {
             lockBtn.querySelector('.locked').style.display = 'none';
             lockBtn.querySelector('.unlocked').style.display = 'inline';
-            lockBtn.title = "Lock randomization";
+            lockBtn.title = "Keep this player's choices when randomizing";
             card.classList.remove('locked-mode');
         }
 
@@ -635,13 +635,13 @@ function updateAllPlayerFactions() {
 // --- Randomization ---
 function randomizeAllPreferences() {
     if (state.players.length === 0) {
-        showToast('error', 'No Players', "Add players first!");
+        showToast('error', 'Add players first', 'Add at least one player, then try again.');
         return;
     }
 
     showConfirm(
-        'Randomize Everything?',
-        'This will randomly assign preferences and bans for ALL players (except locked ones). Existing choices will be lost.',
+        'Randomize choices?',
+        'Every unlocked player gets random preferences and bans, replacing their current choices.',
         () => {
             let count = 0;
             state.players.forEach(player => {
@@ -923,12 +923,12 @@ function runOptimization(players, factions, mode) {
             worker.terminate();
         };
         _optimizerReject = error => { teardown(); reject(error); };
-        timer = setTimeout(() => { teardown(); reject(new Error('Optimization took too long. Try again or use fewer players and factions.')); }, 15000);
+        timer = setTimeout(() => { teardown(); reject(new Error('Calculating assignments took too long. Try again, or use fewer players and factions.')); }, 15000);
 
         worker.onmessage = (e) => {
             teardown();
             if (e.data && e.data.ok) resolve(e.data.result);
-            else reject(new Error((e.data && e.data.error) || 'Optimization failed'));
+            else reject(new Error((e.data && e.data.error) || 'Could not calculate assignments'));
         };
         worker.onerror = () => {
             teardown();
@@ -981,12 +981,12 @@ function optimizationSnapshotIsCurrent(snapshot) {
 
 async function calculateOptimization() {
     if (state.players.length === 0) {
-        showToast('error', 'No Players', "Add players first!");
+        showToast('error', 'Add players first', 'Add at least one player, then try again.');
         return;
     }
 
     if (state.factions.length < state.players.length) {
-        showToast('error', 'Not Enough Factions', `You have ${state.factions.length} factions for ${state.players.length} players.`);
+        showToast('error', 'Not enough factions', `Each player needs a different faction. Add at least ${state.players.length - state.factions.length} more.`);
         return;
     }
 
@@ -1008,21 +1008,21 @@ async function calculateOptimization() {
         } catch (e) {
             hideOptimizerSpinner();
             if (e && e.message !== 'cancelled') {
-                showToast('error', 'Optimization Failed', e.message || 'Something went wrong.');
+                showToast('error', 'Could not calculate assignments', e.message || 'Try again. If it keeps failing, reload the page.');
             }
             return;
         }
         hideOptimizerSpinner();
 
         if (!optimizationSnapshotIsCurrent(snapshot)) {
-            showToast('info', 'Picks Changed', 'The setup or player choices changed while calculating. Run Optimize again to include the latest picks.');
+            showToast('info', 'Picks changed', 'The setup or choices changed while calculating. Run Compare and assign again to include them.');
             return;
         }
 
         if (result.success) {
             showGoalComparison(comparison, snapshot);
         } else {
-            showToast('error', 'No Valid Assignment', result.reason || 'No assignment respects all bans. Add factions or revise the conflicting choices.');
+            showToast('error', 'No assignment fits the bans', result.reason || 'Add factions or change the conflicting bans.');
         }
     } finally {
         _optimizing = false;
@@ -1038,14 +1038,14 @@ function reopenForChanges() {
         return;
     }
     showConfirm(
-        'Clear Results?',
-        'This clears the current results and reopens the picker so players can change their picks. You can optimize again afterward.',
+        'Clear results?',
+        'This clears the current results and reopens picking so players can change their choices. You can assign again afterward.',
         async () => {
             state.results = null;
             state.roomStage = 'collecting';
             autoSave();
             if (activeSessionName) {
-                if (!(await flushSession())) showToast('info', 'Reopen not saved yet', 'Guests can change picks after saving succeeds.');
+                if (!(await flushSession())) showToast('info', 'Reopen not saved yet', 'Players can change their picks once saving succeeds.');
             }
             updateRoomBanner();
             switchView('view-players');
@@ -1071,7 +1071,7 @@ function displayResults(result, input = state, goalOverride = null) {
     const gameTitle = (input.gameTitle || '').trim();
     const subtitleParts = [sessionName, gameTitle].filter(Boolean);
     get('results-subtitle').textContent =
-        subtitleParts.length ? subtitleParts.join(' · ') : 'The happiness algorithm has spoken.';
+        subtitleParts.length ? subtitleParts.join(' · ') : 'Final assignments';
 
     const goalEl = document.querySelector('input[name="opt-mode"]:checked');
     const goalText = goalOverride || (goalEl ? goalEl.parentElement.querySelector('strong').textContent : '');
@@ -1214,13 +1214,13 @@ function updateWorkspaceIndicator() {
     if (!el) return;
     const links = document.createElement('button');
     links.className = 'link-btn'; links.onclick = () => openWorkspaceModal();
-    links.textContent = hasWorkspaceKey() ? 'Save or open your private organizer link' : 'Open saved games or start a workspace';
+    links.textContent = hasWorkspaceKey() ? 'Save or open your private organizer link' : 'Open your organizer link or start a workspace';
     el.replaceChildren(links);
     if (typeof accountsEnabled === 'function' && accountsEnabled()) {
         const account = document.createElement('button');
         account.className = 'link-btn'; account.onclick = () => openAccountModal();
-        account.textContent = !accountSession ? 'Sign in to use them on all your devices (optional)'
-            : 'Signed in: your games are on all your devices';
+        account.textContent = !accountSession ? 'Sign in to use your sessions on all your devices (optional)'
+            : 'Signed in: your sessions are on all your devices';
         el.append(document.createTextNode(' · '), account);
     }
 }
@@ -1233,11 +1233,11 @@ function getSessions() {
 // Create a brand-new, empty session in the database and open it. Everything
 // after this auto-saves, so there's no separate "Save" step.
 async function createNewSession(name, repeatSource = null) {
-    if (!name) return showToast('error', 'Missing Name', 'Please enter a session name.');
+    if (!name) return showToast('error', 'Name required', 'Enter a name for this session.');
     if (name.length > 500) return showToast('error', 'Name too long', 'Use at most 500 characters.');
-    if (!isSupabaseConfigured()) return showToast('error', 'Not Configured', 'Sessions need Supabase set up.');
+    if (!isSupabaseConfigured()) return showToast('error', 'Saving unavailable', 'Sessions need Supabase configured in config.js.');
     if (!hasWorkspaceKey()) { openWorkspaceModal(); return; }
-    if (sessionsCache[name]) return showToast('error', 'Name Taken', `A session named "${name}" already exists.`);
+    if (sessionsCache[name]) return showToast('error', 'Name already used', `You already have a session named "${name}".`);
     await flushSession();
     if (journal?.storageError) return;
 
@@ -1262,14 +1262,14 @@ async function createNewSession(name, repeatSource = null) {
     deactivateRoomSync();
     closeModals();
     switchView('view-factions');
-    if (saved) showToast('success', 'Session Created', `"${name}" is ready.`);
-    else showToast('info', 'Game not saved yet', 'You can keep editing here. Use the save status above to retry or recover your work.');
+    if (saved) showToast('success', 'Session created', `"${name}" is ready.`);
+    else showToast('info', 'Session not saved yet', 'You can keep editing. Use the save status above to retry or recover your work.');
 }
 
 function deleteSession(name, onSuccess) {
     showConfirm(
-        'Delete Session?',
-        `Are you sure you want to delete "${name}"?`,
+        `Delete "${name}"?`,
+        "Its player links stop working and submitted picks are removed. This can't be undone.",
         async () => {
             if (activeSessionName !== name && !(await flushSession())) return;
             if (_sessionSyncTimer) { clearTimeout(_sessionSyncTimer); _sessionSyncTimer = null; }
@@ -1283,7 +1283,7 @@ function deleteSession(name, onSuccess) {
                 autoSave();
             }
 
-            showToast('info', 'Deleted', `Session "${name}" deleted.`);
+            showToast('info', 'Session deleted', `"${name}" was deleted.`);
             if (onSuccess) onSuccess();
         },
         'Delete',
@@ -1324,7 +1324,7 @@ function renderHomeSessions() {
     const names = Object.keys(sessions).sort((a, b) => new Date(sessions[b].date) - new Date(sessions[a].date));
 
     if (names.length === 0) {
-        container.innerHTML = '<div class="empty-state">No saved sessions yet</div>';
+        container.innerHTML = '<div class="empty-state">No sessions yet. Start one with + New session.</div>';
         return;
     }
 
@@ -1361,7 +1361,7 @@ async function resumeSession(name) {
     const sessions = getSessions();
     const data = sessions[name];
     if (!data) {
-        showToast('error', 'Error', 'Session not found.');
+        showToast('error', 'Session not found', 'It may have been deleted on another device.');
         renderHomeSessions();
         return;
     }
@@ -1386,7 +1386,7 @@ async function resumeSession(name) {
     } else {
         switchView('view-players');
     }
-    showToast('success', 'Resumed', `Loaded "${name}".`);
+    showToast('success', 'Session opened', `Opened "${name}".`);
 }
 
 // Render the results view from a stored snapshot (e.g. on resume), keeping the
@@ -1394,7 +1394,7 @@ async function resumeSession(name) {
 function showHostResults(payload) {
     payload = validateResultsPayload(payload);
     if (!payload) {
-        showToast('error', 'Invalid Results', 'These saved results cannot be displayed. You can generate new assignments.');
+        showToast('error', "Results can't be shown", 'These saved results are damaged. Run Compare and assign to make new ones.');
         switchView('view-players');
         return;
     }
@@ -1404,7 +1404,7 @@ function showHostResults(payload) {
 
     const parts = [payload.t, payload.gm, payload.g ? `Goal: ${payload.g}` : ''].filter(Boolean);
     get('results-subtitle').textContent =
-        parts.length ? parts.join(' · ') : 'The happiness algorithm has spoken.';
+        parts.length ? parts.join(' · ') : 'Final assignments';
 
     (payload.r || []).forEach((row, index) => {
         container.appendChild(buildResultCard({ name: row.n, faction: row.f, note: row.note, score: row.s, index }));
@@ -1419,11 +1419,11 @@ function showHostResults(payload) {
 
 // New Session: prompt for a name, then create it in the database.
 function startNewSession() {
-    if (!isSupabaseConfigured()) return showToast('error', 'Not Configured', 'Sessions need Supabase set up.');
+    if (!isSupabaseConfigured()) return showToast('error', 'Saving unavailable', 'Sessions need Supabase configured in config.js.');
     if (!hasWorkspaceKey()) { openWorkspaceModal(); return; }
     repeatSessionSource = null;
-    get('new-session-title').textContent = 'New Session';
-    get('new-session-help').textContent = 'Name this game night. Everything you set up afterward saves automatically.';
+    get('new-session-title').textContent = 'New session';
+    get('new-session-help').textContent = 'Name the session. Everything you set up afterward saves automatically.';
     get('new-session-input').value = '';
     get('modal-overlay').classList.add('active');
     get('new-session-modal').classList.add('active');
@@ -1442,7 +1442,7 @@ async function confirmNewSession() {
 let presetEditState = { originalName: null, factions: [] };
 
 async function openPresetModal() {
-    if (!isSupabaseConfigured()) return showToast('error', 'Not Configured', 'Games need Supabase set up.');
+    if (!isSupabaseConfigured()) return showToast('error', 'Saving unavailable', 'Saved games need Supabase configured in config.js.');
     if (!hasWorkspaceKey()) { openWorkspaceModal(); return; }
 
     get('modal-overlay').classList.add('active');
@@ -1467,7 +1467,7 @@ function renderPresetList() {
     const names = Object.keys(presets).sort((a, b) => a.localeCompare(b));
 
     if (names.length === 0) {
-        container.innerHTML = '<div class="empty-state">No games yet — add one below</div>';
+        container.innerHTML = '<div class="empty-state">No saved games yet. Add one below.</div>';
         return;
     }
 
@@ -1505,10 +1505,10 @@ function openPresetEditor(name = null) {
 
     if (name && presets[name]) {
         presetEditState = { originalName: name, factions: [...presets[name]] };
-        get('preset-edit-title').textContent = 'Edit Game';
+        get('preset-edit-title').textContent = 'Edit saved game';
     } else {
         presetEditState = { originalName: null, factions: [] };
-        get('preset-edit-title').textContent = 'New Game';
+        get('preset-edit-title').textContent = 'New saved game';
     }
 
     get('preset-name-input').value = presetEditState.originalName || '';
@@ -1527,7 +1527,7 @@ function addPresetFaction() {
 
     if (!name) return;
     if (presetEditState.factions.includes(name)) {
-        showToast('error', 'Duplicate', 'That faction is already in this preset.');
+        showToast('error', 'Already added', 'That faction is already in this saved game.');
         return;
     }
 
@@ -1575,11 +1575,11 @@ function savePreset() {
     const name = get('preset-name-input').value.trim();
 
     if (!name) {
-        showToast('error', 'Missing Name', 'Please enter a preset name.');
+        showToast('error', 'Name required', 'Enter a name for this saved game.');
         return;
     }
     if (presetEditState.factions.length === 0) {
-        showToast('error', 'No Factions', 'Add at least one faction to the preset.');
+        showToast('error', 'Add a faction', 'Add at least one faction to this saved game.');
         return;
     }
 
@@ -1595,16 +1595,16 @@ function savePreset() {
             delete presets[original];
         }
         renderPresetOptions();
-        showToast('success', 'Game Saved', `"${name}" saved.`);
+        showToast('success', 'Saved', `"${name}" saved.`);
         showPresetListView();
     };
 
     if (overwritingDifferent) {
         showConfirm(
-            'Overwrite Game?',
-            `A game named "${name}" already exists. Overwrite it?`,
+            `Replace saved game "${name}"?`,
+            `A saved game named "${name}" already exists. Replace its factions with these?`,
             doSave,
-            'Overwrite',
+            'Replace',
             'danger'
         );
     } else {
@@ -1614,8 +1614,8 @@ function savePreset() {
 
 function deletePreset(name) {
     showConfirm(
-        'Delete Game?',
-        `Are you sure you want to delete the game "${name}"? This cannot be undone.`,
+        `Delete saved game "${name}"?`,
+        "Sessions that used it keep their factions. This can't be undone.",
         async () => {
             const presets = getPresets();
             if (!(await deletePresetFromDb(name))) return;
@@ -1626,7 +1626,7 @@ function deletePreset(name) {
 
             renderPresetOptions();
             renderPresetList();
-            showToast('info', 'Deleted', `Game "${name}" deleted.`);
+            showToast('info', 'Saved game deleted', `"${name}" was deleted.`);
         },
         'Delete',
         'danger'
@@ -1650,14 +1650,14 @@ async function copyToClipboard(text) {
 // --- Share results (read-only link) ---
 function openResultsShareModal() {
     if (!lastResults) {
-        showToast('error', 'No Results', 'Run an optimization first.');
+        showToast('error', 'No results yet', 'Run Compare and assign first.');
         return;
     }
     const base = location.origin + location.pathname;
     const payload = validateResultsPayload(lastResults);
     const encoded = payload && encodeData(payload);
     if (!encoded || encoded.length > RESULT_LIMITS.encodedLength) {
-        showToast('error', 'Cannot Share Results', 'These results are invalid or too large to share in a link.');
+        showToast('error', "Results can't be shared", 'These results are invalid or too large to fit in a link.');
         return;
     }
     const link = `${base}#results=${encoded}`;
@@ -1674,10 +1674,10 @@ async function copyResultsLink() {
     const link = get('results-link-input').value;
     const ok = await copyToClipboard(link);
     if (ok) {
-        showToast('success', 'Link Copied', 'Share it with your players.');
+        showToast('success', 'Link copied', 'Send it to your players.');
     } else {
         get('results-link-input').select();
-        showToast('info', 'Copy Manually', 'Press Ctrl/Cmd+C to copy the selected link.');
+        showToast('info', 'Copy manually', 'Press Ctrl+C (Cmd+C on a Mac) to copy the selected link.');
     }
 }
 

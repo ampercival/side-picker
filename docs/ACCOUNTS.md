@@ -12,8 +12,8 @@ Accounts are optional and cost nothing to run. Nobody needs one to create a game
 - **Sign out** removes this browser's device key, so the account's games leave that browser, and brings back any games that were set aside.
 - **Delete account** deletes the sign-in. Games are not deleted: they stay in this browser, and on other devices where they are open, as an ordinary workspace.
 - While signed in, **Open a different organizer link** offers to move that link's games into the account; the old link then stops working. **Start separate workspace** is hidden until sign-out.
-- **Players:** a personal invitation offers an optional sign-in. A signed-in player's invitation is saved to their account automatically, and their home screen lists it under **Games you're playing in** with the game, their player name, and whether picking is open. **Open** goes straight to their picks without the link. If the organizer replaces player links or removes that player, the entry shows "invitation replaced" and cannot be opened. Viewing links are never saved.
-- The home screen has **Manage games** for saved games (faction lists), next to **+ New Session**. Shared results never show account controls.
+- **Players:** a personal invitation offers an optional sign-in. A signed-in player's invitation is saved to their account automatically, and their home screen lists it under **Sessions you're playing in** with the game, their player name, and whether picking is open. **Open** goes straight to their picks without the link. If the organizer replaces player links or removes that player, the entry shows "invitation replaced" and cannot be opened. Viewing links are never saved.
+- The home screen has **Saved games** for saved faction lists, next to **+ New session**. Shared results never show account controls.
 
 ## Design
 

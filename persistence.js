@@ -7,7 +7,7 @@ function renderSaveStatus() {
     let text = 'All changes saved';
     if (j.storageError) text = 'Browser backup unavailable. Keep this tab open until saving succeeds.';
     else if (current.some(e => e.status === 'conflict')) text = 'Changed elsewhere. Your edits are kept here; save a recovery copy.';
-    else if (current.some(e => e.status === 'blocked')) text = 'Save needs attention. Your edits are kept here; check your organizer link or game setup.';
+    else if (current.some(e => e.status === 'blocked')) text = 'Save needs attention. Your edits are kept here; check your organizer link or session setup.';
     else if (current.some(e => e.status === 'failed')) text = 'Waiting to save. Your edits are backed up in this browser.';
     else if (current.some(e => e.status === 'saving')) text = 'Saving…';
     else if (current.length) text = 'Changes backed up here. Waiting to save…';

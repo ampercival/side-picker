@@ -15,15 +15,15 @@
             <h2>Privacy and saved data</h2>
             <p class="subtitle">Last updated 2026-09-27. Side Picker is a free hobby app with no ads, analytics, or tracking cookies.</p>
 
-            <h3>Games</h3>
-            <p>Games you create are saved in a Supabase database: session and game names, faction names, player display names, their choices, and published results. Only people with the matching private link can open them. Organizer links can edit a workspace, player links can edit one player's choices, and viewing links are read-only. The database stores one-way hashes of organizer links, not the links themselves. A shared results link carries the results inside the link.</p>
+            <h3>Sessions</h3>
+            <p>Sessions and saved games you create are stored in a Supabase database: session and game names, faction names, player display names, their choices, and published results. Only people with the matching private link can open them. Organizer links can edit a workspace, player links can edit one player's choices, and viewing links are read-only. The database stores one-way hashes of organizer links, not the links themselves. A shared results link carries the results inside the link.</p>
 
             <h3>Your browser</h3>
             <p>Your browser keeps your organizer link, unsaved drafts, and theme choice in local storage. A player invitation is remembered only in that browser tab. Clearing this site's data removes them from the browser.</p>
 
             <h3>Optional accounts</h3>
-            <p>You never need an account to create games or join as a player. If you sign in with Google, Discord, or GitHub, Supabase stores your account identifier, email address, and the basic profile details the provider shares, such as your name and profile picture address, along with sign-in records that can include IP addresses. Side Picker uses your name or email only to show who is signed in, and your account identifier only to list the games you add to it. It does not ask for access to your contacts, files, or anything else.</p>
-            <p>Use <strong>Delete account</strong> in the Account dialog to delete your sign-in and its list of games. Games are not deleted automatically: they stay available to anyone with their links, and on devices where they are open. Delete games from Sessions first if you want them removed.</p>
+            <p>You never need an account to create games or join as a player. If you sign in with Google, Discord, or GitHub, Supabase stores your account identifier, email address, and the basic profile details the provider shares, such as your name and profile picture address, along with sign-in records that can include IP addresses. Side Picker uses your name or email only to show who is signed in, and your account identifier only to list the sessions you add to it and any player invitations you save. It does not ask for access to your contacts, files, or anything else.</p>
+            <p>Use <strong>Delete account</strong> in the Account dialog to delete your sign-in and its saved invitations. Your sessions are not deleted automatically: they stay available to anyone with their links, and on devices where they are open. Delete sessions from the home screen first if you want them removed.</p>
 
             <h3>Services involved</h3>
             <p>GitHub Pages hosts the site, Supabase hosts the database and sign-in, jsDelivr serves the Supabase code library, and Google Fonts serves the typeface. Google, Discord, or GitHub is involved only if you choose to sign in with it. Like any website, these services receive your IP address when your browser contacts them.</p>

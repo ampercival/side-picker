@@ -14,6 +14,6 @@ test('bulk names trim, skip empty entries, deduplicate case and Unicode without 
     assert.deepEqual(parseBulkNames(' Alex, Jordan\r\n  jordan  \n\nZoë,Zoe\u0308, Taylor ',existing),{names:['Jordan','Zoë','Taylor'],duplicates:3});
     assert.deepEqual(existing,['Alex']);
     assert.throws(()=>parseBulkNames('X'.repeat(501)),/500/);
-    assert.throws(()=>parseBulkNames('B,C',['A'],2),/Nothing has been added/);
+    assert.throws(()=>parseBulkNames('B,C',['A'],2),/Nothing was added/);
     assert.deepEqual(parseBulkNames('A',['A'],1),{names:[],duplicates:1});
 });

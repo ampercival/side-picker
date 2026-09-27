@@ -21,13 +21,13 @@ Side Picker assigns distinct board-game factions to players using their ranked p
 5. Optionally open a live room and send each player their personal invitation. A separate viewing link is read-only.
 6. Close picking when ready, or optimize to close it automatically. Compare Highest Group Score and Fairest for Everyone, then explicitly publish one; the app synchronizes final submissions before solving. Cancellation leaves picking closed until you reopen it.
 7. View results, share a results snapshot, or clear results and reopen picking.
-8. Optionally sign in. While signed in, every device shows the account's games; games already in a browser are added only by choice. **Manage games** on the home screen edits saved games (faction lists).
+8. Optionally sign in. While signed in, every device shows the account's games; games already in a browser are added only by choice. **Saved games** on the home screen edits saved faction lists.
 
 Game presets are named faction lists. A session contains the game-night setup, players, room code, and optional results. Editing the displayed session name does not change its original database identity.
 
 ### Guest
 
-A room invitation uses `?room=CODE` plus a player ID and private token in the fragment. The app remembers the invitation within that tab and removes the fragment from the address bar. It opens that player's choices directly; there is no name selector. A viewing link shows the room without permitting submissions. Old room links without capabilities require replacement. Scoped polling refreshes room status and published results. No guest account is required. A player may optionally sign in from their invitation; it is then saved to their account and listed on their home screen under **Games you're playing in**.
+A room invitation uses `?room=CODE` plus a player ID and private token in the fragment. The app remembers the invitation within that tab and removes the fragment from the address bar. It opens that player's choices directly; there is no name selector. A viewing link shows the room without permitting submissions. Old room links without capabilities require replacement. Scoped polling refreshes room status and published results. No guest account is required. A player may optionally sign in from their invitation; it is then saved to their account and listed on their home screen under **Sessions you're playing in**.
 
 ### Shared results
 
@@ -204,15 +204,15 @@ Views reset scrolling and focus their heading. Organizer navigation records view
 
 Validated with isolated 360px/390px iframe previews and a desktop browser: readable Add Player, keyboard ranking/submission, Help focus trap/Escape restoration, browser Back between setup and picks, room dialog, long result names, and reconnect catching up to published results. Both phone previews had no horizontal page overflow. Physical-device touch gestures were not emulated by the browser-control tools; the grip-only gesture path remains a useful real-phone spot check.
 
-## Repeat game nights and bulk entry
+## Repeat sessions and bulk entry
 
-Every session card offers **Repeat game**. The name can be changed before creation. It copies the game title, factions, and player display names into an independent saved session; choices, bans, submission metadata, locks, results, room code, and old player IDs are cleared. The new room gets its own invitations. The original session is untouched.
+Every session card offers **Repeat session**. The name can be changed before creation. It copies the game title, factions, and player display names into an independent saved session; choices, bans, submission metadata, locks, results, room code, and old player IDs are cleared. The new room gets its own invitations. The original session is untouched.
 
 **Paste faction list** and **Paste player list** accept one name per line or comma-separated names. A preview reports additions and duplicates. Names are trimmed; matching is case-insensitive with Unicode normalization. Existing entries are preserved; exceeding 100 entries or 500 characters per name rejects the entire pasted list. This is simple name entry, not a quoted CSV importer. Single-player entry still permits intentionally distinct people with the same display name; each has a unique ID.
 
 ## Comparing and sharing results
 
-**Compare & Assign** closes live picking, synchronizes submissions, and calculates both goals. Expand each preview for assignments, then publish the chosen goal. Cancelling leaves picking closed until explicitly reopened. A changed setup or pick invalidates the preview; publication never silently uses stale choices. Tied outcomes can differ even when the two goals reach the same scores.
+**Compare and assign** closes live picking, synchronizes submissions, and calculates both goals. Expand each preview for assignments, then publish the chosen goal. Cancelling leaves picking closed until explicitly reopened. A changed setup or pick invalidates the preview; publication never silently uses stale choices. Tied outcomes can differ even when the two goals reach the same scores.
 
 The room dialog has a QR disclosure for its viewing invitation. Copying a personal invitation switches the QR and label to that player; copying the viewing invitation switches back. QR generation runs entirely in the browser using a pinned, vendored MIT library; private links never go to an external QR service. A personal QR grants exactly the same permission as its personal link, so share it with that player. Guest identity remains in the current tab's session storage after the fragment is removed.
 
