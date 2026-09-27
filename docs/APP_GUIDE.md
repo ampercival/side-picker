@@ -1,6 +1,6 @@
 # Side Picker application guide
 
-Last updated: 2026-09-26. Baseline reviewed: commit `2fae186` on `main`.
+Last updated: 2026-09-27. Initial review: `2fae186`; current verified core release: `0ea2704` on `main`.
 
 This describes the existing application, not the proposed future design. See [the improvement plan](IMPROVEMENT_PLAN.md) for changes and session handoffs. Verify live operational details when they matter; a successful check on the review date is not ongoing monitoring.
 
@@ -137,7 +137,7 @@ Results use the payload `{v, t, gm, g, pct, r}`: version, session title, game, g
 | Live rooms | Stable IDs, reconnect refresh, guest conflict choices, and preserved host conflicts | ROOM-01 complete |
 | Optimizer | Exact objectives with bounded matching, randomized tie traversal, and cancellable workers | OPT-01 and OPT-02 complete |
 | Mobile | Flexible inputs, 44px controls, wrapping names, compact empty lists, view focus/scroll reset | UX-01 complete |
-| Operations | Local daily check installed and timer-triggered run verified; computer must be on/signed in. Broader app checks remain outstanding | OPS-01 complete; ENG-01 ongoing |
+| Operations | Local daily check installed and timer-triggered run verified; computer must be on/signed in. Release checks now gate Pages deployment | OPS-01 and ENG-01 complete |
 
 ## Hosting, local use, and validation
 

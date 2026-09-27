@@ -1,8 +1,8 @@
 # Side Picker improvement plan
 
-Created: 2026-09-26. Last updated: 2026-09-26.
+Created: 2026-09-26. Last updated: 2026-09-27.
 
-Status: implementation in progress; commit and push after each improvement as requested by the user.
+Status: selected core improvements implemented, committed, pushed, and verified live. Optional later features remain deferred.
 
 ## Goal and scope
 
@@ -14,13 +14,14 @@ Read [APP_GUIDE.md](APP_GUIDE.md) for current behavior. Follow [AGENTS.md](../AG
 
 ## Current handoff
 
-- **Completed:** initial review and durable documentation.
-- **Implementation tasks completed:** SEC-01 (safe result links), OPS-01 (local daily database check), OPT-01 (strict bans, conflict explanations, consistent input snapshots, result summaries), SEC-02 (private organizer/player links and enforced database access), REL-01 (durable drafts, truthful status, safe retries, version-checked saves, and explicit conflict recovery), and ROOM-01 (room stages and safe submission reconciliation).
-- **Next action:** verify the ENG-01 checks-gated Pages deployment and live read-only smoke test; then the selected core scope is complete. Optional player groups, accounts, and rotation/history remain deferred.
-- **Scope:** no required sign-in. Private organizer links control one workspace; personal invitations control one player; viewing links are read-only. Three existing sessions and two presets belong to two separate workspaces and have separate recovery links. Optional accounts remain FEATURE-04.
-- **External state:** SEC-01 `2c72a21`, OPS-01 `ce280b0`, OPT-01 `27bbdd6`, independent health access `ac3f649`, and SEC-02 `b5cbd3a` are pushed. Pages reports SEC-02 built. Both private-link migrations and legacy bindings are applied; public game-table access is revoked. The live original-game link and post-cutover API/permission checks passed. The local check completed three validated health reads at 22:35:44 Atlantic on 2026-09-26. Daily schedule remains 09:17 plus sign-in catch-up; this computer must be on and signed in.
-- **Recovery:** `.local/private-organizer-links.html` contains private buttons for the original games and presets. Keep this ignored local file; never commit it. Database-local pre-upgrade snapshot: `side_picker_private.before_private_links`. Old room invitations require fresh personal/viewing links; public result snapshots still work.
-- **Working state:** ROOM-01 `6b7bc0d`, OPT-02 `a458d18`, and UX-01 `482e0e4` are deployed (latest verified Pages run `36289083762`). FEATURE-01 `87d3b20` is deployed (Pages run `36289319157`). FEATURE-02 `a952f95` is deployed (Pages run `36289726977`). ENG-01 checks and release workflow are prepared; activation/verification follow this commit.
+- **Completed:** review/documentation and SEC-01, OPS-01, OPT-01, SEC-02, REL-01, ROOM-01, OPT-02, UX-01, FEATURE-01 core repeat/bulk entry, FEATURE-02, and ENG-01. Each improvement has its own pushed commit.
+- **Current release:** ENG-01 `0ea2704`; Checks and Pages run `36289848720` succeeded. FEATURE-02 `a952f95` and FEATURE-01 `87d3b20` also deployed successfully. The new release workflow gates deployment on passing checks and publishes application assets only.
+- **Live verification:** the exact pinned Supabase 2.117.2 script loaded with integrity checking; the original TmpTest, Night B, and Reopen Test games remain visible with their original timestamps. Read-only resume showed bulk entry, room stage, and Compare & Assign. Returned to Sessions; no browser errors. No production game edits used for final verification.
+- **Validation:** 38 Node tests, JavaScript syntax, offline PowerShell health-script tests, independent QR decoding, optimizer benchmarks, and scoped host/guest phone/desktop checks passed. Migration 005 is applied; the deployed SQL suites and preservation assertions passed. Browser mock tests, deployed database tests, and live checks are recorded separately in the work log.
+- **Next action:** no resolved core implementation remains. For a future release, run `node scripts/check.cjs`, follow [RELEASE.md](RELEASE.md), and select a deferred feature only when its scope is resolved. Optional player groups, accounts, and history/rotation are not prerequisites and have not been implemented. A physical-phone touch spot check remains useful; iframe checks do not substitute for hardware gestures.
+- **Scope:** anyone can use the app without signing in. Private organizer links control one workspace; personal invitations control one player; viewing links are read-only. Existing games and presets belong to two separate workspaces. Optional accounts remain FEATURE-04.
+- **Operations:** local daily Supabase task is Ready; last scheduled result is 0 and next run was verified as 2026-09-27 at 09:17 Atlantic. The most recent real health-script success remains 2026-09-26 at 22:35 Atlantic. It requires this computer on, signed in, and connected; future daily recurrence is not yet observed. No external monitor is installed.
+- **Recovery:** ignored `.local/private-organizer-links.html` contains separate private recovery links for the three games and two presets. Keep it private and preserve it. Database migration snapshots are documented in RELEASE.md; they are not off-project disaster backups. Old pre-cutover room invitations require replacement.
 
 ## Decisions to settle during planning
 
@@ -34,7 +35,7 @@ Read [APP_GUIDE.md](APP_GUIDE.md) for current behavior. Follow [AGENTS.md](../AG
 | Bans | Hard exclusions; explain infeasible assignments rather than silently forcing a ban | Implemented in OPT-01 |
 | Unsaved edits | Small durable pending-edit store with visible sync status; database remains authoritative for acknowledged saves | Implemented durable workspace-scoped drafts; cloud saves remain authoritative, stale edits recover as separate copies |
 | Room stages | Collecting, locked, published, with explicit reopen | Implemented 2026-09-26; optimizing closes picking first; cancellation leaves it closed until the organizer reopens |
-| Expanded features | Prioritize repeat sessions, easier setup, and clearer results after reliability work | Proposed; final selection pending |
+| Expanded features | Repeat sessions, bulk setup, goal comparison, QR and result sharing | Core implemented; optional player groups/history/rotation remain deferred |
 
 Routine implementation choices can be resolved from the user's instructions and current code. Record material choices here with date and rationale.
 
@@ -348,3 +349,10 @@ At the end of each implementation session, update Current handoff and append a d
 - Added an explicit isolated host/guest/phone acceptance matrix and release/migration/backup guide. Manual browser evidence and deployed SQL assertions remain separate from unattended checks. Physical touch and off-project disaster backup remain stated limitations.
 - Pinned the currently resolved Supabase client 2.117.2 to its exact UMD URL and integrity digest; QR bytes remain pinned. Added an application-only asset staging check excluding private local files, SQL, docs, and fixtures.
 - Prepared a pinned-action Pages workflow whose deployment depends on passing Windows checks; PRs only test. Next: activate workflow publishing, commit/push, observe CI/deployment, then verify live original sessions and changed controls. FEATURE-02 Pages run `36289726977` succeeded.
+
+### 2026-09-27 — ENG-01 deployment and final handoff verified
+
+- GitHub Pages publishing switched from the legacy branch builder to the prepared workflow. Commit `0ea2704` passed all Windows checks and deployed successfully in run `36289848720`.
+- Reloaded the live site, confirmed the exact Supabase 2.117.2 UMD script, all three original games and unchanged timestamps, and the live comparison/bulk/room-stage controls through read-only resume. Returned to Sessions. Browser error log was empty.
+- Local scheduler readback: Ready, last scheduled result 0, next run 2026-09-27 09:17 Atlantic. The health status file reports the prior real successful read, distinct from simulated checks in CI.
+- All selected core work is complete. Future sessions should use APP_GUIDE.md and RELEASE.md; deferred accounts, player groups, and history/rotation remain intentionally unchecked. Final documentation commit records this evidence; its Pages run is expected to repeat the same gates without changing app assets.
