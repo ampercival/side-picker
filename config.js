@@ -13,5 +13,5 @@
 window.SUPABASE_CONFIG = {
     url: 'https://gghixlqrgwwfgramgvon.supabase.co',
     publishableKey: 'sb_publishable_OOZSdrQpGXvBRs_JPpwUEg_On0CyNq2',
-    accountProviders: []
+    accountProviders: ['google']
 };
