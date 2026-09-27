@@ -54,7 +54,7 @@ begin
  if (select k->>'label' from jsonb_array_elements(listed->0->'keys') k where k->>'kind'='device') is distinct from 'Testbrowser'
   or listed->0->'sessions'->0->>'session_name'<>'Changed' then raise exception 'Device label or save missing: %',listed; end if;
 
- -- Replacing a link replaces only the key that asked.
+ -- The signed-in owner replacing a link replaces only that key.
  perform public.sp_workspace('rotate',device,jsonb_build_object('token_hash',pg_temp.key_hash(device2)));
  begin perform public.sp_workspace('load',device); raise exception 'Replaced device key still works';
  exception when insufficient_privilege then null; end;

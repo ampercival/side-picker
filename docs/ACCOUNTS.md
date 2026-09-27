@@ -1,6 +1,6 @@
 # Optional accounts
 
-Status (2026-09-27): client, migration, and tests prepared; fixture-verified. Migration 006 is **not applied**, no sign-in provider is configured, and `accountProviders` in `config.js` is empty, so the live app does not show accounts yet. See the improvement plan (FEATURE-04) for current status.
+Status (2026-09-27): client, migration, and tests prepared; fixture-verified; migration 006 passed a rolled-back trial on production with all six SQL suites. It is **not applied**, no sign-in provider is configured, and `accountProviders` in `config.js` is empty, so the live app does not show accounts yet. See the improvement plan (FEATURE-04) for current status.
 
 Accounts are optional and cost nothing to run. Nobody needs one to create a game, use an organizer link, or join as a player. Sign-in uses Discord and Google through Supabase Auth. It sends no email, and the providers handle passwords and recovery.
 
@@ -63,7 +63,7 @@ Do these in order. Keep client secrets only in the Supabase dashboard, never in 
 4. **Google.** In Google Cloud Console, create a project and configure Google Auth Platform: External audience, app name Side Picker, support email, privacy policy `https://ampercival.github.io/side-picker/privacy.html`, and only the `openid`, `email`, and `profile` scopes. While publishing status is Testing, only listed test users can sign in; publish it for general use. Create an OAuth client of type Web application with JavaScript origin `https://ampercival.github.io` and redirect URI `https://gghixlqrgwwfgramgvon.supabase.co/auth/v1/callback`. Enable Google in Supabase with that client ID and secret.
 5. **Unused sign-in methods.** Leave anonymous sign-ins and phone disabled. The app never uses email sign-in; disabling the Email provider avoids unused sign-up paths.
 6. **Turn it on.** Set `accountProviders: ['discord', 'google']` in `config.js` (only providers that are enabled), run `node scripts/check.cjs`, commit, push, and wait for Checks and Pages.
-7. **Live verification.** With a new test workspace, not the original games: sign in with each provider, add the workspace, open it in a second browser, save a change there, sign out of one browser, remove a device, and delete a test account. Confirm guest invitations still work signed out, and that the original games still load from their organizer links.
+7. **Live verification.** With a new test workspace, not the original games: sign in with each provider, add the workspace, open it in a second browser, save a change there, sign out of one browser, remove a device, and delete a test account. Confirm guest invitations still work signed out, and that existing organizer links still open their workspaces.
 
 ## Checks
 
