@@ -347,10 +347,16 @@ function addPlayer() {
     input.focus();
 }
 
-function removePlayer(event, btn) {
+async function removePlayer(event, btn) {
     event.stopPropagation(); // prevent toggle
     const card = btn.closest('.player-card');
     const id = card.getAttribute('data-player-id');
+    // A player who joined from the group link stays unless the server knows this device has seen them.
+    if (state.players.find(p => p.id === id)?.joined && state.roomCode) {
+        try { await workspaceRequest('acknowledge_join', { name: activeSessionName, player_id: id }); }
+        catch (error) { accessError(error, 'Could not remove player'); return; }
+        removedPlayerIds.add(id);
+    }
     state.players = state.players.filter(p => p.id !== id);
     autoSave();
     renderPlayers();
@@ -460,7 +466,8 @@ function renderPlayers() {
     container.innerHTML = '';
 
     if (state.players.length === 0) {
-        container.innerHTML = '<div class="empty-state">No players yet</div>';
+        container.innerHTML = state.roomJoin?.open ? '<div class="empty-state">No players yet. People who join from the group link appear here.</div>'
+            : '<div class="empty-state">No players yet</div>';
         return;
     }
 
@@ -979,7 +986,15 @@ function optimizationSnapshotIsCurrent(snapshot) {
     return JSON.stringify(snapshot) === JSON.stringify(optimizationSnapshot());
 }
 
-async function calculateOptimization() {
+async function calculateOptimization(belowMinimumConfirmed = false) {
+    const minimum = state.roomJoin?.open ? state.roomJoin.min : null;
+    if (minimum && state.players.length > 0 && state.players.length < minimum && belowMinimumConfirmed !== true) {
+        const count = state.players.length;
+        showConfirm(`Only ${count} ${count === 1 ? 'player has' : 'players have'} joined`,
+            `This session is set for at least ${minimum} players. Assign factions to ${count === 1 ? 'the one player' : `the ${count} players`} who joined so far? You can reopen picking later.`,
+            () => calculateOptimization(true), 'Assign anyway');
+        return;
+    }
     if (state.players.length === 0) {
         showToast('error', 'Add players first', 'Add at least one player, then try again.');
         return;

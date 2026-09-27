@@ -16,7 +16,7 @@ function keyInfo(hash){
     if(!keyMeta.has(hash))keyMeta.set(hash,{id:crypto.randomUUID(),kind:'link',user:null,label:null,created_at:new Date().toISOString()});
     return keyMeta.get(hash);
 }
-const rooms = new Map(), roomStates = new Map(), picks = new Map(), receipts = new Map();
+const rooms = new Map(), roomStates = new Map(), picks = new Map(), receipts = new Map(), roomJoins = new Map();
 const choices=(p,f)=>({preferences:(p?.preferences||[]).filter(x=>f.includes(x)),bans:(p?.bans||[]).filter(x=>f.includes(x)),noPreference:!!(p?.noPreference??p?.no_preference)});
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 let offline=false, loseNext=false, delay=0, roomsOffline=false;
@@ -82,6 +82,12 @@ function rpc(fn,args,user=null){
         const i=w.sessions.findIndex(s=>s.name===payload.name);let s=w.sessions[i];
         if(action==='save_session'){
             const row={...s,...payload,id:s?.id||crypto.randomUUID(),owner_key:w.owner_key,room_code:s?.room_code||null,updated_at:new Date().toISOString()};
+            const joins=s&&roomJoins.get(s.id);
+            if(joins){
+                for(const [pid,j] of joins)if(!j.acknowledged&&row.players.some(p=>p.id===pid))j.acknowledged=true;
+                for(const old of s.players){const j=joins.get(old.id);if(j&&!j.acknowledged&&!row.players.some(p=>p.id===old.id))row.players=[...row.players,old];}
+                for(const [pid,j] of [...joins])if(j.acknowledged&&!row.players.some(p=>p.id===pid))joins.delete(pid);
+            }
             row.players=row.players.map(p=>{
                 let pick=picks.get(row.id+':'+p.id);if(!pick)return p;
                 const incoming=choices(p,row.factions),saved=choices(pick,row.factions);
@@ -102,7 +108,17 @@ function rpc(fn,args,user=null){
         if(action==='save_preset'){w.presets=w.presets.filter(p=>p.name!==payload.name);w.presets.push(payload);return {};}
         if(action==='delete_preset'){w.presets=w.presets.filter(p=>p.name!==payload.name);return {};}
         if(!s)fail();
-        if(action==='open_room'){s.room_code ||= crypto.randomBytes(12).toString('hex').toUpperCase();if(!rooms.has(s.id)){rooms.set(s.id,crypto.randomBytes(32));roomStates.set(s.id,{locked:false,revision:crypto.randomUUID()});}return s;}
+        if(action==='open_room'){
+            if(!s.factions.length||s.factions.length<s.players.length)fail('Add factions first, at least one per player','22023');
+            s.room_code ||= crypto.randomBytes(12).toString('hex').toUpperCase();if(!rooms.has(s.id)){rooms.set(s.id,crypto.randomBytes(32));roomStates.set(s.id,{locked:false,revision:crypto.randomUUID(),join_open:false,min:null,max:null});}return s;
+        }
+        if(action==='set_room_join'){
+            const r=roomStates.get(s.id);if(!r)fail('Open the room first','22023');
+            const min=payload.min_players??null,max=payload.max_players??null;
+            if(typeof payload.join_open!=='boolean'||[min,max].some(v=>v!==null&&!(Number.isInteger(v)&&v>=1&&v<=100))||(min!==null&&max!==null&&min>max))fail('Use a player range from 1 to 100, with the minimum no higher than the maximum','22023');
+            Object.assign(r,{join_open:payload.join_open,min,max});return {open:r.join_open,min,max};
+        }
+        if(action==='acknowledge_join'){const j=roomJoins.get(s.id)?.get(payload.player_id);if(j)j.acknowledged=true;return {};}
         if(action==='set_room_stage'||action==='room_status'){
             const r=roomStates.get(s.id);if(!r)fail();
             if(action==='set_room_stage'){
@@ -110,7 +126,9 @@ function rpc(fn,args,user=null){
                 if(s.results)fail('Clear results first','22023');
                 if(r.locked!==(payload.stage==='locked')){r.locked=payload.stage==='locked';r.revision=crypto.randomUUID();}
             }
-            return {picks:[...picks.values()].filter(p=>p.session_id===s.id),stage:s.results?'published':r.locked?'locked':'collecting',save_version:s.save_version};
+            return {picks:[...picks.values()].filter(p=>p.session_id===s.id),stage:s.results?'published':r.locked?'locked':'collecting',save_version:s.save_version,
+                join:{open:!!r.join_open,min:r.min??null,max:r.max??null},
+                joins:[...(roomJoins.get(s.id)||new Map())].filter(([pid,j])=>!j.acknowledged&&s.players.some(p=>p.id===pid)).map(([id,j])=>({id,name:j.name}))};
         }
         if(action==='reset_room_links'){rooms.set(s.id,crypto.randomBytes(32));return {};}
         if(action==='submissions')return [...picks.values()].filter(p=>p.session_id===s.id);
@@ -121,6 +139,20 @@ function rpc(fn,args,user=null){
         if(!s||!rooms.has(s.id)||invitation(rooms.get(s.id),player)!==credential)fail();
         const chosen=s.players.find(p=>p.id===player);if(player&&!chosen)fail();
         const r=roomStates.get(s.id), prior=picks.get(s.id+':'+player);
+        const seats=Math.min(r.max??100,s.factions.length);
+        if(action==='join'){
+            if(player)fail('You already have a seat in this session','22023');
+            if(!r.join_open||s.results||r.locked)fail('Joining is closed. Ask the organizer for a player link.');
+            const joiner=String(payload.name||'').replace(/[\x00-\x1f\x7f]/g,'').trim();
+            if(!joiner||joiner.length>60)fail('Enter a name of up to 60 characters','22023');
+            if(s.players.some(p=>p.name.toLowerCase()===joiner.toLowerCase()))fail(`Someone named ${joiner} has already joined. Add an initial or a nickname.`,'22023');
+            if(s.players.length>=seats)fail('This session is full','22023');
+            const id='player-'+crypto.randomUUID();
+            s.players=[...s.players,{id,name:joiner,preferences:[],bans:[],noPreference:false,locked:false,expanded:false,joined:true}];
+            r.revision=crypto.randomUUID();
+            if(!roomJoins.has(s.id))roomJoins.set(s.id,new Map());roomJoins.get(s.id).set(id,{name:joiner,acknowledged:false});
+            return {player_id:id,player_name:joiner,token:invitation(rooms.get(s.id),id)};
+        }
         if(action==='submit'){
             if(!player||s.results||r.locked)fail();
             if(payload.expected_room!==r.revision||payload.expected_pick!==(prior?.updated_at||null))fail('Changed elsewhere','40001');
@@ -128,7 +160,8 @@ function rpc(fn,args,user=null){
         }
         return {session_name:s.session_name,game_title:s.game_title,factions:s.factions,results:s.results||null,
             revision:r.revision,stage:s.results?'published':r.locked?'locked':'collecting',initial_choices:chosen?choices(chosen,s.factions):null,
-            players:s.players.map(p=>({id:p.id,name:p.name,submitted:picks.get(s.id+':'+p.id)?.source==='player'})),mine:picks.get(s.id+':'+player)||null,player_name:chosen?.name||null};
+            players:s.players.map(p=>({id:p.id,name:p.name,submitted:picks.get(s.id+':'+p.id)?.source==='player'})),mine:picks.get(s.id+':'+player)||null,player_name:chosen?.name||null,
+            join:{open:!!r.join_open&&!s.results&&!r.locked,min:r.min??null,max:seats,taken:s.players.length}};
     }
     fail('Unknown operation','22023');
 }

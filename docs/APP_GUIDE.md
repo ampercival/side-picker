@@ -18,7 +18,7 @@ Side Picker assigns distinct board-game factions to players using their ranked p
 2. Create a named session or resume an existing one.
 3. Enter session/game details and add factions, or choose a saved game preset.
 4. Add players and arrange each player's factions into Preferences, Available, and Banned.
-5. Optionally open a live room and send each player their personal invitation. A separate viewing link is read-only.
+5. Optionally open a live room and send each player their personal invitation. The group link is read-only unless the organizer turns on **Let players join**. Then anyone with it can add themselves, up to the seat limit (at most one seat per faction), and gets their own personal invitation. A room can open before any players are added.
 6. Close picking when ready, or optimize to close it automatically. Compare Highest Group Score and Fairest for Everyone, then explicitly publish one; the app synchronizes final submissions before solving. Cancellation leaves picking closed until you reopen it.
 7. View results, share a results snapshot, or clear results and reopen picking.
 8. Optionally sign in. While signed in, every device shows the account's games; games already in a browser are added only by choice. **Saved games** on the home screen edits saved faction lists.
@@ -227,3 +227,9 @@ Run `node scripts/check.cjs` with Node 24 and PowerShell for all offline syntax,
 ## Optional accounts
 
 Accounts add a layer on top of organizer keys; they never gate games or invitations. A workspace can hold several hashed keys: its shareable organizer link and per-device keys created when a signed-in owner's device signs in. While signed in, a browser always shows the account's single set of games; local games are added (merged) or kept separate by choice and return on sign-out. Players can save personal invitations to their account. Adding games to an account requires this browser's valid organizer key, and a workspace has one owning account. Replacing a link while signed in as the owning account replaces only that key; any other replacement resets all keys and account ownership, as before accounts. Sign-out deletes this browser's device key and starts an empty workspace; unlinking and account deletion keep existing keys working. The client shows accounts only when `config.js` lists a provider. Full design, one-time provider setup, and checks are in [ACCOUNTS.md](ACCOUNTS.md).
+
+## Joining from the group link
+
+In the live room dialog, **Let players join from the group link** turns the room's group (viewing) link into a way to join. The organizer sets **Players from N to M**. M cannot exceed the number of factions, and the server caps seats there anyway. N is a soft minimum: **Compare and assign** asks for confirmation below it. A person opening the group link while joining is on sees the seats taken and a name box. Names are trimmed, limited to 60 characters, and must be distinct ignoring case. Joining is refused when the session is full, picking is closed, or results are published.
+
+A join writes the player straight into the session (flagged `joined`) and records it in `side_picker_private.room_joins`, so it works while the organizer is offline. The joiner receives the normal personal invitation, and the page reloads under it. The tab remembers them, and they are offered **Copy my personal link** and, if accounts are on, sign-in. The organizer's room poll adds unseen joiners to the editor and saves them. Until the organizer's device has saved a joiner, an older player list saved by the organizer keeps that joiner instead of dropping them. Removing a joined player first acknowledges the join, so the removal sticks. Migration 008 implements this; `supabase/tests/room_joins.sql` covers it.

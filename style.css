@@ -1583,3 +1583,15 @@ summary { cursor: pointer; min-height: 44px; padding-block: 10px; }
 .guest-account { padding: 1rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-dim); margin-bottom: 1.5rem; }
 .guest-account .account-note { margin-bottom: .75rem; }
 .guest-account .account-providers { flex-direction: row; flex-wrap: wrap; margin-bottom: 0; }
+/* Joining from the group link */
+#room-join-range[hidden], #guest-join[hidden], #guest-joined[hidden], #guest-join-form[hidden] { display: none; }
+.room-join { padding: 1rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-dim); margin-bottom: 1rem; }
+#room-modal .room-join .toggle-switch { display: flex; margin-top: 0; }
+#room-modal .room-join .toggle-switch input { width: 0; }
+.room-join-range { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-top: .75rem; }
+#room-modal .room-join-range { flex-wrap: nowrap; }
+#room-modal .room-join-range label { display: inline; margin-top: 0; white-space: nowrap; font-size: .9rem; color: var(--text-muted); }
+#room-modal .room-join-range input { width: 4.5rem; min-height: 44px; padding: .5rem .6rem; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--input-bg); color: var(--text-main); font: inherit; }
+.room-join .subtitle { margin: .75rem 0 0; }
+#guest-join-form { margin-bottom: 0; }

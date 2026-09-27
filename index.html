@@ -158,7 +158,7 @@
             <section id="view-players" class="view">
                 <div class="card">
                     <h2>Step 2: Add players</h2>
-                    <p class="subtitle">Add everyone, then rank each player's factions — drag them or use the buttons.</p>
+                    <p class="subtitle">Add players yourself, or open a live room and let them join from a group link. Then rank each player's factions — drag them or use the buttons.</p>
 
                     <div class="input-group">
                         <input type="text" id="player-input" placeholder="Player name"
@@ -289,6 +289,22 @@
 
                     <div id="guest-roster" class="guest-roster" style="display: none;"></div>
 
+                    <div id="guest-join" class="guest-account" hidden>
+                        <p id="guest-join-status" class="account-note"></p>
+                        <div id="guest-join-form" class="input-group">
+                            <label for="guest-join-name" class="sr-only">Your name</label>
+                            <input type="text" id="guest-join-name" maxlength="60" placeholder="Your name" autocomplete="nickname"
+                                onkeypress="handleEnter(event, joinSession)">
+                            <button class="btn primary" id="guest-join-button" onclick="joinSession()">Join</button>
+                        </div>
+                    </div>
+                    <div id="guest-joined" class="guest-account" hidden>
+                        <p id="guest-joined-text" class="account-note"></p>
+                        <div class="actions">
+                            <button class="btn secondary" onclick="copyMyPlayerLink()">Copy my personal link</button>
+                            <button class="btn text" onclick="dismissJoinedNotice()">Done</button>
+                        </div>
+                    </div>
                     <div id="guest-account" class="guest-account" hidden></div>
 
                     <div id="guest-name-wrap" style="margin-bottom: 1.5rem;">
@@ -438,7 +454,7 @@
                 <br>• Move factions they don't want into <strong>Banned</strong> (red).
                 <br>• Leave the rest in <strong>Available</strong>.
             </p>
-            <p style="margin-bottom: 1rem;"><strong>4. Collect picks live (optional):</strong> Click <strong>Live room</strong> and send each person their own player link. Players rank their factions on their phones and submit; their picks appear here within a few seconds.</p>
+            <p style="margin-bottom: 1rem;"><strong>4. Collect picks live (optional):</strong> Click <strong>Live room</strong> and send each person their own player link, or turn on joining and share the group link so people add themselves. Players rank their factions on their phones and submit; their picks appear here within a few seconds.</p>
             <p style="margin-bottom: 1rem;"><strong>5. Assign:</strong> Click <strong>Compare and assign</strong> to see both goals: <em>Highest Group Score</em> (best total) or <em>Fairest for Everyone</em> (protects the lowest-scoring player). Publish one, then use <strong>Share results</strong> to send everyone the assignments.</p>
             <p style="font-size: 0.85rem; opacity: 0.7;"><em>Everything saves automatically, so you can reopen a session anytime. Lock a player to keep their choices when you use Randomize choices.</em></p>
             <p class="account-privacy"><a href="privacy.html" target="_blank" rel="noopener">Privacy and saved data</a></p>
@@ -550,8 +566,22 @@
     <div id="room-modal" class="modal">
         <h3>Live room <span id="room-code-label" class="room-code-pill"></span></h3>
         <p style="color: var(--text-muted); line-height: 1.5; font-size: 0.9rem; margin-bottom: 1rem;">
-            Send each person their own player link below. It lets them edit only their choices. The viewing link shows progress and results without allowing edits.
+            Send each person their own player link, or turn on joining and share the group link. A player link edits only that player's choices. The group link shows progress and results, and lets people add themselves while joining is on.
         </p>
+        <div id="room-join" class="room-join">
+            <label class="toggle-switch">
+                <input type="checkbox" id="room-join-open" onchange="saveRoomJoin()">
+                <span class="slider"></span>
+                <span class="label-text">Let players join from the group link</span>
+            </label>
+            <div id="room-join-range" class="room-join-range" hidden>
+                <label for="room-join-min">Players from</label>
+                <input type="number" id="room-join-min" min="1" max="100" inputmode="numeric" onchange="saveRoomJoin()">
+                <label for="room-join-max">to</label>
+                <input type="number" id="room-join-max" min="1" max="100" inputmode="numeric" onchange="saveRoomJoin()">
+            </div>
+            <p id="room-join-status" class="subtitle"></p>
+        </div>
         <p id="room-connection" role="status" class="subtitle">Connecting…</p>
         <label for="room-link-input">Invitation link</label>
         <input type="text" id="room-link-input" readonly onclick="this.select()">
@@ -565,7 +595,7 @@
         <div class="actions right">
             <button class="btn" onclick="closeModals()">Done</button>
             <button class="btn secondary" onclick="replaceRoomLinks()">Replace player links</button>
-            <button class="btn primary" onclick="copyRoomLink()">Copy viewing link</button>
+            <button class="btn primary" onclick="copyRoomLink()">Copy group link</button>
         </div>
     </div>
 

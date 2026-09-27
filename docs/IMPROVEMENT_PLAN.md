@@ -151,7 +151,8 @@ Routine implementation choices can be resolved from the user's instructions and 
 
 - [x] Duplicate a session with the same game/players while clearing picks, results, room code, and submission identities.
 - [x] Add bulk player/faction entry with trimming and duplicate handling.
-- [ ] Add reusable player groups if selected for scope. **Deferred: not selected; repeat-game copying supplies the current roster-reuse workflow.**
+- [ ] Add reusable player groups if selected for scope.
+- [x] Let players add themselves from the group link, within an organizer-set seat range capped at the number of factions. *(Requested 2026-09-27; client, migration 008, and tests prepared; fixture-verified; migration not yet applied.)* **Deferred: not selected; repeat-game copying supplies the current roster-reuse workflow.**
 
 **Acceptance:** a repeated night is independent of the original, and old guest links cannot submit to the new session.
 
@@ -401,3 +402,10 @@ At the end of each implementation session, update Current handoff and append a d
 - On request, reviewed all user-facing text for clarity, consistency, and no hype. The user chose **session** as the term for one play meeting ("game night" was dropped because sessions happen at any time). Terms now used: session, saved game (formerly preset or "game"), players (formerly also "guests"), and assign (the Compare and assign button, formerly "optimize").
 - Updated `index.html`, `script.js`, `rooms.js`, `accounts.js`, `persistence.js`, `sharing.js`, `repeat-games.js`, and `privacy.html`. The changes cover the tagline and title; results wording (removed "The happiness algorithm has spoken", "Optimal Assignment"); plain goal and preference-score explanations; sentence case for headings, buttons, and toasts; no exclamation marks or "Please"; confirmations that name the action and its effect ("Delete \"X\"?" / **Delete session**); errors that say how to fix the problem; clearer player-list labels; stale references to Optimize, presets, and guests; and account text that says sessions instead of games. The privacy page now mentions saved invitations and the current account-deletion behaviour.
 - Kept unchanged on purpose: the goal names **Highest Group Score** and **Fairest for Everyone**, and the per-player result labels ("Choice #1", "Neutral"). Both are stored in shared result links and used for result counting.
+
+### 2026-09-27 — Players can join from the group link (FEATURE-01 addition)
+
+- Requested: organizers should not have to add every player; people with the link add their names, with a seat range so there are never more players than factions.
+- Migration `202609270008_open_joining.sql` (not yet applied) adds room joining settings, `room_joins`, and a `join` action on `sp_room` for the viewing capability only. Joins require joining to be on and picking to be open, a distinct name of up to 60 characters, and a free seat (capped at the number of factions). The migration also adds `set_room_join` and `acknowledge_join`, zero-player `open_room`, and unseen joins in `room_status` to `sp_workspace`. `reconcile_room` now keeps joiners the organizer's device has not saved yet, and lets seen joiners be removed. `sp_account` and 006's rotation rule are unchanged.
+- Client: live room dialog toggle and range, "Copy group link", joiners added from the poll and saved, removal acknowledging first, and a soft minimum warning. Players see seat counts and a name box on the group link, then reload as the new player with a "You joined" notice and **Copy my personal link**.
+- Validation: 48 Node checks pass, including 3 joining tests (poll adds once with picks and never revives removed joiners, join request and reload, and panel states). Fixture browser run: zero-player room, joining on with defaults 2 to 3, two players joining from a 360px group-link tab, the organizer listing and saving both, Kim's removal persisting across polls, and the minimum warning. A found bug is fixed and covered by a test: a fragment-only navigation did not reload the page after joining. `supabase/tests/room_joins.sql` written; not yet run.

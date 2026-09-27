@@ -250,6 +250,11 @@ function replaceOrganizerLink() {
 let guestPick = { id: 'guest', name: '', preferences: [], bans: [], noPreference: false };
 let guestSession = null, guestShowingResults = false, guestAccess = null, guestSavedChoices = '';
 let guestDirtyConflict = false, guestSubmitting = false;
+// Joined players the organizer removed on this page; a late poll or save reply must not bring them back.
+const removedPlayerIds = new Set();
+function joinedPlayer(joiner) {
+    return { id: joiner.id, name: joiner.name, preferences: [], bans: [], locked: false, noPreference: false, expanded: false, joined: true };
+}
 let roomTimer = null, roomEpoch = 0, resumeRoomPolling = null;
 function pickSignature(p) { return JSON.stringify([p.preferences, p.bans, !!p.noPreference]); }
 function playerHasSubmitted(player) { return Boolean(player?.submitted || (player?.submittedAt && player.submittedSource !== 'organizer' && (!player.submittedChoices || JSON.stringify(player.submittedChoices) === pickSignature(player)))); }
@@ -300,10 +305,15 @@ async function refreshRoomSubmissions(epoch = roomEpoch) {
     const name = activeSessionName, workspace = getWorkspaceKey();
     const data = await workspaceRequest('room_status', { name });
     if (epoch !== roomEpoch || name !== activeSessionName || workspace !== getWorkspaceKey()) return;
-    state.roomStage = data.stage; updateRoomBanner();
+    state.roomStage = data.stage; state.roomJoin = data.join || null; updateRoomBanner(); renderRoomJoin();
     // Do not overwrite a durable local edit. The server reconciles the frozen save.
     if (journal?.entries.has('session:' + name)) return;
     let changed = false;
+    // Players who joined from the group link, including while this device was away.
+    for (const joiner of data.joins || []) {
+        if (state.players.some(p => p.id === joiner.id) || removedPlayerIds.has(joiner.id)) continue;
+        state.players.push(joinedPlayer(joiner)); changed = true;
+    }
     for (const row of data.picks) {
         const player = state.players.find(p => p.id === row.player_id);
         if (!player || player.submittedAt === row.updated_at) continue;
@@ -349,7 +359,7 @@ async function showRoomModal() {
     try {
         const link = await invitation(); if (name !== activeSessionName) return;
         get('room-link-input').value = link; get('room-code-label').textContent = ''; renderRoomStatus();
-        showInvitationQR(link,'Viewing invitation — read only');
+        showInvitationQR(link, groupLinkLabel()); renderRoomJoin();
         get('modal-overlay').classList.add('active'); get('room-modal').classList.add('active');
     } catch (error) { accessError(error, 'Could not load invitations'); }
 }
@@ -362,13 +372,43 @@ async function copyPlayerLink(id) {
         else { get('room-link-input').select(); showToast('info', 'Copy manually', 'Copy the selected player link.'); }
     } catch (error) { accessError(error, 'Could not copy invitation'); }
 }
+function groupLinkLabel() { return state.roomJoin?.open ? 'Group link: anyone with it can join' : 'Group link: view only'; }
 async function copyRoomLink() {
     try {
         get('room-link-input').value = await invitation();
-        showInvitationQR(get('room-link-input').value,'Viewing invitation — read only');
-        if (await copyToClipboard(get('room-link-input').value)) showToast('success', 'Viewing link copied', 'This link can view the room but cannot submit picks.');
+        showInvitationQR(get('room-link-input').value, groupLinkLabel());
+        if (await copyToClipboard(get('room-link-input').value)) showToast('success', 'Group link copied', state.roomJoin?.open
+            ? 'Anyone with it can add themselves while joining is on.' : 'Anyone with it can follow progress and results.');
         else get('room-link-input').select();
-    } catch (error) { accessError(error, 'Could not copy viewing link'); }
+    } catch (error) { accessError(error, 'Could not copy group link'); }
+}
+// --- Letting players join from the group link ---
+function renderRoomJoin() {
+    const toggle = get('room-join-open'); if (!toggle) return;
+    const join = state.roomJoin || { open: false, min: null, max: null };
+    const seats = Math.min(join.max ?? 100, state.factions.length);
+    toggle.checked = !!join.open;
+    get('room-join-range').hidden = !join.open;
+    if (document.activeElement !== get('room-join-min')) get('room-join-min').value = join.min ?? '';
+    if (document.activeElement !== get('room-join-max')) get('room-join-max').value = join.max ?? '';
+    get('room-join-status').textContent = join.open
+        ? `${state.players.length} of ${seats} seats taken${join.min ? `; at least ${join.min} needed` : ''}. Seats can't exceed the number of factions.`
+        : 'Off: only players you add can pick.';
+}
+async function saveRoomJoin() {
+    if (!activeSessionName || !state.roomCode) return;
+    const open = get('room-join-open').checked, factions = state.factions.length;
+    let min = parseInt(get('room-join-min').value, 10), max = parseInt(get('room-join-max').value, 10);
+    if (!Number.isInteger(max)) max = open ? factions : null;
+    if (!Number.isInteger(min)) min = open ? Math.min(2, max) : null;
+    if (open && (max < 1 || max > factions || min < 1 || min > max)) {
+        showToast('error', 'Check the player range', `Use 1 to ${factions} players (one per faction), with the minimum no higher than the maximum.`);
+        renderRoomJoin(); return;
+    }
+    try {
+        state.roomJoin = await workspaceRequest('set_room_join', { name: activeSessionName, join_open: open, min_players: min, max_players: max });
+        renderRoomJoin(); showInvitationQR(get('room-link-input').value, groupLinkLabel()); renderPlayers();
+    } catch (error) { accessError(error, 'Could not change joining'); renderRoomJoin(); }
 }
 function replaceRoomLinks() {
     showConfirm('Replace player links?', 'All current player and viewing links for this game will stop working. Send new invitations afterward. Saved picks are kept.', async () => {
@@ -418,7 +458,7 @@ async function enterRoomGuestMode(code) {
         guestPick.id = guestAccess.player || 'guest'; guestPick.name = data.player_name || '';
         setGuestChoices(data.mine || data.initial_choices);
         guestSavedChoices = pickSignature(guestPick);
-        get('guest-name-wrap').style.display = 'block';
+        get('guest-name-wrap').style.display = 'block'; renderGuestJoined();
         setupDragAndDrop(get('guest-available'), get('guest-preference'), get('guest-banned'), guestPick); applyGuestRoom(data);
         if (typeof startGuestAccount === 'function') void startGuestAccount();
         startRoomPolling(async epoch => { const fresh = await guestRequest(); if (epoch === roomEpoch) applyGuestRoom(fresh); });
@@ -436,7 +476,8 @@ function applyGuestRoom(data) {
     guestSession.lastResponse = response;
     get('guest-banner').style.display = 'block'; get('guest-session-name').textContent = data.session_name || ''; get('guest-game-title').textContent = data.game_title || '';
     guestPick.name = data.player_name || '';
-    get('guest-player-name').textContent = guestPick.name || 'Viewing only — ask the organizer for your personal player link to submit picks.';
+    get('guest-player-name').textContent = guestPick.name || (data.join?.open ? '' : 'Viewing only. Ask the organizer for your personal player link to submit picks.');
+    renderGuestJoin(data);
     guestPick.preferences = guestPick.preferences.filter(f => data.factions.includes(f)); guestPick.bans = guestPick.bans.filter(f => data.factions.includes(f));
     renderGuestRoster();
     if (guestResultsReady(data.results)) { guestShowingResults = true; enterSharedResultsMode(data.results); }
@@ -488,4 +529,48 @@ async function submitMyPicks() {
         accessError(error, 'Could not submit picks');
         try { const fresh = await guestRequest(); if (epoch === roomEpoch) applyGuestRoom(fresh); } catch { setRoomConnection(false); }
     } finally { guestSubmitting = false; if (epoch === roomEpoch) updateGuestSubmitted(); }
+}
+// --- Joining from the group link (players) ---
+function renderGuestJoin(data) {
+    const box = get('guest-join'); if (!box) return;
+    const join = data?.join || {};
+    box.hidden = !!guestAccess?.player || !join.open;
+    if (box.hidden) return;
+    const full = join.taken >= join.max;
+    get('guest-join-status').textContent = full
+        ? `This session is full (${join.taken} of ${join.max} seats). Ask the organizer if you should have a seat.`
+        : `${join.taken} of ${join.max} seats taken${join.min && join.taken < join.min ? `; the organizer needs at least ${join.min}` : ''}. Enter your name to take a seat.`;
+    get('guest-join-form').hidden = full;
+}
+async function joinSession() {
+    const input = get('guest-join-name'), name = input.value.trim(), button = get('guest-join-button');
+    if (!name) { input.focus(); return; }
+    button.disabled = true;
+    try {
+        const joined = await guestRequest('join', { name });
+        try { sessionStorage.setItem(`side_picker_joined_${guestSession.code}`, '1'); } catch { /* optional notice */ }
+        // Continue as the new player through their personal link, like any invitation. Only the
+        // fragment changes, which does not reload the page by itself.
+        location.replace(makePrivateLink('player', joined.token, { room: guestSession.code, player: joined.player_id }));
+        location.reload();
+    } catch (error) {
+        button.disabled = false;
+        showToast('error', 'Could not join', ['42501', '22023'].includes(error?.code) && error.message ? error.message : 'Check your connection and try again.');
+    }
+}
+function renderGuestJoined() {
+    const box = get('guest-joined'); if (!box) return;
+    let joined = false;
+    try { joined = !!guestAccess?.player && sessionStorage.getItem(`side_picker_joined_${guestSession.code}`) === '1'; } catch { /* optional */ }
+    box.hidden = !joined;
+    if (joined) get('guest-joined-text').textContent = `You joined as ${guestPick.name}. This tab remembers you. To come back from another tab or device, copy your personal link and keep it private.`;
+}
+async function copyMyPlayerLink() {
+    const link = makePrivateLink('player', guestAccess.token, { room: guestSession.code, player: guestAccess.player });
+    if (await copyToClipboard(link)) showToast('success', 'Personal link copied', 'Keep it private. It lets anyone change your picks.');
+    else showToast('info', 'Copy manually', link);
+}
+function dismissJoinedNotice() {
+    try { sessionStorage.removeItem(`side_picker_joined_${guestSession.code}`); } catch { /* optional */ }
+    get('guest-joined').hidden = true;
 }
