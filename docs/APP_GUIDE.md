@@ -21,13 +21,13 @@ Side Picker assigns distinct board-game factions to players using their ranked p
 5. Optionally open a live room and send each player their personal invitation. A separate viewing link is read-only.
 6. Close picking when ready, or optimize to close it automatically. Compare Highest Group Score and Fairest for Everyone, then explicitly publish one; the app synchronizes final submissions before solving. Cancellation leaves picking closed until you reopen it.
 7. View results, share a results snapshot, or clear results and reopen picking.
-8. Optionally sign in to keep workspaces in an account and open them on other devices without saving links. This appears only once providers are configured.
+8. Optionally sign in. While signed in, every device shows the account's games; games already in a browser are added only by choice. **Manage games** on the home screen edits saved games (faction lists).
 
 Game presets are named faction lists. A session contains the game-night setup, players, room code, and optional results. Editing the displayed session name does not change its original database identity.
 
 ### Guest
 
-A room invitation uses `?room=CODE` plus a player ID and private token in the fragment. The app remembers the invitation within that tab and removes the fragment from the address bar. It opens that player's choices directly; there is no name selector. A viewing link shows the room without permitting submissions. Old room links without capabilities require replacement. Scoped polling refreshes room status and published results. No guest account is required.
+A room invitation uses `?room=CODE` plus a player ID and private token in the fragment. The app remembers the invitation within that tab and removes the fragment from the address bar. It opens that player's choices directly; there is no name selector. A viewing link shows the room without permitting submissions. Old room links without capabilities require replacement. Scoped polling refreshes room status and published results. No guest account is required. A player may optionally sign in from their invitation; it is then saved to their account and listed on their home screen under **Games you're playing in**.
 
 ### Shared results
 
@@ -91,6 +91,7 @@ There is no application server, framework, bundler, or package manifest. Focused
 | `submissions` | Legacy `(room_code, player_name)` | Retained for recovery; new client does not use it |
 | `side_picker_private.workspaces` | Token hash; several per workspace after migration 006 | Hashed organizer keys: the shareable link, plus account device keys with label and creating user |
 | `side_picker_private.account_workspaces` | Workspace label | The one account that owns a workspace (migration 006) |
+| `side_picker_private.account_invitations` | Account + session UUID + player ID | A player's saved invitation: hash only, retired when links are replaced (migration 007) |
 | `side_picker_private.rooms` | Session UUID | Private seed for viewing/player links |
 | `side_picker_private.picks` | `(session_id, player_id)` | Validated private submissions and timestamp |
 | `side_picker_private.save_receipts` | Workspace + operation UUID | Idempotent save replies, retained for 30 days per active workspace |
@@ -225,4 +226,4 @@ Run `node scripts/check.cjs` with Node 24 and PowerShell for all offline syntax,
 
 ## Optional accounts
 
-Accounts add a layer on top of organizer keys; they never gate games or invitations. A workspace can hold several hashed keys: its shareable organizer link and per-device keys created when a signed-in owner chooses **Open in this browser**. Adding games to an account requires this browser's valid organizer key, and a workspace has one owning account. Replacing a link while signed in as the owning account replaces only that key; any other replacement resets all keys and account ownership, as before accounts. Sign-out deletes this browser's device key and starts an empty workspace; unlinking and account deletion keep existing keys working. The client shows accounts only when `config.js` lists a provider. Full design, one-time provider setup, and checks are in [ACCOUNTS.md](ACCOUNTS.md).
+Accounts add a layer on top of organizer keys; they never gate games or invitations. A workspace can hold several hashed keys: its shareable organizer link and per-device keys created when a signed-in owner's device signs in. While signed in, a browser always shows the account's single set of games; local games are added (merged) or kept separate by choice and return on sign-out. Players can save personal invitations to their account. Adding games to an account requires this browser's valid organizer key, and a workspace has one owning account. Replacing a link while signed in as the owning account replaces only that key; any other replacement resets all keys and account ownership, as before accounts. Sign-out deletes this browser's device key and starts an empty workspace; unlinking and account deletion keep existing keys working. The client shows accounts only when `config.js` lists a provider. Full design, one-time provider setup, and checks are in [ACCOUNTS.md](ACCOUNTS.md).

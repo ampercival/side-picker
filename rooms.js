@@ -200,12 +200,11 @@ async function createPrivateWorkspace(confirmed = false) {
     if (journal?.storageError) return;
     const credential = localStorage.getItem(PRIVATE_WORKSPACE_KEY + '_new') || newPrivateToken();
     localStorage.setItem(PRIVATE_WORKSPACE_KEY + '_new', credential);
-    const generation = ++loadGeneration, previous = privateWorkspace().credential;
+    const generation = ++loadGeneration;
     try {
         const data = await workspaceRequest('create', {}, credential);
         if (generation !== loadGeneration) return;
         storeWorkspace(credential, data.owner_key); localStorage.removeItem(PRIVATE_WORKSPACE_KEY + '_new');
-        if (typeof releaseAccountKey === 'function') void releaseAccountKey(previous);
         activeSessionName = null; state.roomCode = ''; deactivateRoomSync();
         applyWorkspaceData({ sessions: [], presets: [] });
         closeModals(); updateWorkspaceIndicator(); renderHomeSessions(); renderPresetOptions();
@@ -214,14 +213,15 @@ async function createPrivateWorkspace(confirmed = false) {
 async function importOrganizerLink() {
     try {
         const credential = parseOrganizerLink(get('workspace-input').value);
+        // Signed in, the browser keeps showing the account's games; the link's games join them.
+        if (typeof accountSession !== 'undefined' && accountSession) { importIntoAccount(credential); return; }
         await flushSession();
         if (journal?.storageError) return;
-        const generation = ++loadGeneration, previous = privateWorkspace().credential;
+        const generation = ++loadGeneration;
         const data = await workspaceRequest('load', {}, credential);
         if (generation !== loadGeneration) return;
         deactivateRoomSync(); activeSessionName = null; state.roomCode = '';
         storeWorkspace(credential, data.owner_key); applyWorkspaceData(data);
-        if (previous !== credential && typeof releaseAccountKey === 'function') void releaseAccountKey(previous);
         closeModals(); renderHomeSessions(); renderPresetOptions(); switchView('view-home');
     } catch (error) { accessError(error, 'Could not open organizer link'); }
 }
@@ -420,6 +420,7 @@ async function enterRoomGuestMode(code) {
         guestSavedChoices = pickSignature(guestPick);
         get('guest-name-wrap').style.display = 'block';
         setupDragAndDrop(get('guest-available'), get('guest-preference'), get('guest-banned'), guestPick); applyGuestRoom(data);
+        if (typeof startGuestAccount === 'function') void startGuestAccount();
         startRoomPolling(async epoch => { const fresh = await guestRequest(); if (epoch === roomEpoch) applyGuestRoom(fresh); });
     } catch { showGuestError('This room link is incomplete, expired, or unavailable. Ask the organizer for a fresh personal invitation.'); }
 }

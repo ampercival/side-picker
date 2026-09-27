@@ -85,11 +85,17 @@
 
                     <div class="actions" style="margin-bottom: 1.5rem;">
                         <button class="btn primary" onclick="startNewSession()">+ New Session</button>
+                        <button class="btn secondary" onclick="openPresetModal()">Manage games</button>
                     </div>
 
                     <div id="home-session-list" class="session-cards">
                         <!-- Session cards injected by JS -->
                     </div>
+                </div>
+                <div id="home-invitations" class="card" hidden>
+                    <h2>Games you're playing in</h2>
+                    <p class="subtitle">Invitations saved to your account. Open one to make or change your picks.</p>
+                    <div id="home-invitation-list" class="invitation-list"></div>
                 </div>
             </section>
 
@@ -288,6 +294,8 @@
                     <div id="guest-error" class="guest-error" style="display: none;"></div>
 
                     <div id="guest-roster" class="guest-roster" style="display: none;"></div>
+
+                    <div id="guest-account" class="guest-account" hidden></div>
 
                     <div id="guest-name-wrap" style="margin-bottom: 1.5rem;">
                         <strong id="guest-player-name"></strong>
@@ -535,13 +543,13 @@
             <button class="btn text" onclick="replaceOrganizerLink()">Replace link</button></div>
         </div>
         <p id="workspace-account-hint" class="account-note" hidden>Prefer not to keep links?
-            <button class="link-btn" onclick="openAccountModal(true)">Keep these games in an optional account</button></p>
+            <button class="link-btn" onclick="openAccountModal()">Keep these games in an optional account</button></p>
         <label for="workspace-input">Open a different organizer link</label>
         <input type="text" id="workspace-input" placeholder="Paste a private organizer link" autocomplete="off"
             onkeypress="handleEnter(event, importOrganizerLink)">
         <div class="actions right">
             <button class="btn" onclick="closeModals()">Close</button>
-            <button class="btn secondary" onclick="createPrivateWorkspace()">Start separate workspace</button>
+            <button class="btn secondary" id="start-separate-workspace" onclick="createPrivateWorkspace()">Start separate workspace</button>
             <button class="btn primary" onclick="importOrganizerLink()">Open link</button>
         </div>
     </div>

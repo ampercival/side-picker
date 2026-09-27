@@ -4,7 +4,7 @@ const root = path.resolve(__dirname, '..');
 const workspaces = new Map();
 const rotatedWorkspaces = new Map();
 // Every workspace, even one whose keys were all revoked, plus key metadata and account links.
-const registry = new Map(), keyMeta = new Map(), accountLinks = new Map();
+const registry = new Map(), keyMeta = new Map(), accountLinks = new Map(), savedInvites = new Map();
 const sha = value => crypto.createHash('sha256').update(value).digest('hex');
 const make = () => { const w = {owner_key:crypto.randomUUID(),sessions:[],presets:[]}; registry.set(w.owner_key,w); return w; };
 workspaces.set('a'.repeat(64), Object.assign(make(),{sessions:[{id:'sample',save_version:crypto.randomUUID(),name:'Ban conflict fixture',session_name:'Ban conflict fixture',game_title:'Example Game',factions:['A','B'],room_code:null,results:null,updated_at:new Date().toISOString(),players:['Alex','Jordan'].map((name,i)=>({id:'p'+i,name,preferences:['A'],bans:['B'],expanded:true,noPreference:false}))}]}));
@@ -132,7 +132,8 @@ function rpc(fn,args,user=null){
     }
     fail('Unknown operation','22023');
 }
-// Mirrors migration 006: proof by organizer key, one owning account, device keys.
+// Mirrors migrations 006-007: proof by organizer key, one owning account, device keys, start, merge, invitations.
+const sessionById=id=>[...registry.values()].flatMap(w=>w.sessions).find(s=>s.id===id);
 function account(action,payload,user){
     if(!user)fail('permission denied for function sp_account','42501');
     let h=null;
@@ -141,7 +142,49 @@ function account(action,payload,user){
     if(action==='list')return {workspaces:[...accountLinks].filter(([,u])=>u===user).map(([owner])=>{const w=registry.get(owner);return {owner_key:owner,
         sessions:w.sessions.map(s=>({name:s.name,session_name:s.session_name,game_title:s.game_title,updated_at:s.updated_at})).sort((a,b)=>String(b.updated_at).localeCompare(String(a.updated_at))),
         presets:w.presets.map(p=>p.name).sort(),
-        keys:keysOf(w).map(k=>{const i=keyInfo(k.hash);return {id:i.id,kind:i.kind,label:i.label,created_at:i.created_at,current:k.hash===h};})};})};
+        keys:keysOf(w).map(k=>{const i=keyInfo(k.hash);return {id:i.id,kind:i.kind,label:i.label,created_at:i.created_at,current:k.hash===h};})};}),
+        invitations:[...savedInvites.values()].filter(v=>v.user===user).flatMap(v=>{const s=sessionById(v.session_id),r=s&&roomStates.get(s.id);if(!r)return [];
+            const player=s.players.find(p=>p.id===v.player_id);
+            return [{session_id:s.id,player_id:v.player_id,session_name:s.session_name,game_title:s.game_title,player_name:player?.name||null,saved_at:v.saved_at,
+                stage:s.results?'published':r.locked?'locked':'collecting',current:!!player&&sha(invitation(rooms.get(s.id),v.player_id))===v.token_hash}];})};
+    if(action==='save_invite'){
+        const player=String(payload.player||'');
+        if(!/^[0-9a-f]{64}$/.test(payload.token||'')||!player)fail('Only a personal player invitation can be saved','22023');
+        const s=[...registry.values()].flatMap(w=>w.sessions).find(s=>s.room_code===payload.room);
+        if(!s||!rooms.has(s.id)||invitation(rooms.get(s.id),player)!==payload.token||!s.players.some(p=>p.id===player))fail('Room link is invalid or expired');
+        savedInvites.set(user+'|'+s.id+'|'+player,{user,session_id:s.id,player_id:player,token_hash:sha(payload.token),saved_at:new Date().toISOString()});return {saved:true};
+    }
+    if(action==='open_invite'||action==='forget_invite'){
+        const id=user+'|'+payload.session_id+'|'+payload.player_id,v=savedInvites.get(id);
+        if(action==='forget_invite'){savedInvites.delete(id);return {};}
+        const s=v&&sessionById(v.session_id);if(!s)fail('Invitation not found');
+        const token=invitation(rooms.get(s.id),v.player_id);
+        if(!s.players.some(p=>p.id===v.player_id)||sha(token)!==v.token_hash)fail('This invitation was replaced or you were removed from the game. Ask the organizer for a new one.');
+        return {room_code:s.room_code,player_id:v.player_id,token};
+    }
+    if(action==='start'){
+        if([...accountLinks.values()].includes(user))fail('Your account already has games. Refresh to load them.','22023');
+        if(!/^[0-9a-f]{64}$/.test(payload.token_hash||''))fail('Invalid device key','22023');
+        const w=make();rotatedWorkspaces.set(payload.token_hash,w);
+        Object.assign(keyInfo(payload.token_hash),{kind:'device',user,label:String(payload.label||'').slice(0,100)||null});
+        accountLinks.set(w.owner_key,user);return {owner_key:w.owner_key};
+    }
+    if(action==='merge'){
+        if(!mine(payload.owner_key))fail('These games are not in your account');
+        let source;
+        if(h){const k=keyEntries().find(k=>k.hash===h);if(!k)fail('Organizer link is missing or invalid');source=k.w;}
+        else{if(!mine(payload.source_owner_key))fail('These games are not in your account');source=registry.get(payload.source_owner_key);}
+        const target=registry.get(payload.owner_key);
+        if(source===target)return {owner_key:target.owner_key,sessions:0,presets:0};
+        if(accountLinks.has(source.owner_key)&&!mine(source.owner_key))fail('These games belong to another account');
+        const unique=(list,name)=>{let next=name,n=1;while(list.some(x=>x.name===next)){n++;next=name.slice(0,480)+' ('+n+')';}return next;};
+        for(const row of source.sessions)target.sessions.push({...row,owner_key:target.owner_key,name:unique(target.sessions,row.name),save_version:crypto.randomUUID()});
+        for(const row of source.presets)target.presets.push({...row,name:unique(target.presets,row.name),save_version:crypto.randomUUID()});
+        const counts={owner_key:target.owner_key,sessions:source.sessions.length,presets:source.presets.length};
+        source.sessions=[];source.presets=[];
+        for(const k of keysOf(source)){k.drop();keyMeta.delete(k.hash);}
+        accountLinks.delete(source.owner_key);registry.delete(source.owner_key);return counts;
+    }
     if(action==='attach'){
         const k=h&&keyEntries().find(k=>k.hash===h);if(!k)fail('Organizer link is missing or invalid');
         const owner=k.w.owner_key;if(accountLinks.has(owner)&&!mine(owner))fail('These games already belong to another account');

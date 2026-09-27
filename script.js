@@ -180,9 +180,10 @@ function openInfoModal() {
     get('info-modal').classList.add('active');
 }
 
-function showConfirm(title, message, callback, btnText = 'Confirm', btnClass = 'primary', onCancel = null) {
+function showConfirm(title, message, callback, btnText = 'Confirm', btnClass = 'primary', onCancel = null, cancelText = 'Cancel') {
     get('confirm-title').textContent = title;
     get('confirm-message').textContent = message;
+    get('confirm-cancel-btn').textContent = cancelText;
 
     const confirmBtn = get('confirm-btn');
     confirmBtn.textContent = btnText;
@@ -1174,6 +1175,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Read an optional-account sign-in return before anything else uses the URL.
     const authCallback = accountsEnabled() ? takeAuthCallback() : null;
+    if (authCallback && pendingGuestInvitation()) { void finishGuestSignIn(authCallback); return; }
     renderPresetOptions();
     updateWorkspaceIndicator();
     initWorkspaceAndSessions(authCallback); // async: load sessions from DB (prompts for a workspace key if needed)
@@ -1186,12 +1188,14 @@ async function initWorkspaceAndSessions(authCallback = null) {
         renderHomeSessions(); // Will show a "not configured" notice.
         return;
     }
-    const account = startAccount(authCallback); // optional; never blocks games
-    try { await initializePrivateWorkspace(); }
-    catch (error) { workspaceLoadFailed = true; accessError(error, 'Could not open saved games'); ensureJournal(); if (!hasWorkspaceKey()) openWorkspaceModal(); renderSaveStatus(); }
+    await startAccount(authCallback); // optional; signed-out visitors continue at once
+    // A signed-in browser with no games of its own goes straight to the account's games.
+    if (!skipLocalWorkspace()) {
+        try { await initializePrivateWorkspace(); }
+        catch (error) { workspaceLoadFailed = true; accessError(error, 'Could not open saved games'); ensureJournal(); if (!hasWorkspaceKey() && !accountSession) openWorkspaceModal(); renderSaveStatus(); }
+    }
     renderPresetOptions();
     renderHomeSessions();
-    await account;
     await completeSignIn(authCallback);
 }
 
@@ -1216,7 +1220,7 @@ function updateWorkspaceIndicator() {
         const account = document.createElement('button');
         account.className = 'link-btn'; account.onclick = () => openAccountModal();
         account.textContent = !accountSession ? 'Sign in to use them on all your devices (optional)'
-            : currentWorkspaceLinked() ? 'Your account’s games' : 'Add these games to your account';
+            : 'Signed in: your games are on all your devices';
         el.append(document.createTextNode(' · '), account);
     }
 }

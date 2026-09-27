@@ -1,9 +1,10 @@
--- Isolated, rolled-back account checks. Run after migration 006.
--- Two sample auth users and every workspace/key below disappear on rollback.
+-- Isolated, rolled-back account checks. Run after migration 007.
+-- Three sample auth users and every workspace/key below disappear on rollback.
 begin;
 insert into auth.users(id,email,aud,role) values
  ('00000000-0000-4000-8000-00000000000a','account-a@example.invalid','authenticated','authenticated'),
- ('00000000-0000-4000-8000-00000000000b','account-b@example.invalid','authenticated','authenticated');
+ ('00000000-0000-4000-8000-00000000000b','account-b@example.invalid','authenticated','authenticated'),
+ ('00000000-0000-4000-8000-00000000000c','account-c@example.invalid','authenticated','authenticated');
 create function pg_temp.as_user(u text,anonymous boolean default false) returns void language sql as $$
  select set_config('request.jwt.claims',json_build_object('sub',u,'role','authenticated','is_anonymous',anonymous)::text,true)
 $$;
@@ -122,6 +123,82 @@ begin
  perform set_config('sp_test.owner',owner,true);
 end $$;
 
+-- Account games everywhere: start once, then merge other games into them.
+do $$
+declare c text := '00000000-0000-4000-8000-00000000000c'; b text := '00000000-0000-4000-8000-00000000000b';
+ device text := encode(extensions.gen_random_bytes(32),'hex'); second text := encode(extensions.gen_random_bytes(32),'hex');
+ local text := encode(extensions.gen_random_bytes(32),'hex'); extra text := encode(extensions.gen_random_bytes(32),'hex');
+ foreign_link text := encode(extensions.gen_random_bytes(32),'hex');
+ mine text; other text; game jsonb; opened jsonb; invite jsonb; moved jsonb; listed jsonb;
+begin
+ perform pg_temp.as_user(c);
+ mine := public.sp_account('start',jsonb_build_object('token_hash',pg_temp.key_hash(device),'label','Phone'))->>'owner_key';
+ begin perform public.sp_account('start',jsonb_build_object('token_hash',pg_temp.key_hash(second)));
+  raise exception 'Started a second set of account games'; exception when invalid_parameter_value then null; end;
+ game := '{"name":"Game night","session_name":"Game night","factions":["A","B"],"players":[{"id":"p1","name":"Alex","preferences":[],"bans":[]}]}';
+ perform public.sp_workspace('save_session',device,game || jsonb_build_object('expected_version',null,'operation_id',gen_random_uuid()));
+
+ -- Games made in a browser before signing in move in with their live room intact.
+ other := public.sp_workspace('create',local)->>'owner_key';
+ perform public.sp_workspace('save_session',local,game || jsonb_build_object('expected_version',null,'operation_id',gen_random_uuid()));
+ perform public.sp_workspace('save_preset',local,jsonb_build_object('name','Favourite','factions','["A"]'::jsonb,'expected_version',null,'operation_id',gen_random_uuid()));
+ opened := public.sp_workspace('open_room',local,game);
+ invite := public.sp_workspace('invite',local,game || '{"player_id":"p1"}');
+ begin perform public.sp_account('merge',jsonb_build_object('owner_key',other,'credential',local));
+  raise exception 'Merged into games outside the account'; exception when insufficient_privilege then null; end;
+ moved := public.sp_account('merge',jsonb_build_object('owner_key',mine,'credential',local));
+ if (moved->>'sessions')::int<>1 or (moved->>'presets')::int<>1 then raise exception 'Merge moved the wrong rows: %',moved; end if;
+ begin perform public.sp_workspace('load',local); raise exception 'Merged link still works';
+ exception when insufficient_privilege then null; end;
+ listed := public.sp_account('list',jsonb_build_object('credential',device))->'workspaces';
+ if jsonb_array_length(listed)<>1 or jsonb_array_length(listed->0->'sessions')<>2 or listed->0->'presets'<>'["Favourite"]'::jsonb
+  or not exists(select 1 from jsonb_array_elements(listed->0->'sessions') x where x->>'name'='Game night (2)') then
+  raise exception 'Merged games missing or not renamed: %',listed;
+ end if;
+ if public.sp_room(opened->>'room_code','p1',invite->>'token')->>'player_name'<>'Alex' then raise exception 'Live room lost in merge'; end if;
+
+ -- A player keeps a valid personal invitation; replacing player links retires it.
+ begin perform public.sp_account('save_invite',jsonb_build_object('room',opened->>'room_code','player','p1','token',repeat('0',64)));
+  raise exception 'Saved a forged invitation'; exception when insufficient_privilege then null; end;
+ begin perform public.sp_account('save_invite',jsonb_build_object('room',opened->>'room_code','player','','token',invite->>'token'));
+  raise exception 'Saved a viewing link as a player'; exception when invalid_parameter_value then null; end;
+ perform public.sp_account('save_invite',jsonb_build_object('room',opened->>'room_code','player','p1','token',invite->>'token'));
+ listed := public.sp_account('list')->'invitations';
+ if jsonb_array_length(listed)<>1 or listed->0->>'player_name'<>'Alex' or (listed->0->>'current')::boolean is not true or listed->0->>'stage'<>'collecting' then
+  raise exception 'Saved invitation summary is wrong: %',listed;
+ end if;
+ if public.sp_account('open_invite',jsonb_build_object('session_id',listed->0->>'session_id','player_id','p1'))->>'token'<>invite->>'token' then
+  raise exception 'Saved invitation did not reopen';
+ end if;
+ perform pg_temp.as_user(b);
+ begin perform public.sp_account('open_invite',jsonb_build_object('session_id',listed->0->>'session_id','player_id','p1'));
+  raise exception 'Another account opened a saved invitation'; exception when insufficient_privilege then null; end;
+ perform pg_temp.as_user(c);
+ perform public.sp_workspace('reset_room_links',device,'{"name":"Game night (2)"}');
+ if (public.sp_account('list')->'invitations'->0->>'current')::boolean then raise exception 'Replaced invitation still current'; end if;
+ begin perform public.sp_account('open_invite',jsonb_build_object('session_id',listed->0->>'session_id','player_id','p1'));
+  raise exception 'Replaced invitation reopened'; exception when insufficient_privilege then null; end;
+ invite := public.sp_workspace('invite',device,'{"name":"Game night (2)","player_id":"p1"}');
+ perform public.sp_account('save_invite',jsonb_build_object('room',opened->>'room_code','player','p1','token',invite->>'token'));
+ if not (public.sp_account('list')->'invitations'->0->>'current')::boolean then raise exception 'Fresh invitation not current'; end if;
+ perform public.sp_account('forget_invite',jsonb_build_object('session_id',listed->0->>'session_id','player_id','p1'));
+ if jsonb_array_length(public.sp_account('list')->'invitations')<>0 then raise exception 'Forgotten invitation still listed'; end if;
+
+ -- A second account workspace folds into the first by owner key.
+ perform public.sp_workspace('create',extra);
+ perform public.sp_account('attach',jsonb_build_object('credential',extra));
+ other := public.sp_workspace('load',extra)->>'owner_key';
+ perform public.sp_account('merge',jsonb_build_object('owner_key',mine,'source_owner_key',other));
+ if jsonb_array_length(public.sp_account('list')->'workspaces')<>1 then raise exception 'Account still has two sets of games'; end if;
+
+ -- Another account's games cannot be pulled in, even with their link.
+ perform pg_temp.as_user(b);
+ perform public.sp_account('start',jsonb_build_object('token_hash',pg_temp.key_hash(foreign_link)));
+ perform pg_temp.as_user(c);
+ begin perform public.sp_account('merge',jsonb_build_object('owner_key',mine,'credential',foreign_link));
+  raise exception 'Merged another account''s games'; exception when insufficient_privilege then null; end;
+end $$;
+
 reset role;
 do $$ begin
  if exists(select 1 from auth.users where id='00000000-0000-4000-8000-00000000000a') then raise exception 'Account was not deleted'; end if;
@@ -133,4 +210,4 @@ do $$ begin
  if has_schema_privilege('authenticated','side_picker_private','USAGE') then raise exception 'Private schema exposed'; end if;
 end $$;
 rollback;
-select 'PASS: account proof, ownership, device keys, sign-out, unlink, and deletion checks rolled back' as result;
+select 'PASS: account proof, ownership, device keys, start, merge, saved invitations, sign-out, unlink, and deletion checks rolled back' as result;

@@ -1573,3 +1573,13 @@ summary { cursor: pointer; min-height: 44px; padding-block: 10px; }
 .privacy-page h3 { margin: 1.5rem 0 .5rem; }
 .privacy-page p { line-height: 1.6; margin-bottom: .75rem; overflow-wrap: anywhere; }
 .privacy-page a { color: var(--primary); }
+#home-invitations[hidden], #guest-account[hidden], #start-separate-workspace[hidden] { display: none; }
+#home-invitations { margin-top: 1.5rem; }
+.invitation-list { display: flex; flex-direction: column; gap: .75rem; }
+.invitation-row { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; padding: 1rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-dim); }
+.invitation-text { flex: 1 1 14rem; min-width: 0; display: flex; flex-direction: column; gap: .25rem; overflow-wrap: anywhere; }
+.invitation-text span { color: var(--text-muted); font-size: .9rem; }
+.invitation-row button { font-family: inherit; }
+.guest-account { padding: 1rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-dim); margin-bottom: 1.5rem; }
+.guest-account .account-note { margin-bottom: .75rem; }
+.guest-account .account-providers { flex-direction: row; flex-wrap: wrap; margin-bottom: 0; }
