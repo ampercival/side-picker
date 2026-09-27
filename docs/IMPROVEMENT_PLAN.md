@@ -2,7 +2,7 @@
 
 Created: 2026-09-26. Last updated: 2026-09-27.
 
-Status: selected core improvements implemented, committed, pushed, and verified live. Optional later features remain deferred.
+Status: selected core improvements implemented, committed, pushed, and verified live. FEATURE-04 optional accounts is in progress: code, migration, and tests prepared; database and provider activation pending. Other later features remain deferred.
 
 ## Goal and scope
 
@@ -18,8 +18,9 @@ Read [APP_GUIDE.md](APP_GUIDE.md) for current behavior. Follow [AGENTS.md](../AG
 - **Current release:** ENG-01 `0ea2704`; Checks and Pages run `36289848720` succeeded. FEATURE-02 `a952f95` and FEATURE-01 `87d3b20` also deployed successfully. The new release workflow gates deployment on passing checks and publishes application assets only.
 - **Live verification:** the exact pinned Supabase 2.117.2 script loaded with integrity checking; the original TmpTest, Night B, and Reopen Test games remain visible with their original timestamps. Read-only resume showed bulk entry, room stage, and Compare & Assign. Returned to Sessions; no browser errors. No production game edits used for final verification.
 - **Validation:** 38 Node tests, JavaScript syntax, offline PowerShell health-script tests, independent QR decoding, optimizer benchmarks, and scoped host/guest phone/desktop checks passed. Migration 005 is applied; the deployed SQL suites and preservation assertions passed. Browser mock tests, deployed database tests, and live checks are recorded separately in the work log.
-- **Next action:** no resolved core implementation remains. For a future release, run `node scripts/check.cjs`, follow [RELEASE.md](RELEASE.md), and select a deferred feature only when its scope is resolved. Optional player groups, accounts, and history/rotation are not prerequisites and have not been implemented. A physical-phone touch spot check remains useful; iframe checks do not substitute for hardware gestures.
-- **Scope:** anyone can use the app without signing in. Private organizer links control one workspace; personal invitations control one player; viewing links are read-only. Existing games and presets belong to two separate workspaces. Optional accounts remain FEATURE-04.
+- **FEATURE-04 (in progress, 2026-09-27):** optional Discord/Google accounts are implemented in `accounts.js`, migration `202609270006_accounts.sql`, `supabase/tests/accounts.sql`, `privacy.html`, and [ACCOUNTS.md](ACCOUNTS.md). 44 Node checks and the isolated fixture pass. The client ships dormant: `accountProviders` is empty, so the live app shows no account controls. **Not yet done:** migration 006 trial/application, the Discord and Google provider setup, enabling providers in `config.js`, and live verification.
+- **Next action:** sign in to the Supabase dashboard in the browser pane. Then inspect the `side_picker_private.workspaces` constraints, trial migration 006 plus all six SQL suites in a rolled-back transaction, apply it, and run the preservation query in ACCOUNTS.md. Follow ACCOUNTS.md setup steps 2–7. The provider client secrets must be entered by the user. Other deferred items (player groups, history/rotation) are unchanged. A physical-phone touch spot check remains useful.
+- **Scope:** anyone can use the app without signing in. Private organizer links control one workspace; personal invitations control one player; viewing links are read-only. Existing games and presets belong to two separate workspaces. Optional accounts are FEATURE-04 and never gate these paths.
 - **Operations:** local daily Supabase task is Ready; last scheduled result is 0 and next run was verified as 2026-09-27 at 09:17 Atlantic. The most recent real health-script success remains 2026-09-26 at 22:35 Atlantic. It requires this computer on, signed in, and connected; future daily recurrence is not yet observed. No external monitor is installed.
 - **Recovery:** ignored `.local/private-organizer-links.html` contains separate private recovery links for the three games and two presets. Keep it private and preserve it. Database migration snapshots are documented in RELEASE.md; they are not off-project disaster backups. Old pre-cutover room invitations require replacement.
 
@@ -29,7 +30,7 @@ Read [APP_GUIDE.md](APP_GUIDE.md) for current behavior. Follow [AGENTS.md](../AG
 | --- | --- | --- |
 | Daily scheduler | Local PowerShell script with Windows Task Scheduler, daily plus sign-in catch-up | User selected local script on 2026-09-26; requires this computer on, signed in, and connected |
 | Public access | Anyone can create and use a game without an account setup requirement | User clarified on 2026-09-26; supersedes email/Google onboarding work |
-| Optional accounts later | Let people manage saved games across devices and recover access, with a safe way to attach existing games | User requested a future TODO on 2026-09-26; FEATURE-04. Do not block current work on provider setup |
+| Optional accounts | $0 to run: Supabase Auth with Discord and Google only (no email, which would need a paid sending domain; no Apple, which needs a paid developer program). Accounts sit on top of organizer keys: attach by proof of a valid key, one owning account per workspace, hash-only per-device keys, sign-out removes this browser's key | User asked for a zero-cost optional design on 2026-09-27, accepted the recommendation (Discord + Google, single owner) with "let's try it". People without either provider keep using links |
 | Organizer permissions | Private organizer link using an unguessable capability checked by the backend; preserve saved games through a deliberate migration | Implemented workspace scope, cryptographic token hashes, replacement, and private recovery links; deployment status above |
 | Guest permissions | Players join by link without an account; separate guest access from organizer access and scope submissions to the authorized player | Implemented stable player identity and per-player invitations, plus viewing links; no account required |
 | Bans | Hard exclusions; explain infeasible assignments rather than silently forcing a ban | Implemented in OPT-01 |
@@ -170,15 +171,17 @@ Routine implementation choices can be resolved from the user's instructions and 
 
 ### FEATURE-04 — Optional accounts for managing games (later)
 
-- [ ] Add an optional account and a "My games" view for finding, organizing, and resuming saved games across devices.
-- [ ] Let an organizer attach existing games/workspaces only after proving control through the private organizer link; never claim data using a public workspace label or matching display name.
-- [ ] Provide account recovery and a clear way to manage/revoke organizer links without losing saved games.
-- [ ] Choose sign-in providers and configure reliable email delivery when this feature is implemented; email and Google remain options, not current prerequisites.
-- [ ] Preserve immediate account-free game creation and guest participation; explain the benefits of an account without forcing one.
+- [x] Add an optional account and a "My games" view for finding, organizing, and resuming saved games across devices. *(Code prepared and fixture-verified; not activated.)*
+- [x] Let an organizer attach existing games/workspaces only after proving control through the private organizer link; never claim data using a public workspace label or matching display name. *(Enforced in migration 006; rolled-back SQL suite written, not yet run.)*
+- [x] Provide account recovery and a clear way to manage/revoke organizer links without losing saved games. *(Per-device keys, Devices and links, unlink/delete guards; provider accounts handle password recovery.)*
+- [x] Choose sign-in providers. *Decided 2026-09-27: Discord and Google, no email delivery, to keep running cost at $0.*
+- [x] Preserve immediate account-free game creation and guest participation; explain the benefits of an account without forcing one.
+- [ ] Apply migration 006 with the SQL suites and preservation check.
+- [ ] Configure Discord and Google in Supabase, list them in `config.js`, deploy, and verify live with test workspaces.
 
 **Acceptance:** an account holder can find and manage their games on another device; linking preserves the original sessions and permissions; another account cannot claim those games; people who skip accounts can still create and join games.
 
-**Requested:** 2026-09-26. Deferred until the security and reliability foundation is in place.
+**Requested:** 2026-09-26. Started 2026-09-27 after the foundation was complete. Design, setup, and checks: [ACCOUNTS.md](ACCOUNTS.md).
 
 ## Supporting engineering work
 
@@ -361,3 +364,11 @@ At the end of each implementation session, update Current handoff and append a d
 
 - Final handoff commit `cbe9a36` passed checks and deployed in run `36310370466`. GitHub reported Node 20 action-runtime deprecations, though the application checks used Node 24 successfully.
 - Updated action pins to verified official releases declaring Node 24: checkout 7.0.1, setup-node 7.0.0, configure-pages 6.0.0, upload-pages-artifact 5.0.0, deploy-pages 5.0.1. Upload now also pins its underlying artifact action. Workflow permissions, check gate, and application assets are unchanged. The new push must pass the same CI/deployment gates before calling this maintenance deployed.
+
+### 2026-09-27 — FEATURE-04 optional accounts prepared
+
+- Reviewed the app for account readiness. User asked for a zero-cost optional-account design. Checked current provider facts: Supabase Free includes 50,000 monthly sign-ins and social providers; its built-in mailer only reaches project team members (2/hour), so email sign-in would need custom SMTP and an owned domain. Supabase passkeys (beta) require an existing account. User accepted Discord + Google with single ownership.
+- Added migration `202609270006_accounts.sql`: keys table keyed by hash (link or device), per-workspace request lock, **Replace link** that is narrow only for the signed-in owner and a full reset otherwise (so a leaked link attached to another account cannot survive replacement), `account_workspaces`, and the authenticated-only `sp_account` API (list, attach, open, revoke_key, forget_device, unlink, delete_account) with ownership, proof, limits, and orphan guards. Snapshot `before_accounts`. `game_permissions.sql` now checks the new grants; `accounts.sql` is a rolled-back suite with two sample auth users.
+- Added `accounts.js` (PKCE sign-in, explicit attach choice, My games, device keys, sign-out, deletion), header/dialog UI, `privacy.html`, and provider gating through `config.js` (empty for now). Supabase sessions persist only when providers are listed. Switching away from an account device key releases it.
+- Validation: `node scripts/check.cjs` passed (44 Node checks, including 6 new account checks, plus keepalive). The isolated fixture now has a fake sign-in and in-memory account API. It verified sign-in with explicit attach, URL cleanup, opening from the account with a new key, saving through the device key, sign-out removing that key, a second account refused while the link still works, account deletion keeping games, link replacement, guest mode without account controls, the privacy page, and the dialog/header at 360px without horizontal overflow.
+- Not done: the Supabase dashboard was signed out in the browser pane, so migration 006 and the SQL suites have not been run. No provider is configured, and the live app does not show accounts. Next action is in Current handoff.

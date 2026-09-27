@@ -1172,22 +1172,27 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
+    // Read an optional-account sign-in return before anything else uses the URL.
+    const authCallback = accountsEnabled() ? takeAuthCallback() : null;
     renderPresetOptions();
     updateWorkspaceIndicator();
-    initWorkspaceAndSessions(); // async: load sessions from DB (prompts for a workspace key if needed)
+    initWorkspaceAndSessions(authCallback); // async: load sessions from DB (prompts for a workspace key if needed)
 
     // autoSave backs up synchronously; unload delivery is not required.
 });
 
-async function initWorkspaceAndSessions() {
+async function initWorkspaceAndSessions(authCallback = null) {
     if (!isSupabaseConfigured()) {
         renderHomeSessions(); // Will show a "not configured" notice.
         return;
     }
+    const account = startAccount(authCallback); // optional; never blocks games
     try { await initializePrivateWorkspace(); }
     catch (error) { workspaceLoadFailed = true; accessError(error, 'Could not open saved games'); ensureJournal(); if (!hasWorkspaceKey()) openWorkspaceModal(); renderSaveStatus(); }
     renderPresetOptions();
     renderHomeSessions();
+    await account;
+    await completeSignIn(authCallback);
 }
 
 // --- Workspace key ---
@@ -1203,7 +1208,17 @@ function openWorkspaceModal() {
 function updateWorkspaceIndicator() {
     const el = get('workspace-indicator');
     if (!el) return;
-    el.innerHTML = `<button class="link-btn" onclick="openWorkspaceModal()">${hasWorkspaceKey() ? 'Save or open your private organizer link' : 'Open saved games or start a workspace'}</button>`;
+    const links = document.createElement('button');
+    links.className = 'link-btn'; links.onclick = () => openWorkspaceModal();
+    links.textContent = hasWorkspaceKey() ? 'Save or open your private organizer link' : 'Open saved games or start a workspace';
+    el.replaceChildren(links);
+    if (typeof accountsEnabled === 'function' && accountsEnabled()) {
+        const account = document.createElement('button');
+        account.className = 'link-btn'; account.onclick = () => openAccountModal();
+        account.textContent = !accountSession ? 'Sign in to use them on all your devices (optional)'
+            : currentWorkspaceLinked() ? 'Your account’s games' : 'Add these games to your account';
+        el.append(document.createTextNode(' · '), account);
+    }
 }
 
 // Named Sessions (DB-backed; sessionsCache lives in rooms.js)

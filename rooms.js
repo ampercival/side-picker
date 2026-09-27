@@ -9,8 +9,12 @@ async function databaseFetch(input, options = {}) {
 function getSupabaseClient() {
     const cfg = window.SUPABASE_CONFIG;
     if (!window.supabase || !cfg?.url || cfg.url.startsWith('YOUR_')) return null;
+    // Sign-in sessions persist only when optional accounts are configured. The
+    // OAuth return is handled explicitly by accounts.js, never auto-detected.
+    const accounts = Array.isArray(cfg.accountProviders) && cfg.accountProviders.length > 0;
     return _supabase ||= window.supabase.createClient(cfg.url, cfg.publishableKey, {
-        auth: { persistSession: false, detectSessionInUrl: false, autoRefreshToken: false },
+        auth: accounts ? { flowType: 'pkce', persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
+            : { persistSession: false, detectSessionInUrl: false, autoRefreshToken: false },
         global: { fetch: databaseFetch }
     });
 }
@@ -196,11 +200,12 @@ async function createPrivateWorkspace(confirmed = false) {
     if (journal?.storageError) return;
     const credential = localStorage.getItem(PRIVATE_WORKSPACE_KEY + '_new') || newPrivateToken();
     localStorage.setItem(PRIVATE_WORKSPACE_KEY + '_new', credential);
-    const generation = ++loadGeneration;
+    const generation = ++loadGeneration, previous = privateWorkspace().credential;
     try {
         const data = await workspaceRequest('create', {}, credential);
         if (generation !== loadGeneration) return;
         storeWorkspace(credential, data.owner_key); localStorage.removeItem(PRIVATE_WORKSPACE_KEY + '_new');
+        if (typeof releaseAccountKey === 'function') void releaseAccountKey(previous);
         activeSessionName = null; state.roomCode = ''; deactivateRoomSync();
         applyWorkspaceData({ sessions: [], presets: [] });
         closeModals(); updateWorkspaceIndicator(); renderHomeSessions(); renderPresetOptions();
@@ -211,11 +216,12 @@ async function importOrganizerLink() {
         const credential = parseOrganizerLink(get('workspace-input').value);
         await flushSession();
         if (journal?.storageError) return;
-        const generation = ++loadGeneration;
+        const generation = ++loadGeneration, previous = privateWorkspace().credential;
         const data = await workspaceRequest('load', {}, credential);
         if (generation !== loadGeneration) return;
         deactivateRoomSync(); activeSessionName = null; state.roomCode = '';
         storeWorkspace(credential, data.owner_key); applyWorkspaceData(data);
+        if (previous !== credential && typeof releaseAccountKey === 'function') void releaseAccountKey(previous);
         closeModals(); renderHomeSessions(); renderPresetOptions(); switchView('view-home');
     } catch (error) { accessError(error, 'Could not open organizer link'); }
 }
@@ -224,7 +230,11 @@ async function copyOrganizerLink() {
     else { get('organizer-link').select(); showToast('info', 'Copy manually', 'Copy the selected private link.'); }
 }
 function replaceOrganizerLink() {
-    showConfirm('Replace organizer link?', 'The old organizer link will stop working on every device. Save the replacement link afterward. Player links stay valid.', async () => {
+    // Only the signed-in owning account keeps its other devices; any other replacement resets all access.
+    const owned = typeof currentWorkspaceLinked === 'function' && accountSession && currentWorkspaceLinked();
+    showConfirm('Replace organizer link?', owned
+        ? 'This link will stop working everywhere it is used. Devices opened from your account keep their own access; manage them under Account. Player links stay valid.'
+        : `The old organizer link will stop working on every device${typeof accountsEnabled === 'function' && accountsEnabled() ? ', and any account holding these games loses them' : ''}. Save the replacement link afterward. Player links stay valid.`, async () => {
         if (!(await flushSession())) return;
         if (!(await ensureJournal().flushAll())) return;
         const saved = privateWorkspace(), credential = newPrivateToken();

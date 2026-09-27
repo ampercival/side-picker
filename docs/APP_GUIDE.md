@@ -8,7 +8,7 @@ This describes the existing application, not the proposed future design. See [th
 
 Side Picker assigns distinct board-game factions to players using their ranked preferences, neutral choices, and bans. An organizer can enter everyone's choices or collect them through a live room, then optimize and share the assignments.
 
-**Product direction confirmed 2026-09-26:** this is a public app that anyone should be able to use immediately. Required Google/email sign-in is not the planned entry flow. Private organizer links and personal player invitations now provide the access model. See SEC-02 in the plan for deployment status and PRIVATE_LINKS.md for operations. Optional accounts remain a future feature.
+**Product direction confirmed 2026-09-26:** this is a public app that anyone should be able to use immediately. Required Google/email sign-in is not the planned entry flow. Private organizer links and personal player invitations now provide the access model. See SEC-02 in the plan for deployment status and PRIVATE_LINKS.md for operations. Optional Discord/Google accounts (FEATURE-04) are prepared but not yet activated; see [ACCOUNTS.md](ACCOUNTS.md).
 
 ## Current user journeys
 
@@ -21,6 +21,7 @@ Side Picker assigns distinct board-game factions to players using their ranked p
 5. Optionally open a live room and send each player their personal invitation. A separate viewing link is read-only.
 6. Close picking when ready, or optimize to close it automatically. Compare Highest Group Score and Fairest for Everyone, then explicitly publish one; the app synchronizes final submissions before solving. Cancellation leaves picking closed until you reopen it.
 7. View results, share a results snapshot, or clear results and reopen picking.
+8. Optionally sign in to keep workspaces in an account and open them on other devices without saving links. This appears only once providers are configured.
 
 Game presets are named faction lists. A session contains the game-night setup, players, room code, and optional results. Editing the displayed session name does not change its original database identity.
 
@@ -46,13 +47,15 @@ If both URL forms are present, room mode takes precedence at startup.
 | `results.js` | Snapshot validation, bounded decoding, safe result card rendering; also testable under Node |
 | `optimizer.js` | Pure scoring, input validation, conflict detection, strict-ban assignment solver |
 | `rooms.js` | Capability-authorized RPC calls, private workspaces, scoped host/guest polling |
+| `accounts.js` | Optional sign-in, My games, device keys, sign-out and account deletion |
+| `privacy.html` | Static privacy and saved-data notice, published with the app |
 | `access.js` | Secure token generation, fragment parsing, safe link construction |
 | `save-journal.js` | Durable draft queue, immutable retry requests, save states |
 | `persistence.js` | Save-status and recovery UI, connection retries |
 | `sharing.js` | Goal comparison, explicit publication, result summaries, local invitation QR codes |
 | `repeat-games.js` | Fresh repeat-session setup and bounded bulk-name entry |
 | `accessibility.js` | Dialog focus/keyboard behavior, announcements, and browser view navigation |
-| `config.js` | Public Supabase project URL and publishable key |
+| `config.js` | Public Supabase project URL, publishable key, and enabled account providers (empty hides accounts) |
 | `supabase/schema.sql` | Historical fresh-install baseline; refuses rerun after private links |
 | `supabase/migrations/` | Versioned migrations; health sentinel and both private-link stages are deployed |
 | `supabase/tests/health_permissions.sql` | Transactional health-table role/permission checks |
@@ -60,7 +63,7 @@ If both URL forms are present, room mode takes precedence at startup.
 | `scripts/keep-supabase-active.ps1` | Daily local read-only database check, bounded retries, logging and status |
 | `scripts/register-keepalive-task.ps1` | Registers the daily Windows task and sign-in catch-up |
 
-The scripts are classic browser scripts sharing globals, not ES modules. Loading order is Supabase's CDN client, `config.js`, `access.js`, `save-journal.js`, `results.js`, `optimizer.js`, `repeat-games.js`, the pinned QR encoder, `sharing.js`, `script.js`, `rooms.js`, then `persistence.js` and `accessibility.js`. Much of initialization runs at `DOMContentLoaded`, after the application scripts are available.
+The scripts are classic browser scripts sharing globals, not ES modules. Loading order is Supabase's CDN client, `config.js`, `access.js`, `save-journal.js`, `results.js`, `optimizer.js`, `repeat-games.js`, the pinned QR encoder, `sharing.js`, `script.js`, `rooms.js`, `accounts.js`, then `persistence.js` and `accessibility.js`. Much of initialization runs at `DOMContentLoaded`, after the application scripts are available.
 
 There is no application server, framework, bundler, or package manifest. Focused Node tests now live in `tests/`. Supabase JS is pinned to version 2.117.2 with integrity verification. Google Fonts supplies Outfit.
 
@@ -86,7 +89,8 @@ There is no application server, framework, bundler, or package manifest. Focused
 | `sessions` | `(owner_key, name)` | Display name, game title, JSON factions and players, unique optional room code, JSON results, timestamp |
 | `presets` | `(owner_key, name)` | JSON faction list and timestamp |
 | `submissions` | Legacy `(room_code, player_name)` | Retained for recovery; new client does not use it |
-| `side_picker_private.workspaces` | Existing workspace label, unique token hash | Hashed organizer capability |
+| `side_picker_private.workspaces` | Token hash; several per workspace after migration 006 | Hashed organizer keys: the shareable link, plus account device keys with label and creating user |
+| `side_picker_private.account_workspaces` | Workspace label | The one account that owns a workspace (migration 006) |
 | `side_picker_private.rooms` | Session UUID | Private seed for viewing/player links |
 | `side_picker_private.picks` | `(session_id, player_id)` | Validated private submissions and timestamp |
 | `side_picker_private.save_receipts` | Workspace + operation UUID | Idempotent save replies, retained for 30 days per active workspace |
@@ -138,6 +142,7 @@ Results use the payload `{v, t, gm, g, pct, r}`: version, session title, game, g
 | Optimizer | Exact objectives with bounded matching, randomized tie traversal, and cancellable workers | OPT-01 and OPT-02 complete |
 | Mobile | Flexible inputs, 44px controls, wrapping names, compact empty lists, view focus/scroll reset | UX-01 complete |
 | Operations | Local daily check installed and timer-triggered run verified; computer must be on/signed in. Release checks now gate Pages deployment | OPS-01 and ENG-01 complete |
+| Accounts | Optional Discord/Google accounts prepared and fixture-verified; migration 006 and provider setup pending | FEATURE-04 in progress |
 
 ## Hosting, local use, and validation
 
@@ -164,7 +169,7 @@ node --check config.js
 node --check results.js
 node --check optimizer.js
 node --check access.js
-node --test --test-isolation=none tests/results.test.cjs tests/optimizer.test.cjs tests/access.test.cjs tests/saves.test.cjs tests/rooms.test.cjs tests/repeat-games.test.cjs tests/sharing.test.cjs tests/text-encoding.test.cjs
+node --test --test-isolation=none tests/results.test.cjs tests/optimizer.test.cjs tests/access.test.cjs tests/saves.test.cjs tests/rooms.test.cjs tests/repeat-games.test.cjs tests/sharing.test.cjs tests/text-encoding.test.cjs tests/accounts.test.cjs
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/keepalive.Tests.ps1
 ```
 
@@ -217,3 +222,7 @@ Optional independent QR verification: obtain `dist/jsQR.js` from the npm `jsqr@1
 ## Repeatable release entry point
 
 Run `node scripts/check.cjs` with Node 24 and PowerShell for all offline syntax, regression, and keepalive checks. [RELEASE.md](RELEASE.md) records the repeatable browser acceptance matrix, SQL checks, migration/backups, pinned dependency updates, and gated Pages release procedure. Browser and database checks remain explicit separate steps.
+
+## Optional accounts
+
+Accounts add a layer on top of organizer keys; they never gate games or invitations. A workspace can hold several hashed keys: its shareable organizer link and per-device keys created when a signed-in owner chooses **Open in this browser**. Adding games to an account requires this browser's valid organizer key, and a workspace has one owning account. Replacing a link while signed in as the owning account replaces only that key; any other replacement resets all keys and account ownership, as before accounts. Sign-out deletes this browser's device key and starts an empty workspace; unlinking and account deletion keep existing keys working. The client shows accounts only when `config.js` lists a provider. Full design, one-time provider setup, and checks are in [ACCOUNTS.md](ACCOUNTS.md).

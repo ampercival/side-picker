@@ -6,6 +6,12 @@
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "8753"],
       "port": 8753
+    },
+    {
+      "name": "side-picker-fixture",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["tests/serve-fixture.cjs"],
+      "port": 8754
     }
   ]
 }

@@ -26,6 +26,14 @@
                     </svg>
                     Sessions
                 </button>
+                <button class="btn-sm" id="account-button" onclick="openAccountModal()" hidden>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                    Account
+                </button>
                 <button class="btn-sm" onclick="openInfoModal()" aria-label="How it works">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -437,6 +445,7 @@
                 unluckiest player). Use <strong>Share Results Link</strong> to send everyone the final assignments.</p>
             <p style="font-size: 0.85rem; opacity: 0.7;"><em>Everything saves to your Sessions automatically — reopen a
                     game night anytime. Tip: "Lock" a player to keep their picks safe when you hit Randomize.</em></p>
+            <p class="account-privacy"><a href="privacy.html" target="_blank" rel="noopener">Privacy and saved data</a></p>
         </div>
         <div class="actions right">
             <button class="btn primary" onclick="closeModals()">Got it</button>
@@ -525,6 +534,8 @@
             <div class="actions"><button class="btn primary" onclick="copyOrganizerLink()">Copy organizer link</button>
             <button class="btn text" onclick="replaceOrganizerLink()">Replace link</button></div>
         </div>
+        <p id="workspace-account-hint" class="account-note" hidden>Prefer not to keep links?
+            <button class="link-btn" onclick="openAccountModal(true)">Keep these games in an optional account</button></p>
         <label for="workspace-input">Open a different organizer link</label>
         <input type="text" id="workspace-input" placeholder="Paste a private organizer link" autocomplete="off"
             onkeypress="handleEnter(event, importOrganizerLink)">
@@ -533,6 +544,12 @@
             <button class="btn secondary" onclick="createPrivateWorkspace()">Start separate workspace</button>
             <button class="btn primary" onclick="importOrganizerLink()">Open link</button>
         </div>
+    </div>
+
+    <div id="account-modal" class="modal">
+        <h3>Account <span class="optional-pill">optional</span></h3>
+        <div id="account-body"></div>
+        <div class="actions right"><button class="btn" onclick="closeModals()">Close</button></div>
     </div>
 
     <div id="room-modal" class="modal">
@@ -604,6 +621,7 @@
     <script src="sharing.js"></script>
     <script src="script.js"></script>
     <script src="rooms.js"></script>
+    <script src="accounts.js"></script>
     <script src="persistence.js"></script>
     <script src="accessibility.js"></script>
 </body>

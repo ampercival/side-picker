@@ -1548,3 +1548,28 @@ summary { cursor: pointer; min-height: 44px; padding-block: 10px; }
     *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
     .result-card { opacity: 1; transform: none; }
 }
+
+/* Optional accounts */
+#account-button[hidden], #workspace-account-hint[hidden] { display: none; }
+.optional-pill { font-size: .75rem; font-weight: 500; color: var(--text-muted); border: 1px solid var(--border); border-radius: 999px; padding: .1rem .6rem; vertical-align: middle; }
+.account-note { color: var(--text-muted); line-height: 1.5; font-size: .9rem; margin-bottom: 1rem; overflow-wrap: anywhere; }
+.account-choice { display: flex; gap: .6rem; align-items: flex-start; margin-bottom: 1rem; line-height: 1.4; font-size: .9rem; }
+.account-choice input { width: 1.25rem; height: 1.25rem; flex: none; margin-top: .1rem; }
+.account-providers { display: flex; flex-direction: column; gap: .6rem; margin-bottom: 1rem; }
+#account-modal h4 { margin: 1.25rem 0 .5rem; }
+#account-modal .actions { flex-wrap: wrap; gap: .6rem; }
+.account-attach, .account-workspace { padding: 1rem; border: 1px solid var(--border); border-radius: 12px; margin-bottom: .75rem; background: var(--surface-dim); }
+.account-attach p { margin-bottom: .75rem; }
+.account-workspace-title { font-weight: 600; }
+.account-workspace-names { color: var(--text-muted); font-size: .9rem; margin-top: .25rem; overflow-wrap: anywhere; }
+.account-workspace .actions { margin: .75rem 0 .5rem; justify-content: flex-start; }
+.account-workspace summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; color: var(--text-muted); }
+.account-key { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; padding: .5rem 0; border-top: 1px solid var(--border); font-size: .9rem; overflow-wrap: anywhere; }
+.account-key span { flex: 1 1 12rem; min-width: 0; }
+.account-key button { font-family: inherit; }
+.account-actions { justify-content: flex-start; }
+.account-privacy { font-size: .85rem; margin-top: 1rem; }
+.account-privacy a { color: var(--primary); }
+.privacy-page h3 { margin: 1.5rem 0 .5rem; }
+.privacy-page p { line-height: 1.6; margin-bottom: .75rem; overflow-wrap: anywhere; }
+.privacy-page a { color: var(--primary); }

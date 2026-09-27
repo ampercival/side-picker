@@ -1,12 +1,12 @@
 # Private organizer and player links
 
-Side Picker stays open to anyone. No email, password, or Google account is required. Optional accounts for managing games later are tracked as FEATURE-04.
+Side Picker stays open to anyone. No email, password, or Google account is required. Optional accounts (FEATURE-04) add per-device keys on top of these links; see [ACCOUNTS.md](ACCOUNTS.md).
 
 ## Using the links
 
 - A new visitor gets an empty workspace automatically. The browser remembers its organizer credential locally.
 - **Save or open your private organizer link** opens the workspace controls. Save this link somewhere private: it can read, edit, and delete every session and preset in that workspace. Opening it on another device loads the same workspace.
-- **Replace link** invalidates the old organizer link; save the replacement. Player links are unaffected.
+- **Replace link** invalidates the old organizer link; save the replacement. Player links are unaffected. It also removes every other device key and any account ownership, unless you are signed in as the account that owns these games. In that case only this link changes, and your other devices keep their own keys.
 - **Live Room** creates the room. Copy each person's **player link** and send it only to them. Names can change without changing identity; two people may have the same display name.
 - A **viewing link** reveals the roster, submitted status, game setup, and published results, but cannot submit choices or read private picks.
 - **Replace player links** invalidates all current invitations/viewing links for that game. Previously submitted picks remain saved. Send fresh links afterward.
@@ -18,7 +18,7 @@ Possession of a private link is authorization. Someone forwarding their player l
 
 `access.js` generates organizer credentials using 32 cryptographically random bytes. Credentials travel in URL fragments and are removed from the address bar after import. They are passed to the database in HTTPS POST bodies, never query parameters. The app uses `no-referrer` and never includes organizer credentials in guest/result links.
 
-`sp_workspace` looks up the SHA-256 hash of the credential in a private schema. Every operation uses that server-selected workspace; a supplied workspace label cannot override it. The private organizer credential lives in local storage; guest credentials use per-tab session storage. Never log RPC bodies or include recovery files in Git.
+`sp_workspace` looks up the SHA-256 hash of the credential in a private schema. Every operation uses that server-selected workspace; a supplied workspace label cannot override it. After migration 006 a workspace may have several key hashes (the link plus account device keys); every request serializes on the workspace, not the key. The private organizer credential lives in local storage; guest credentials use per-tab session storage. Never log RPC bodies or include recovery files in Git.
 
 Each session has a stable UUID, alongside its existing stable `(owner_key, name)` identity. Player IDs are retained on rename; new players use random UUIDs. Each room has a private random seed. Its viewing/player capabilities are HMAC-SHA256 values over the player ID (empty for a viewer). The seed never leaves the database. Room link replacement changes this seed.
 

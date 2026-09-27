@@ -3,10 +3,10 @@ const fs = require('node:fs'), path = require('node:path');
 const root = path.resolve(__dirname,'..');
 function publicFiles() {
     const html = fs.readFileSync(path.join(root,'index.html'),'utf8');
-    const files = ['index.html','LICENSE','vendor/qrcode-generator-LICENSE'];
+    const files = ['index.html','privacy.html','LICENSE','vendor/qrcode-generator-LICENSE'];
     for (const match of html.matchAll(/(?:src|href)="([^"]+)"/g)) {
         const file = match[1];
-        if (/^https:\/\//.test(file) || file==='./') continue;
+        if (/^https:\/\//.test(file) || file==='./' || file==='privacy.html') continue;
         if (!/^(?:[a-z][a-z0-9-]*\.(?:js|css)|vendor\/qrcode-generator-1\.4\.4\.js)$/.test(file)) throw new Error('Review new public asset: '+file);
         if (!fs.statSync(path.join(root,file)).isFile()) throw new Error('Missing asset: '+file);
         files.push(file);

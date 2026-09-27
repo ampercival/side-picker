@@ -18,6 +18,12 @@ do $$ declare r text; t text; begin
       raise exception 'Scoped API is unavailable for %', r;
     end if;
   end loop;
+  -- After migration 006: accounts require a signed-in (authenticated) caller.
+  if to_regprocedure('public.sp_account(text,jsonb)') is not null and
+     (has_function_privilege('anon','public.sp_account(text,jsonb)','EXECUTE')
+      or not has_function_privilege('authenticated','public.sp_account(text,jsonb)','EXECUTE')) then
+    raise exception 'Account API grants are wrong';
+  end if;
 end $$;
 rollback;
 select 'PASS: direct game access denied, RLS enabled, private schema hidden, scoped API available for anon/authenticated' as result;
