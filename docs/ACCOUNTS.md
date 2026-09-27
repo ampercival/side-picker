@@ -47,6 +47,12 @@ Every organizer request takes a per-workspace advisory lock, whichever key is us
 
 The raw organizer key sent to `attach`/`merge`/`forget_device`, or the invitation sent to `save_invite`, is proof only and is never stored. Invitations live in `side_picker_private.account_invitations` (RLS on, no policies), which cascades when the session or the account is deleted. Saved games set aside at sign-in are kept in the browser's local storage (`side_picker_parked_workspace_v1`), not on the server. A player who signs in from an invitation returns to the app's address, the only allowed redirect, and the tab's saved room code (`side_picker_pending_invite` in session storage) brings them back to their room. The browser stores the Supabase session (`sb-<project>-auth-token`) in local storage only when accounts are configured. Sign-in uses the PKCE flow. `accounts.js` exchanges the returned `?code` once and removes it from the address bar; supabase-js does not auto-detect URLs.
 
+## Linking sign-in providers
+
+Supabase links a new sign-in to an existing account when both use the same verified email address. Either provider then opens the same account and games. Verified live on 2026-09-27: GitHub sign-in in a new private window opened the existing Google account's games. Supabase does not link to an unverified email, which prevents pre-account takeover.
+
+People whose providers use different emails get separate accounts. Supabase's manual linking (beta, the "Allow manual linking" setting, `linkIdentity`/`unlinkIdentity`) could add a Sign-in methods section to the Account dialog. It is not enabled or built. A separate account made earlier must be deleted before its provider can be linked elsewhere.
+
 ## Cost and limits
 
 - Supabase Free includes 50,000 monthly active sign-ins and social providers. Google, Discord, and GitHub sign-in are free. No email service is needed.
