@@ -19,7 +19,7 @@ function room(responses, elements = {}) {
         activeSessionName: 'Session', state: { players: [], factions: ['A', 'B', 'C'], roomCode: 'ROOM' }, isGuestMode: false,
         get: id => elements[id] || null, showToast() {}, autoSave: () => saves.push(1), renderPlayers() {}
     });
-    for (const file of ['access.js', 'save-journal.js', 'rooms.js']) vm.runInContext(fs.readFileSync(file, 'utf8'), ctx, { filename: file });
+    for (const file of ['access.js', 'save-journal.js', 'optimizer.js', 'rooms.js']) vm.runInContext(fs.readFileSync(file, 'utf8'), ctx, { filename: file });
     return { ctx, calls, saves, replaced, run: code => vm.runInContext(code, ctx) };
 }
 

@@ -21,6 +21,7 @@ begin
  game := row;
  -- Organizer override is visible to the guest and no longer claims guest submission.
  game := jsonb_set(game,'{players,0,preferences}','["A"]');
+ game := jsonb_set(game,'{players,0,preferenceRanks}','[1]');
  row := public.sp_workspace('save_session',c,game || jsonb_build_object('expected_version',row->'save_version','operation_id',gen_random_uuid()));
  guest := public.sp_room(row->>'room_code','p1',invite->>'token');
  if guest->'mine'->'preferences'<>'["A"]'::jsonb or guest->'mine'->>'source'<>'organizer' or guest->>'player_name'<>'Renamed' then raise exception 'Organizer update not visible'; end if;
@@ -45,6 +46,7 @@ begin
  -- Removed factions are pruned and a new setup revision rejects late requests.
  game := jsonb_set(row,'{factions}','["A","C"]');
  game := jsonb_set(game,'{players,0,preferences}','[]');
+ game := jsonb_set(game,'{players,0,preferenceRanks}','[]');
  row := public.sp_workspace('save_session',c,game || jsonb_build_object('expected_version',row->'save_version','operation_id',gen_random_uuid()));
  guest := public.sp_room(row->>'room_code','p1',invite->>'token');
  if guest->'mine'->'preferences'<>'[]'::jsonb then raise exception 'Removed faction retained'; end if;

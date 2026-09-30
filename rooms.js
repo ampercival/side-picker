@@ -52,7 +52,12 @@ function mapRowToSession(row) {
 function sessionRow(name, s) {
     const factions = s.factions || [];
     return { name, session_name: s.sessionName || name, game_title: s.gameTitle || '', factions,
-        players: (s.players || []).map(p => ({ ...p, preferences: p.preferences.filter(f => factions.includes(f)), bans: p.bans.filter(f => factions.includes(f)) })), results: s.results || null };
+        players: (s.players || []).map(p => {
+            const copy = {...p};
+            setPreferenceOrder(copy, p.preferences.filter(f => factions.includes(f)));
+            copy.bans = p.bans.filter(f => factions.includes(f));
+            return copy;
+        }), results: s.results || null };
 }
 function ensureJournal() {
     const owner = getWorkspaceKey(), credential = privateWorkspace().credential;
@@ -75,7 +80,7 @@ function ensureJournal() {
                         const current = sessionsCache[req.payload.name].players.find(p => p.id === saved.id);
                         if (sent && current && pickSignature(current) === pickSignature(sent)) {
                             choicesChanged ||= pickSignature(current) !== pickSignature(saved);
-                            for (const field of ['preferences','bans','noPreference','submittedAt','submittedSource','submittedChoices']) current[field] = saved[field];
+                            for (const field of ['preferences','preferenceRanks','bans','noPreference','submittedAt','submittedSource','submittedChoices']) current[field] = saved[field];
                         }
                     }
                     if (typeof activeSessionName !== 'undefined' && activeSessionName === req.payload.name) {
@@ -256,8 +261,13 @@ function joinedPlayer(joiner) {
     return { id: joiner.id, name: joiner.name, preferences: [], bans: [], locked: false, noPreference: false, expanded: false, joined: true };
 }
 let roomTimer = null, roomEpoch = 0, resumeRoomPolling = null;
-function pickSignature(p) { return JSON.stringify([p.preferences, p.bans, !!p.noPreference]); }
-function playerHasSubmitted(player) { return Boolean(player?.submitted || (player?.submittedAt && player.submittedSource !== 'organizer' && (!player.submittedChoices || JSON.stringify(player.submittedChoices) === pickSignature(player)))); }
+function pickSignature(p) {
+    const signature = [p.preferences, p.bans, !!p.noPreference];
+    const ranks = preferenceRanks(p);
+    if (ranks.some((rank, i) => rank !== i + 1)) signature.push(ranks);
+    return JSON.stringify(signature);
+}
+function playerHasSubmitted(player) { return Boolean(player?.submitted || (player?.submittedAt && player.submittedSource !== 'organizer' && (!player.submittedChoices || pickSignature({preferences:player.submittedChoices[0],bans:player.submittedChoices[1],noPreference:player.submittedChoices[2],preferenceRanks:player.submittedChoices[3]}) === pickSignature(player)))); }
 function playerSubmissionLabel(p) {
     if (playerHasSubmitted(p)) return 'Submitted';
     if (p.submittedAt) return p.submittedSource === 'organizer' ? 'Organizer updated' : 'Edited since submission';
@@ -317,9 +327,9 @@ async function refreshRoomSubmissions(epoch = roomEpoch) {
     for (const row of data.picks) {
         const player = state.players.find(p => p.id === row.player_id);
         if (!player || player.submittedAt === row.updated_at) continue;
-        player.preferences = row.preferences.filter(f => state.factions.includes(f)); player.bans = row.bans.filter(f => state.factions.includes(f));
+        player.preferences = row.preferences; player.preferenceRanks = row.preference_ranks ?? undefined; setPreferenceOrder(player, row.preferences.filter(f => state.factions.includes(f))); player.bans = row.bans.filter(f => state.factions.includes(f));
         player.noPreference = row.no_preference; player.submittedAt = row.updated_at; player.submittedSource = row.source;
-        player.submittedChoices = [player.preferences.slice(),player.bans.slice(),player.noPreference]; changed = true;
+        player.submittedChoices = JSON.parse(pickSignature(player)); changed = true;
     }
     if (changed) { autoSave(); renderPlayers(); renderRoomStatus(); }
 }
@@ -478,7 +488,7 @@ function applyGuestRoom(data) {
     guestPick.name = data.player_name || '';
     get('guest-player-name').textContent = guestPick.name || (data.join?.open ? '' : 'Viewing only. Ask the organizer for your personal player link to submit picks.');
     renderGuestJoin(data);
-    guestPick.preferences = guestPick.preferences.filter(f => data.factions.includes(f)); guestPick.bans = guestPick.bans.filter(f => data.factions.includes(f));
+    setPreferenceOrder(guestPick, guestPick.preferences.filter(f => data.factions.includes(f))); guestPick.bans = guestPick.bans.filter(f => data.factions.includes(f));
     renderGuestRoster();
     if (guestResultsReady(data.results)) { guestShowingResults = true; enterSharedResultsMode(data.results); }
     else { if (guestShowingResults) { guestShowingResults = false; showGuestPicks(); } renderGuestPicks(); }
@@ -491,13 +501,13 @@ function renderGuestRoster() {
 }
 function showGuestPicks() { isSharedMode = false; document.body.classList.remove('shared-mode'); switchView('view-guest'); renderGuestPicks(); }
 function setGuestChoices(p) {
-    guestPick.preferences = [...(p?.preferences || [])]; guestPick.bans = [...(p?.bans || [])]; guestPick.noPreference = !!(p?.no_preference ?? p?.noPreference);
+    guestPick.preferences = [...(p?.preferences || [])]; guestPick.preferenceRanks = p?.preferenceRanks ?? p?.preference_ranks ?? undefined; guestPick.bans = [...(p?.bans || [])]; guestPick.noPreference = !!(p?.no_preference ?? p?.noPreference);
 }
 function useLatestGuestChoices() {
     setGuestChoices(guestSession.mine || guestSession.initial_choices); guestSavedChoices = pickSignature(guestPick); guestDirtyConflict = false; renderGuestPicks();
 }
 function keepGuestChoices() { guestDirtyConflict = false; updateGuestSubmitted(); }
-function onGuestNoPreferenceChange() { guestPick.noPreference = get('guest-no-preference').checked; updateGuestSubmitted(); }
+function onGuestNoPreferenceChange() { guestPick.noPreference = get('guest-no-preference').checked; renderGuestPicks(); }
 function updateGuestSubmitted() {
     const status = get('guest-submitted'), closed = guestSession?.stage !== 'collecting';
     status.style.display = 'block';
@@ -515,7 +525,7 @@ function renderGuestPicks() {
 }
 async function submitMyPicks() {
     if (!guestPick.name || !guestAccess?.player || guestSession.stage !== 'collecting' || guestDirtyConflict || guestSubmitting) return;
-    const epoch = roomEpoch, signature = pickSignature(guestPick), payload = JSON.parse(JSON.stringify({ preferences: guestPick.preferences, bans: guestPick.bans, no_preference: guestPick.noPreference,
+    const epoch = roomEpoch, signature = pickSignature(guestPick), payload = JSON.parse(JSON.stringify({ preferences: guestPick.preferences, preference_ranks: preferenceRanks(guestPick), bans: guestPick.bans, no_preference: guestPick.noPreference,
         expected_pick: guestSession.mine?.updated_at || null, expected_room: guestSession.revision }));
     guestSubmitting = true; updateGuestSubmitted();
     try {

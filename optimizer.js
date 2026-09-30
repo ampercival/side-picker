@@ -9,10 +9,53 @@ const SCORES = {
     ban: -1000
 };
 
+// Competition ranks: ties occupy positions (1, 1, 3 or 1, 2, 3, 3, 3, 6).
+// Missing ranks are legacy, strictly ordered preferences.
+function preferenceRanks(player) {
+    return player.preferenceRanks ?? player.preferences.map((_, i) => i + 1);
+}
+
+function setPreferenceOrder(player, next) {
+    const ranks = preferenceRanks(player);
+    const old = new Map(player.preferences.map((f, i) => [f, ranks[i]]));
+    let rank = 1;
+    player.preferenceRanks = next.map((f, i) => {
+        if (i === 0 || !old.has(f) || old.get(f) !== old.get(next[i - 1])) rank = i + 1;
+        return rank;
+    });
+    player.preferences = next;
+}
+
+function setPreferenceRank(player, faction, target) {
+    const ranks = preferenceRanks(player), groups = [];
+    player.preferences.forEach((f, i) => {
+        if (!i || ranks[i] !== ranks[i - 1]) groups.push({rank: ranks[i], factions: []});
+        groups[groups.length - 1].factions.push(f);
+    });
+    const source = groups.findIndex(g => g.factions.includes(faction));
+    if (source < 0) return;
+    if (target === 'separate') {
+        groups[source].factions = groups[source].factions.filter(f => f !== faction);
+        groups.splice(source + 1, 0, {factions: [faction]});
+    } else {
+        const destination = groups.find(g => g.rank === Number(target));
+        if (!destination) return;
+        groups[source].factions = groups[source].factions.filter(f => f !== faction);
+        destination.factions.push(faction);
+    }
+    player.preferences = []; player.preferenceRanks = [];
+    for (const group of groups) {
+        const rank = player.preferences.length + 1;
+        player.preferences.push(...group.factions);
+        player.preferenceRanks.push(...group.factions.map(() => rank));
+    }
+}
+
 function getScore(player, faction) {
     if (player.bans.includes(faction)) return SCORES.ban;
 
-    const rankIndex = player.preferences.indexOf(faction);
+    const index = player.preferences.indexOf(faction);
+    const rankIndex = index < 0 ? -1 : preferenceRanks(player)[index] - 1;
 
     // No Preference Mode: every preferred faction is treated as top rank.
     if (player.noPreference) {
@@ -44,6 +87,9 @@ function validateOptimizerInput(players, factions, mode) {
             if (!Array.isArray(list) || new Set(list).size !== list.length || !list.every(f => factions.includes(f))) return `Check ${player.name}'s choices: each faction must exist and appear only once in each list.`;
         }
         if (player.preferences.some(f => player.bans.includes(f))) return `${player.name} has a faction both preferred and banned. Choose one list for it.`;
+        const ranks = preferenceRanks(player);
+        if (!Array.isArray(ranks) || ranks.length !== player.preferences.length ||
+            ranks.some((rank, i) => !Number.isInteger(rank) || (i === 0 ? rank !== 1 : rank !== ranks[i - 1] && rank !== i + 1))) return `Check ${player.name}'s preference ranks.`;
         if (player.noPreference !== undefined && typeof player.noPreference !== 'boolean') return `Check ${player.name}'s unranked preference setting.`;
     }
     return null;
@@ -150,7 +196,6 @@ function findOptimalAssignment(players, factions, mode, random = Math.random) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { SCORES, getScore, validateOptimizerInput, findAssignmentConflict, findOptimalAssignment };
+    module.exports = { preferenceRanks, setPreferenceOrder, setPreferenceRank, SCORES, getScore, validateOptimizerInput, findAssignmentConflict, findOptimalAssignment };
 }
-
 

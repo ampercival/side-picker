@@ -17,7 +17,8 @@ function keyInfo(hash){
     return keyMeta.get(hash);
 }
 const rooms = new Map(), roomStates = new Map(), picks = new Map(), receipts = new Map(), roomJoins = new Map();
-const choices=(p,f)=>({preferences:(p?.preferences||[]).filter(x=>f.includes(x)),bans:(p?.bans||[]).filter(x=>f.includes(x)),noPreference:!!(p?.noPreference??p?.no_preference)});
+const {setPreferenceOrder,preferenceRanks}=require('../optimizer.js');
+const choices=(p,f)=>{const copy={preferences:p?.preferences||[],preferenceRanks:p?.preferenceRanks??p?.preference_ranks??undefined};setPreferenceOrder(copy,copy.preferences.filter(x=>f.includes(x)));return {...copy,bans:(p?.bans||[]).filter(x=>f.includes(x)),noPreference:!!(p?.noPreference??p?.no_preference)}};
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 let offline=false, loseNext=false, delay=0, roomsOffline=false;
 const fixture = `window.SUPABASE_CONFIG={url:'https://fixture.invalid',publishableKey:'fixture'};
@@ -96,8 +97,8 @@ function rpc(fn,args,user=null){
                     if(!same(incoming,saved)&&!same(incoming,choices(s?.players.find(x=>x.id===p.id),row.factions)))fail('Competing player update','40001');
                     next=saved;
                 }
-                if(!same(next,choices(pick,s.factions))){pick={...pick,preferences:next.preferences,bans:next.bans,no_preference:next.noPreference,source:'organizer',updated_at:new Date().toISOString()};picks.set(row.id+':'+p.id,pick);}
-                return {...p,...next,submittedAt:pick.updated_at,submittedSource:pick.source,submittedChoices:[next.preferences,next.bans,next.noPreference]};
+                if(!same(next,choices(pick,s.factions))){pick={...pick,preferences:next.preferences,preference_ranks:next.preferenceRanks,bans:next.bans,no_preference:next.noPreference,source:'organizer',updated_at:new Date().toISOString()};picks.set(row.id+':'+p.id,pick);}
+                return {...p,...next,submittedAt:pick.updated_at,submittedSource:pick.source,submittedChoices:[next.preferences,next.bans,next.noPreference,next.preferenceRanks]};
             });
             const roomState=roomStates.get(row.id);
             if(roomState&&(!same(s.factions,row.factions)||!same(s.players.map(p=>p.id),row.players.map(p=>p.id))||!same(s.results,row.results))){roomState.revision=crypto.randomUUID();if(s.results&&!row.results)roomState.locked=false;}

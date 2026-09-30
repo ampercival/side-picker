@@ -14,6 +14,7 @@ Run `node tests/serve-fixture.cjs`, then open `http://127.0.0.1:8754/`. The fixt
 
 | Check | Actions and expected result |
 | --- | --- |
+| Tied ranks (009) | Add six preferences; tie B with A at rank 1, and D/E with C at rank 3. Expect 1,1,3,3,3,6. Split B to rank 2 and restore. Toggle Treat preferences equally off/on without losing ranks. Submit a guest rank edit, verify the host/reload, compare both goals and verify tied first-choice labels. Check host and guest at 360px. |
 | Strict bans | Resume the sample. Compare: both players ban B, so explain the conflict. Unban B for Jordan; compare again: total 10, minimum 0, one first choice and one neutral. |
 | Preview/publication | Open a room, copy a personal invitation to another tab. Compare both goals: guest stays on closed picks. Publish one: guest sees the exact selected goal and assignments. |
 | Scope and identity | Viewing invitation has no submit control. Personal invitation edits only its player; refresh retains that identity. Copy a player invitation and check its QR label. Replacing links invalidates the old invitations. |
@@ -31,9 +32,9 @@ For guest phone previews, set `src` to the URL-encoded relative personal invitat
 
 ## Database changes and recovery
 
-The checked-in config points to production. Inspect actual schema/data first. On a fresh test project only, run `supabase/schema.sql` once, then migrations 001–008 in order. For an existing deployment, apply only the missing migration; never rerun the historical baseline or older API wrappers. Migration 002 requires deliberate legacy-workspace capability binding before 003 revokes old access; see PRIVATE_LINKS.md.
+The checked-in config points to production. Inspect actual schema/data first. On a fresh test project only, run `supabase/schema.sql` once, then migrations 001–009 in order. For an existing deployment, apply only the missing migration; never rerun the historical baseline or older API wrappers. Migration 002 requires deliberate legacy-workspace capability binding before 003 revokes old access; see PRIVATE_LINKS.md.
 
-Run the seven SQL files under `supabase/tests/` after relevant migrations: health permissions, private links, game permissions, reliable saves, room lifecycle, accounts (after migration 006), and room joins (after migration 008). They assert the deployed permission boundary; browser mocks cannot prove it. Fixture writes use transactions and roll back. Record application separately from test success, and verify existing data against the pre-change snapshot.
+Run the eight SQL files under `supabase/tests/` after relevant migrations: health permissions, private links, game permissions, reliable saves, room lifecycle, accounts (after migration 006), room joins (after migration 008), and tied preferences (after migration 009). They assert the deployed permission boundary; browser mocks cannot prove it. Fixture writes use transactions and roll back. Record application separately from test success, and verify existing data against the pre-change snapshot.
 
 The production database was reset to a clean slate on 2026-09-27; the older `before_private_links`, `before_reliable_saves`, and `before_room_lifecycle` snapshots were dropped, and `side_picker_private.before_accounts` is empty. These are migration recovery snapshots, **not recurring or off-project disaster backups**. Keep an administrator-managed export before future schema changes, including private capabilities, in private storage. Never place dumps or organizer recovery links in Git. Restore selected damaged rows after comparing newer writes; prefer a forward fix over blindly restoring old data or public grants. Existing local organizer recovery links are in ignored `.local/private-organizer-links.html`. See PRIVATE_LINKS.md and SAVING.md for access/draft recovery.
 

@@ -400,6 +400,7 @@ function clearPlayerChoices(btn) {
             'Their preferences and bans move back to Available.',
             () => {
                 player.preferences = [];
+                player.preferenceRanks = [];
                 player.bans = [];
                 autoSave();
                 const availableList = card.querySelector('.available-list');
@@ -539,9 +540,9 @@ function refreshListsForCard(player, availableList, prefList, banList) {
 
     // Move a faction between lists (drag-free, keyboard/tap accessible).
     const moveTo = (faction, dest) => {
-        player.preferences = player.preferences.filter(f => f !== faction);
+        setPreferenceOrder(player, player.preferences.filter(f => f !== faction));
         player.bans = player.bans.filter(f => f !== faction);
-        if (dest === 'pref') player.preferences.push(faction);
+        if (dest === 'pref') setPreferenceOrder(player, [...player.preferences, faction]);
         else if (dest === 'ban') player.bans.push(faction);
         rerender();
     };
@@ -551,7 +552,9 @@ function refreshListsForCard(player, availableList, prefList, banList) {
         const i = player.preferences.indexOf(faction);
         const j = i + dir;
         if (i < 0 || j < 0 || j >= player.preferences.length) return;
-        [player.preferences[i], player.preferences[j]] = [player.preferences[j], player.preferences[i]];
+        const next = player.preferences.slice();
+        [next[i], next[j]] = [next[j], next[i]];
+        setPreferenceOrder(player, next);
         rerender();
     };
 
@@ -570,7 +573,7 @@ function refreshListsForCard(player, availableList, prefList, banList) {
             const item = [availableList,prefList,banList].flatMap(list => [...list.children]).find(li => li.dataset.faction === faction);
             const buttons = [...(item?.querySelectorAll('button') || [])];
             (buttons.find(button => button.getAttribute('aria-label') === title) || buttons[0])?.focus({preventScroll:true});
-            if (typeof announce === 'function') announce(`${faction}: ${player.bans.includes(faction) ? 'banned' : player.preferences.includes(faction) ? `preference ${player.preferences.indexOf(faction)+1}` : 'available'}`);
+            if (typeof announce === 'function') announce(`${faction}: ${player.bans.includes(faction) ? 'banned' : player.preferences.includes(faction) ? `preference ${preferenceRanks(player)[player.preferences.indexOf(faction)]}` : 'available'}`);
         };
         return b;
     };
@@ -594,6 +597,27 @@ function refreshListsForCard(player, availableList, prefList, banList) {
             actions.appendChild(makeBtn('♥', `Prefer ${name}`, () => moveTo(name, 'pref')));
             actions.appendChild(makeBtn('⊘', `Ban ${name}`, () => moveTo(name, 'ban')));
         } else if (listType === 'pref') {
+            const ranks = preferenceRanks(player), rank = ranks[player.preferences.indexOf(name)];
+            const select = document.createElement('select');
+            select.className = 'preference-rank'; select.setAttribute('aria-label', `Rank for ${name}`);
+            select.disabled = !!player.noPreference;
+            for (const value of [...new Set(ranks)]) {
+                const option = document.createElement('option'); option.value = value;
+                option.textContent = `Rank ${value}`; select.appendChild(option);
+            }
+            if (ranks.filter(value => value === rank).length > 1) {
+                const option = document.createElement('option'); option.value = 'separate';
+                option.textContent = 'Separate rank'; select.appendChild(option);
+            }
+            select.value = rank;
+            select.onchange = () => {
+                setPreferenceRank(player, name, select.value); rerender();
+                [...prefList.querySelectorAll('li')].find(item => item.dataset.faction === name)?.querySelector('select')?.focus({preventScroll:true});
+                if (typeof announce === 'function') announce(`${name}: rank ${preferenceRanks(player)[player.preferences.indexOf(name)]}`);
+            };
+            select.onclick = e => e.stopPropagation();
+            label.classList.add('ranked-label');
+            label.appendChild(select);
             actions.appendChild(makeBtn('↑', `Move ${name} up`, () => reorder(name, -1)));
             actions.appendChild(makeBtn('↓', `Move ${name} down`, () => reorder(name, 1)));
             actions.appendChild(makeBtn('✕', `Remove ${name} from preferences`, () => moveTo(name, 'available')));
@@ -633,7 +657,7 @@ function updateAllPlayerFactions() {
     // For simplicity, re-rendering triggers `refreshListsForCard` which handles display.
     // But we should clean the underlying model objects first.
     state.players.forEach(p => {
-        p.preferences = p.preferences.filter(f => state.factions.includes(f));
+        setPreferenceOrder(p, p.preferences.filter(f => state.factions.includes(f)));
         p.bans = p.bans.filter(f => state.factions.includes(f));
     });
     renderPlayers();
@@ -662,6 +686,7 @@ function randomizeAllPreferences() {
                 const numBans = Math.floor(Math.random() * (remaining + 1));
 
                 player.preferences = shuffled.slice(0, numPrefs);
+                delete player.preferenceRanks;
                 player.bans = shuffled.slice(numPrefs, numPrefs + numBans);
             });
 
@@ -874,8 +899,9 @@ function getDragAfterElement(container, y) {
 function updatePlayerStateFromDOM(player, availableList, prefList, banList) {
     // Read names from DOM lists and update state object. Use the data attribute
     // (not textContent) since each item now also contains action buttons.
-    player.preferences = [...prefList.querySelectorAll('li')].map(li => li.dataset.faction);
+    setPreferenceOrder(player, [...prefList.querySelectorAll('li')].map(li => li.dataset.faction));
     player.bans = [...banList.querySelectorAll('li')].map(li => li.dataset.faction);
+    refreshListsForCard(player, availableList, prefList, banList);
     autoSave();
 }
 
@@ -890,6 +916,7 @@ let _optimizerReject = null;
 function buildOptimizerWorker() {
     const src = `
         const SCORES = ${JSON.stringify(SCORES)};
+        ${preferenceRanks.toString()}
         ${getScore.toString()}
         ${validateOptimizerInput.toString()}
         ${findAssignmentConflict.toString()}
@@ -977,8 +1004,8 @@ function optimizationSnapshot() {
         activeSessionName, workspace: getWorkspaceKey(),
         factions: state.factions, sessionName: state.sessionName, gameTitle: state.gameTitle,
         roomCode: state.roomCode,
-        players: state.players.map(({ id, name, preferences, bans, noPreference }) =>
-            ({ id, name, preferences, bans, noPreference: noPreference ?? false }))
+        players: state.players.map(({ id, name, preferences, preferenceRanks, bans, noPreference }) =>
+            ({ id, name, preferences, preferenceRanks, bans, noPreference: noPreference ?? false }))
     }));
 }
 
@@ -1099,7 +1126,7 @@ function displayResults(result, input = state, goalOverride = null) {
 
         let note = "Neutral";
         if (p.preferences.includes(assignedFaction)) {
-            note = p.noPreference ? "Choice" : `Choice #${p.preferences.indexOf(assignedFaction) + 1}`;
+            note = p.noPreference ? "Choice" : `Choice #${preferenceRanks(p)[p.preferences.indexOf(assignedFaction)]}`;
         } else if (p.bans.includes(assignedFaction)) {
             note = "BANNED (Forced)";
         }

@@ -8,6 +8,7 @@ function fixture(){
         renderGuestRoster(){},refreshListsForCard(){},validateResultsPayload:()=>null,showToast(){},
         localStorage:{getItem:()=>'{"ownerKey":"workspace"}'},renderPlayers(){},renderRoomStatus(){},updateRoomBanner(){},activeSessionName:'game',autoSave(){},
         document:{body:{classList:{remove(){}}}},switchView(){},isGuestMode:true});
+    vm.runInContext(fs.readFileSync('optimizer.js','utf8'),ctx);
     vm.runInContext(fs.readFileSync('rooms.js','utf8'),ctx);
     vm.runInContext("renderGuestRoster=()=>{}; updateRoomBanner=()=>{}; renderRoomStatus=()=>{}; guestAccess={player:'p1'};guestPick={id:'p1',name:'Alex',preferences:[],bans:[],noPreference:false};guestSession={code:'ROOM'};guestSavedChoices=pickSignature(guestPick);",ctx);
     return {ctx,elements,run:code=>vm.runInContext(code,ctx)};
@@ -18,6 +19,19 @@ test('neutral submissions count, host edits invalidate the submitted badge',()=>
     assert.equal(run("playerHasSubmitted({submittedAt:'now',preferences:[],bans:[],submittedChoices:[[],[],false]})"),true);
     assert.equal(run("playerSubmissionLabel({submittedAt:'now',preferences:['A'],bans:[],submittedChoices:[[],[],false]})"),'Edited since submission');
     assert.equal(run("playerSubmissionLabel({submittedAt:'now',submittedSource:'organizer'})"),'Organizer updated');
+});
+test('rank-only changes clear submission status and guest conflicts preserve tied drafts',()=>{
+    const {ctx,run}=fixture();
+    assert.equal(run("playerHasSubmitted({submittedAt:'t',preferences:['A','B'],preferenceRanks:[1,1],bans:[],submittedChoices:[['A','B'],[],false,[1,1]]})"),true);
+    assert.equal(run("playerHasSubmitted({submittedAt:'t',preferences:['A','B'],preferenceRanks:[1,2],bans:[],submittedChoices:[['A','B'],[],false,[1,1]]})"),false);
+    ctx.data={...room,initial_choices:{preferences:['A','B'],preferenceRanks:[1,2],bans:[],noPreference:false}};
+    run('applyGuestRoom(data);guestPick.preferenceRanks=[1,1]');
+    ctx.data={...ctx.data,mine:{updated_at:'t',source:'organizer',preferences:['A','B'],preference_ranks:[1,2],bans:[],no_preference:false}};
+    run('applyGuestRoom(data)');
+    assert.equal(run('guestDirtyConflict'),true);
+    assert.equal(run('guestPick.preferenceRanks[1]'),1);
+    run('useLatestGuestChoices()');
+    assert.equal(run('guestPick.preferenceRanks[1]'),2);
 });
 test('guest gets organizer changes when clean; dirty choices require an explicit decision',()=>{
     const {ctx,run,elements}=fixture();ctx.data=room;run('applyGuestRoom(data)');

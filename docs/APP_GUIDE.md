@@ -1,6 +1,6 @@
 # Side Picker application guide
 
-Last updated: 2026-09-27. Initial review: `2fae186`; current verified core release: `0ea2704` on `main`.
+Last updated: 2026-09-30. Initial review: `2fae186`; current verified core release: `0ea2704` on `main`.
 
 This describes the existing application, not the proposed future design. See [the improvement plan](IMPROVEMENT_PLAN.md) for changes and session handoffs. Verify live operational details when they matter; a successful check on the review date is not ongoing monitoring.
 
@@ -70,7 +70,7 @@ There is no application server, framework, bundler, or package manifest. Focused
 ## State and persistence
 
 - `state` in `script.js`: factions, players, sessionName, gameTitle, roomCode, results.
-- Player objects: id, name, preferences, bans, locked, noPreference, expanded.
+- Player objects: id, name, preferences, optional preferenceRanks, bans, locked, noPreference, expanded.
 - `activeSessionName`: the original saved-session identity used by database operations.
 - `sessionsCache` and `presetsCache` in `rooms.js`: in-memory database copies.
 - `currentSessionObject()` builds a session snapshot; `sessionRow()` maps it to database column names.
@@ -114,7 +114,7 @@ The host still bridges submitted picks into the working session. The guest roste
 
 ## Assignment rules and implementation
 
-Scores are 10 for first preference, 7 for second, 4 for third, 2 for fourth, 1 for fifth or later, and 0 for neutral. The unranked toggle makes every preferred faction worth 10. Banned factions are excluded from new assignments. The legacy -1000 ban score remains only for compatibility with older result snapshots/scoring.
+Preferences can share a rank. Ties consume the following positions: two first choices give ranks `1, 1, 3`; three third choices give `1, 2, 3, 3, 3, 6`. Every faction in a tie receives the score for that rank. Scores are 10 for first preference, 7 for second, 4 for third, 2 for fourth, 1 for fifth or later, and 0 for neutral. The unranked toggle makes every preferred faction worth 10. Banned factions are excluded from new assignments. The legacy -1000 ban score remains only for compatibility with older result snapshots/scoring.
 
 - **Highest Group Score:** maximize total score, then the lowest individual score.
 - **Fairest for Everyone:** maximize the lowest individual score, then total score.
@@ -198,7 +198,7 @@ Run `node tests/optimizer.bench.cjs` for 100-player/100-faction neutral, shared-
 
 ## Phone and keyboard interaction
 
-Ranking buttons are 44px and provide the complete no-drag workflow. Touch dragging starts only on the visible grip; swiping the rest of a row can scroll normally. Cancelling a touch drag restores the prior choices. Desktop drops stay within the same player. Empty ranking sections remain visible drop targets with a compact None label.
+Ranking buttons and selectors are at least 44px high and provide the complete no-drag workflow. Each preferred faction has a rank selector: choose an existing rank to tie it with that group, or **Separate rank** to split it into its own rank immediately after its old group. Consumed ranks are omitted automatically. The **Treat preferences equally** toggle disables rank selectors and gives every preferred faction 10 points, retaining the ranks for when it is turned off. Factions left Available remain neutral. Dragging and arrow buttons preserve adjacent ties, and split a group if another rank is moved between its members. Touch dragging starts only on the visible grip; swiping the rest of a row can scroll normally. Cancelling a touch drag restores the prior choices. Desktop drops stay within the same player. Empty ranking sections remain visible drop targets with a compact None label.
 
 Views reset scrolling and focus their heading. Organizer navigation records view/session identity in browser history state, without putting private links in URLs; Back/Forward restore screens and preserve the existing save rules. Modals have accessible names, trap focus, make the background inert, support Escape, and restore focus to their opener. Ranking actions preserve focus and announce their result. Reduced-motion preferences shorten animation. Room polling avoids rebuilding unchanged invitation buttons or repeatedly announcing unchanged connection text.
 
@@ -233,3 +233,9 @@ Accounts add a layer on top of organizer keys; they never gate games or invitati
 In the live room dialog, **Let players join from the group link** turns the room's group (viewing) link into a way to join. The organizer sets **Players from N to M**. M cannot exceed the number of factions, and the server caps seats there anyway. N is a soft minimum: **Compare and assign** asks for confirmation below it. A person opening the group link while joining is on sees the seats taken and a name box. Names are trimmed, limited to 60 characters, and must be distinct ignoring case. Joining is refused when the session is full, picking is closed, or results are published.
 
 A join writes the player straight into the session (flagged `joined`) and records it in `side_picker_private.room_joins`, so it works while the organizer is offline. The joiner receives the normal personal invitation, and the page reloads under it. The tab remembers them, and they are offered **Copy my personal link** and, if accounts are on, sign-in. The organizer's room poll adds unseen joiners to the editor and saves them. Until the organizer's device has saved a joiner, an older player list saved by the organizer keeps that joiner instead of dropping them. Removing a joined player first acknowledges the join, so the removal sticks. Migration 008 implements this; `supabase/tests/room_joins.sql` covers it.
+
+## Tied preference storage (migration 009)
+
+Existing `preferences` arrays remain faction-name lists. Optional `preferenceRanks` arrays align with that list; missing ranks mean distinct ranks in list order. Guest submissions store `preference_ranks` in the private picks table. Migration `202609300009_tied_preferences.sql` validates canonical competition ranks, includes them in host/guest conflict checks and reconciliation, and preserves existing data in a private RLS-protected `before_tied_preferences` snapshot. It was applied and verified on 2026-09-30 after all eight SQL suites passed in a rolled-back trial. The existing saved faction list was verified unchanged. Refresh existing app tabs after this release so all clients understand ties.
+
+Ranking-only edits invalidate assignment previews and submitted badges. Ties survive durable drafts, saves, polling, reloads, and assignment-worker snapshots. Result labels use the shared rank (for example, either tied first choice is `Choice #1`), keeping existing shared-results summaries compatible. Run `supabase/tests/tied_preferences.sql` alongside the other SQL suites after migration 009.

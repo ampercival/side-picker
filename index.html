@@ -158,7 +158,7 @@
             <section id="view-players" class="view">
                 <div class="card">
                     <h2>Step 2: Add players</h2>
-                    <p class="subtitle">Add players yourself, or open a live room and let them join from a group link. Then rank each player's factions — drag them or use the buttons.</p>
+                    <p class="subtitle">Add players yourself, or open a live room and let them join from a group link. Then rank each player's factions. Choose the same rank for a tie; tied factions take up the following slots.</p>
 
                     <div class="input-group">
                         <input type="text" id="player-input" placeholder="Player name"
@@ -321,13 +321,14 @@
                             </label>
                         </div>
 
+                        <p class="rank-help">Choose the same rank to tie factions. Two at rank 1 skip rank 2; the next is rank 3.</p>
                         <div class="guest-body">
                             <div class="preference-column">
                                 <h4>Available</h4>
                                 <ul class="sortable-list available-list" id="guest-available"></ul>
                             </div>
                             <div class="preference-column">
-                                <h4>Preferences (top = most wanted)</h4>
+                                <h4>Preferences (same rank = tied)</h4>
                                 <ul class="sortable-list preference-list" id="guest-preference"></ul>
                             </div>
                             <div class="preference-column">
@@ -411,7 +412,7 @@
                     </ul>
                 </div>
                 <div class="preference-column">
-                    <h4>Preferences (top = most wanted)</h4>
+                    <h4>Preferences (same rank = tied)</h4>
                     <ul class="sortable-list preference-list">
                         <!-- Ranked factions -->
                     </ul>

@@ -14,7 +14,8 @@ function reference(players, factions, mode) {
         if (chosen.length === players.length) {
             if (players.some((p, i) => p.bans.includes(chosen[i]))) return;
             const scores = players.map((p, i) => {
-                const rank = p.preferences.indexOf(chosen[i]);
+                const index = p.preferences.indexOf(chosen[i]);
+                const rank = index < 0 ? -1 : (p.preferenceRanks?.[index] ?? index + 1) - 1;
                 return rank < 0 ? 0 : p.noPreference ? 10 : ([10, 7, 4, 2][rank] ?? 1);
             });
             const total = scores.reduce((a, b) => a + b, 0), minimum = Math.min(...scores);
@@ -47,7 +48,15 @@ test('both goals and secondary tie-breaks match an independent reference over 40
             const order = factions.map(f => ({ f, key: random() })).sort((a, b) => a.key - b.key).map(x => x.f);
             const preferences = [], bans = [];
             order.forEach(f => { const r = random(); if (r < .2) bans.push(f); else if (r < .8) preferences.push(f); });
-            return player('P' + i, preferences, bans, random() < .2);
+            const p = player('P' + i, preferences, bans, random() < .2);
+            if (c % 2) {
+                let rank = 1;
+                p.preferenceRanks = preferences.map((_, index) => {
+                    if (index && random() < .6) rank = index + 1;
+                    return rank;
+                });
+            }
+            return p;
         });
         const before = JSON.stringify(players);
         for (const mode of ['total', 'fairness']) {
@@ -58,7 +67,7 @@ test('both goals and secondary tie-breaks match an independent reference over 40
             const chosen = players.map(p => actual.assignment[p.id]);
             assert.equal(new Set(chosen).size, players.length);
             assert.ok(players.every((p, i) => factions.includes(chosen[i]) && !p.bans.includes(chosen[i])));
-            const scores = players.map((p, i) => { const rank = p.preferences.indexOf(chosen[i]); return rank < 0 ? 0 : p.noPreference ? 10 : ([10, 7, 4, 2][rank] ?? 1); });
+            const scores = players.map((p, i) => { const index = p.preferences.indexOf(chosen[i]); const rank = index < 0 ? -1 : (p.preferenceRanks?.[index] ?? index + 1) - 1; return rank < 0 ? 0 : p.noPreference ? 10 : ([10, 7, 4, 2][rank] ?? 1); });
             const total = scores.reduce((a, b) => a + b, 0), min = Math.min(...scores);
             assert.deepEqual(mode === 'total' ? [total, min] : [min, total], expected);
             assert.equal(actual.score, total);
@@ -94,15 +103,22 @@ function loadRunner() {
 
 test('worker includes validation/conflict helpers and cancellation terminates the pending solve', async () => {
     const context = loadRunner();
+    vm.runInContext("state.players[0].preferences=['B','A'];state.players[0].preferenceRanks=[1,1];", context);
     const pending = vm.runInContext("runOptimization(state.players, state.factions, 'total')", context);
     const rejected = assert.rejects(pending, /cancelled/);
     const self = { postMessage(value) { this.result = value; } };
     vm.runInNewContext(await context.workerBlob.text(), { self });
     self.onmessage({ data: context.worker.input });
-    assert.equal(self.result.ok, true); assert.equal(self.result.result.assignment.p, 'A');
+    assert.equal(self.result.ok, true); assert.equal(self.result.result.score, 10);
     vm.runInContext('cancelOptimization()', context);
     await rejected;
     assert.equal(context.worker.terminated, true);
+});
+
+test('changing only a tie invalidates an assignment snapshot', () => {
+    const context = loadRunner();
+    vm.runInContext("state.players[0].preferences=['A','B']; const beforeTie=optimizationSnapshot(); state.players[0].preferenceRanks=[1,1];",context);
+    assert.equal(vm.runInContext('optimizationSnapshotIsCurrent(beforeTie)',context),false);
 });
 
 test('snapshot guard rejects changed picks/session, while display-only changes do not invalidate it', () => {
