@@ -2,7 +2,7 @@
 
 Created: 2026-09-26. Last updated: 2026-09-30.
 
-Status: selected core improvements, optional accounts and UX-02 tied ranks are deployed and verified. UX-03 pointer dragging is implemented and validated, with deployment next. Prior optional live checks and deferred features remain recorded below.
+Status: selected core improvements, optional accounts, UX-02 tied ranks and UX-03 pointer dragging are deployed and verified. Physical-phone gestures and prior optional live checks remain recorded separately below.
 
 ## Goal and scope
 
@@ -14,10 +14,10 @@ Read [APP_GUIDE.md](APP_GUIDE.md) for current behavior. Follow [AGENTS.md](../AG
 
 ## Current handoff
 
-- **Current work (2026-09-30): UX-03 web and mobile dragging.** User requested polished drag/drop on both. A shared pointer controller is implemented and validated; commit/push and Pages verification are next. UX-02 tied ranks deployed as `8184e3b`; Checks and Pages run `36758981799` succeeded and live assets matched the source.
+- **Current work (2026-09-30): requested picker improvements deployed.** UX-02 tied ranks deployed as `8184e3b`, run `36758981799`. UX-03 dragging deployed as `15159cd`, run `36800548979`. Both Checks and Pages runs succeeded and live assets matched the source. No-preference behavior remains available.
 - **Database:** migration 009 is applied and verified. Before application: 0 sessions, 1 saved faction list, 0 picks; migration 008 present. Migration 009 and all eight SQL suites passed in a single rolled-back transaction, with pasted SQL verified against the prepared source. Application verified existing sessions and the saved faction list unchanged. Postflight: ranks column present, scoped guest RPC available, direct game/private-helper access denied, backup RLS enabled; counts unchanged.
 - **Validation:** 59 Node regressions, syntax and offline PowerShell checks pass. Prior tied-rank acceptance covers host/guest submission, polling, reload, both goals and 360px layouts. Drag checks add real mouse moves in the app, browser mouse/touch event checks, 360px edge scrolling, tied-rank preservation, cancellation and save-once behavior. Physical touch remains a device spot-check limitation. A fresh guest drag browser run could not open the copied invitation because the browser URL policy rejected an invalid address; the shared controller and prior guest picker flow are covered separately.
-- **Exact next action:** commit this scoped improvement and push `main`; wait for Checks and Pages and verify the deployed assets. No production sessions were used for write tests.
+- **Exact next action:** when a physical phone is available, spot-check grip dragging, edge scrolling, normal row swipes and gesture cancellation through a personal fixture invitation; then record that separate evidence. No additional feature work is required for this request. No production sessions were used for write tests.
 - **Prior work:** selected core improvements are complete. Migrations 006–008 and Google/Discord/GitHub sign-in were applied and verified on 2026-09-27 (see Work log). Live saved-account invitation and real-player open-joining acceptance remain prior optional checks; this task does not claim those complete. Reusable player groups and history/rotation remain deferred.
 - **Access and operations:** use remains account-free. Organizer capabilities control a workspace; personal invitations control one player's picks. Local keepalive requires this computer on, signed in, and connected; this session did not reverify its scheduled execution. Migration snapshots are private recovery copies, not off-project disaster backups.
 
@@ -159,7 +159,7 @@ Routine implementation choices can be resolved from the user's instructions and 
 - [x] Preserve normal phone scrolling and accessible buttons/selectors; scroll long lists while dragging near the edge.
 - [x] Commit only on a valid release within the same player; cancelled/outside/cross-player drops restore choices without saving.
 - [x] Verify template integration, ties and cancellation with regression checks, real mouse input and 360px browser touch-event checks.
-- [ ] Commit, push and verify the deployed assets.
+- [x] Commit, push and verify the deployed assets. *(`15159cd`, run `36800548979`; live assets and Help text verified.)*
 - [ ] Physical-phone gesture spot check when a device is available. *(Browser-dispatched touch events are validated separately.)*
 
 **Acceptance:** factions move/reorder across the owning player's three lists, tied ranks remain consistent, controls remain usable, invalid drops do not edit choices, and long lists scroll during grip dragging. Requested 2026-09-30.
@@ -446,3 +446,4 @@ At the end of each implementation session, update Current handoff and append a d
 - Browser acceptance caught template-clone integration: setup occurs before cards enter the live document. Resolving the document on pointerdown fixed it; the new regression reproduces template adoption. Real mouse drops in the organizer app moved Available -> Banned -> Preferences; ranks and choices survived reload. The harness passed browser-dispatched mouse/touch moves, ties, cancellation, outside drops and controls; 360px touch-event edge scrolling passed. Actual 360px organizer preview had no horizontal overflow and 44px grips. Screenshots are ignored local artifacts.
 - `node scripts/check.cjs` passed all 59 Node regressions, JavaScript syntax and offline PowerShell checks. No schema change or production write test was needed. Browser console after correction contains extension errors only. A new guest-browser drag check was blocked when the copied invitation was rejected as an invalid URL; no attempt was made to bypass the browser policy. Prior guest picker acceptance and shared-controller tests remain separate evidence. Physical-phone gesture arbitration still needs a device spot check.
 - Exact next action: commit/push this scoped change, wait for Checks and Pages, compare deployed assets including `drag.js`, and verify the live home. Record release evidence in Current handoff.
+- Release completed: `15159cd2afc61e85d9351c182366ae4795768247` pushed to `main`; Checks and Pages run `36800548979` passed (checks 18s, deployment 14s). Live `index.html`, `drag.js`, `script.js`, `optimizer.js`, `rooms.js` and `style.css` matched source after newline normalization. Live home and updated Help opened without application console errors; browser extension errors are unrelated. No production game edits were made. Physical-phone and fresh guest-drag browser checks remain the explicitly recorded limits above.
