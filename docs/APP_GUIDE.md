@@ -1,6 +1,6 @@
 # Side Picker application guide
 
-Last updated: 2026-09-30. Initial review: `2fae186`; latest deployed application release: `022d6ac` on `main`. EN/FR localization is deployed; live switching, persistence and bilingual privacy copy are verified.
+Last updated: 2026-10-01. Initial review: `2fae186`; latest deployed application release: `022d6ac` on `main`. EN/FR localization is deployed; live switching, persistence and bilingual privacy copy are verified. The October 1 review findings are proposed work in the improvement plan, not deployed fixes.
 
 This describes the existing application, not the proposed future design. See [the improvement plan](IMPROVEMENT_PLAN.md) for changes and session handoffs. Verify live operational details when they matter; a successful check on the review date is not ongoing monitoring.
 
@@ -10,7 +10,7 @@ Side Picker assigns distinct board-game factions to players using their ranked p
 
 The EN/FR switch is available to organizers, players, shared-results readers, and on the privacy page. English is the default; the choice is remembered in this browser. French follows the Quebec French Translator plugin's public-facing Quebec French conventions. Switching updates text and accessibility labels in place, preserving typed input, picks, callbacks, and the current screen. Player/faction/game/session names, provider names, URLs, stored ranks, and canonical result labels are preserved. A shared snapshot is displayed in the reader's chosen language; its encoding remains compatible with existing links. Dates and numbers use `en-CA`/`fr-CA`; French percentages use a nonbreaking space.
 
-**Product direction confirmed 2026-09-26:** this is a public app that anyone should be able to use immediately. Required Google/email sign-in is not the planned entry flow. Private organizer links and personal player invitations now provide the access model. See SEC-02 in the plan for deployment status and PRIVATE_LINKS.md for operations. Optional Discord/Google accounts (FEATURE-04) are prepared but not yet activated; see [ACCOUNTS.md](ACCOUNTS.md).
+**Product direction confirmed 2026-09-26:** this is a public app that anyone should be able to use immediately. Required Google/email sign-in is not the planned entry flow. Private organizer links and personal player invitations now provide the access model. See SEC-02 in the plan for deployment status and PRIVATE_LINKS.md for operations. Optional Google, Discord and GitHub accounts (FEATURE-04) are deployed; the user verified all three providers on September 27. Further saved-invitation acceptance remains separate; see [ACCOUNTS.md](ACCOUNTS.md).
 
 ## Current user journeys
 
@@ -151,6 +151,11 @@ Results use the payload `{v, t, gm, g, pct, r}`: version, session title, game, g
 | Mobile | Flexible inputs, 44px controls, wrapping names, compact empty lists, view focus/scroll reset | UX-01 complete |
 | Operations | Local daily check installed and timer-triggered run verified; computer must be on/signed in. Release checks now gate Pages deployment | OPS-01 and ENG-01 complete |
 | Accounts | Optional accounts: migrations 006-007 applied; Google, Discord, and GitHub live; account games on every device and saved player invitations deployed | FEATURE-04 in progress |
+| Startup/recovery | Blocked storage aborts theme initialization; failed workspace loads can still show the empty-session message | REL-02 proposed |
+| Accounts | Sign-out ignores returned auth errors; failed post-registration loads can accumulate device keys | SEC-03 and REL-03 proposed |
+| Joining | Joining has no request receipt for retrying a lost successful response | ROOM-02 proposed |
+| Guest interaction | Unsubmitted picks disappear on reload; unrelated room changes rebuild ranking controls and remove focus | UX-05 proposed |
+| Sharing | Oversized results are correctly refused as links, but the same modal gate also hides the plain-text summary | UX-06 proposed |
 
 ## Hosting, local use, and validation
 
@@ -209,7 +214,7 @@ Ranking buttons and selectors are at least 44px high and provide the complete no
 
 Views reset scrolling and focus their heading. Organizer navigation records view/session identity in browser history state, without putting private links in URLs; Back/Forward restore screens and preserve the existing save rules. Modals have accessible names, trap focus, make the background inert, support Escape, and restore focus to their opener. Ranking actions preserve focus and announce their result. Reduced-motion preferences shorten animation. Room polling avoids rebuilding unchanged invitation buttons or repeatedly announcing unchanged connection text.
 
-Validated with isolated 360px/390px iframe previews and a desktop browser: readable Add Player, keyboard ranking/submission, Help focus trap/Escape restoration, browser Back between setup and picks, room dialog, long result names, and reconnect catching up to published results. Both phone previews had no horizontal page overflow. The pointer controller also passed browser-dispatched mouse/touch events at desktop and 360px, including scrolling and cancellation, plus real mouse drops in the organizer app and an isolated harness. A regression covers template cards acquiring the live document before dragging. Physical-phone hardware gestures still need a spot check; dispatched touch events do not reproduce the operating system's gesture handling. The later UX-04 iPad text/preview correction has offline regression coverage; its new tablet and measured-alignment browser fixtures are prepared, but browser connection timeouts prevented executing them this session.
+Validated with isolated 360px/390px iframe previews and a desktop browser: readable Add Player, keyboard ranking/submission, Help focus trap/Escape restoration, browser Back between setup and picks, room dialog, long result names, and reconnect catching up to published results. Both phone previews had no horizontal page overflow. The pointer controller also passed browser-dispatched mouse/touch events at desktop and 360px, including scrolling and cancellation, plus real mouse drops in the organizer app and an isolated harness. A regression covers template cards acquiring the live document before dragging. Physical-phone hardware gestures still need a spot check; dispatched touch events do not reproduce the operating system's gesture handling. UX-04 tablet layout and measured preview-alignment browser checks passed on September 30 after browser access recovered. Physical iPad/Safari acceptance is still pending. The October 1 review separately reproduced focus loss after a remote player rename and loss of unsubmitted rank edits after reload; these are UX-05 proposals.
 
 ## Repeat sessions and bulk entry
 
