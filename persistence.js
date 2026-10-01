@@ -13,10 +13,10 @@ function renderSaveStatus() {
     else if (current.length) text = 'Changes backed up here. Waiting to save…';
     else if (drafts.length) text = 'Unsaved drafts found in this browser. Review them before continuing.';
     else if (workspaceLoadFailed) text = 'Cloud games could not be loaded. Check your connection and retry.';
-    get('save-status-text').textContent = text;
+    uiText(get('save-status-text'), text);
     get('retry-saves').hidden = !current.length && !workspaceLoadFailed;
     get('review-drafts').hidden = !drafts.length;
-    get('review-drafts').textContent = `Review drafts (${drafts.length})`;
+    uiText(get('review-drafts'), `Review drafts (${drafts.length})`);
 }
 async function retrySaves() {
     if (journal) {
@@ -31,13 +31,13 @@ function openDrafts() {
     const j = ensureJournal(), list = get('draft-list'); list.replaceChildren();
     for (const draft of j?.drafts() || []) {
         const row = document.createElement('div'); row.className = 'draft-row';
-        const title = document.createElement('p'); title.textContent = `${draft.latest.payload.session_name || draft.latest.payload.name} · ${new Date(draft.updatedAt).toLocaleString()}`;
-        const copy = document.createElement('button'); copy.className = 'btn secondary'; copy.textContent = 'Save as separate copy';
+        const title = document.createElement('p'); uiText(title, () => `${draft.latest.payload.session_name || draft.latest.payload.name} · ${uiDate(draft.updatedAt)}`);
+        const copy = document.createElement('button'); copy.className = 'btn secondary'; uiText(copy, 'Save as separate copy');
         copy.disabled = j.running.has(draft.key);
         copy.onclick = async () => {
             copy.disabled = true;
             const data = draft.latest.payload;
-            const name = `${(data.session_name || data.name).slice(0,430)} (recovered ${crypto.randomUUID().slice(0,8)})`;
+            const name = t('{0} (recovered {1})', (data.session_name || data.name).slice(0,430), crypto.randomUUID().slice(0,8));
             let ok;
             if (draft.key.startsWith('session:')) {
                 const s = mapRowToSession(data); s.sessionName = name; s.roomCode = '';
@@ -51,7 +51,7 @@ function openDrafts() {
                 showToast('success', 'Recovery copy saved', `Your saved original was left intact. Look for "${name}".`);
             } else { copy.disabled = false; renderSaveStatus(); }
         };
-        const discard = document.createElement('button'); discard.className = 'btn secondary'; discard.textContent = 'Discard this draft';
+        const discard = document.createElement('button'); discard.className = 'btn secondary'; uiText(discard, 'Discard this draft');
         discard.disabled = j.running.has(draft.key);
         discard.onclick = () => showConfirm('Discard local draft?', 'This removes these unsaved edits from this browser. The cloud game stays unchanged.', async () => {
             if (!j.discard(draft.id)) return;

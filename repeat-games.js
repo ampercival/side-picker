@@ -24,16 +24,16 @@ function openRepeatSession(name) {
     const source=sessionsCache[name];if(!source)return;
     startNewSession();
     repeatSessionSource=JSON.parse(JSON.stringify(source));
-    const base=((source.sessionName||name).slice(0,460))+' (next)';
+    const base=((source.sessionName||name).slice(0,460))+t(' (next)');
     let next=base, index=2;while(sessionsCache[next])next=base+' '+index++;
     get('new-session-input').value=next;
-    get('new-session-title').textContent='Repeat this session';
-    get('new-session-help').textContent='Keep the game, factions, and player names. Start with empty choices, fresh player invitations, and no results. The original stays saved.';
+    uiText(get('new-session-title'), 'Repeat this session');
+    uiText(get('new-session-help'), 'Keep the game, factions, and player names. Start with empty choices, fresh player invitations, and no results. The original stays saved.');
     get('new-session-input').focus();get('new-session-input').select();
 }
 function openBulkEntry(kind) {
     bulkKind=kind;
-    get('bulk-title').textContent=kind==='players'?'Add several players':'Add several factions';
+    uiText(get('bulk-title'), kind==='players'?'Add several players':'Add several factions');
     get('bulk-input').value='';previewBulkEntry();
     get('modal-overlay').classList.add('active');get('bulk-modal').classList.add('active');get('bulk-input').focus();
 }
@@ -41,9 +41,9 @@ function currentBulkNames(){return bulkKind==='players'?state.players.map(p=>p.n
 function previewBulkEntry(){
     try{
         const {names,duplicates}=parseBulkNames(get('bulk-input').value,currentBulkNames());
-        get('bulk-preview').textContent=`${names.length} to add${duplicates?` · ${duplicates} duplicate entries skipped`:''}`;
+        uiText(get('bulk-preview'), () => t('{0} to add', names.length) + (duplicates ? ' · ' + t(duplicates === 1 ? '{0} duplicate entry skipped' : '{0} duplicate entries skipped', duplicates) : ''));
         get('bulk-add').disabled=!names.length;
-    }catch(error){get('bulk-preview').textContent=error.message;get('bulk-add').disabled=true;}
+    }catch(error){uiText(get('bulk-preview'), error.message);get('bulk-add').disabled=true;}
 }
 function applyBulkEntry(){
     try{

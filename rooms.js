@@ -191,7 +191,7 @@ async function initializePrivateWorkspace() {
     }
     if (localStorage.getItem(WORKSPACE_KEY_LS)) {
         openWorkspaceModal();
-        get('workspace-help').textContent = 'Your older sessions are preserved. Open the private organizer link from the upgrade, or start a separate workspace below.';
+        uiText(get('workspace-help'), 'Your older sessions are preserved. Open the private organizer link from the upgrade, or start a separate workspace below.');
         return;
     }
     await createPrivateWorkspace();
@@ -275,9 +275,9 @@ function playerSubmissionLabel(p) {
 }
 function updateRoomBanner() {
     const banner = get('room-banner'); if (!banner) return;
-    banner.style.display = state.roomCode ? 'flex' : 'none'; get('room-banner-code').textContent = state.roomCode ? (state.results ? 'Published' : state.roomStage === 'locked' ? 'Picking closed' : state.roomStage === 'collecting' ? 'Collecting picks' : 'Checking…') : '';
+    banner.style.display = state.roomCode ? 'flex' : 'none'; uiText(get('room-banner-code'), state.roomCode ? (state.results ? 'Published' : state.roomStage === 'locked' ? 'Picking closed' : state.roomStage === 'collecting' ? 'Collecting picks' : 'Checking…') : '');
     const toggle = get('room-stage-button');
-    if (toggle) { toggle.hidden = !state.roomCode || !!state.results; toggle.textContent = state.roomStage === 'locked' ? 'Reopen picking' : 'Close picking'; }
+    if (toggle) { toggle.hidden = !state.roomCode || !!state.results; uiText(toggle, state.roomStage === 'locked' ? 'Reopen picking' : 'Close picking'); }
     renderRoomStatus();
 }
 function deactivateRoomSync() { ++roomEpoch; clearTimeout(roomTimer); roomTimer = null; resumeRoomPolling = null; }
@@ -309,7 +309,7 @@ if (typeof window.addEventListener === 'function') {
 function setRoomConnection(ok) {
     const el = get(isGuestMode ? 'guest-connection' : 'room-connection');
     const message = ok ? 'Live updates connected' : navigator.onLine === false ? 'Offline — reconnect to update' : 'Connection interrupted — retrying…';
-    if (el && el.textContent !== message) el.textContent = message;
+    if (el && el.textContent !== translateUI(message)) uiText(el, message);
 }
 async function refreshRoomSubmissions(epoch = roomEpoch) {
     const name = activeSessionName, workspace = getWorkspaceKey();
@@ -368,7 +368,7 @@ async function showRoomModal() {
     if (!state.roomCode) return; const name = activeSessionName;
     try {
         const link = await invitation(); if (name !== activeSessionName) return;
-        get('room-link-input').value = link; get('room-code-label').textContent = ''; renderRoomStatus();
+        get('room-link-input').value = link; uiText(get('room-code-label'), ''); renderRoomStatus();
         showInvitationQR(link, groupLinkLabel()); renderRoomJoin();
         get('modal-overlay').classList.add('active'); get('room-modal').classList.add('active');
     } catch (error) { accessError(error, 'Could not load invitations'); }
@@ -401,9 +401,9 @@ function renderRoomJoin() {
     get('room-join-range').hidden = !join.open;
     if (document.activeElement !== get('room-join-min')) get('room-join-min').value = join.min ?? '';
     if (document.activeElement !== get('room-join-max')) get('room-join-max').value = join.max ?? '';
-    get('room-join-status').textContent = join.open
+    uiText(get('room-join-status'), join.open
         ? `${state.players.length} of ${seats} seats taken${join.min ? `; at least ${join.min} needed` : ''}. Seats can't exceed the number of factions.`
-        : 'Off: only players you add can pick.';
+        : 'Off: only players you add can pick.');
 }
 async function saveRoomJoin() {
     if (!activeSessionName || !state.roomCode) return;
@@ -429,15 +429,15 @@ function replaceRoomLinks() {
 function renderRoomStatus() {
     const container = get('room-status-list'); if (!container) return;
     const players = state.players || [], count = get('room-banner-count');
-    if (count) count.textContent = `${players.filter(playerHasSubmitted).length}/${players.length} submitted`;
+    if (count) uiText(count, `${players.filter(playerHasSubmitted).length}/${players.length} submitted`);
     const signature = JSON.stringify(players.map(p => [p.id,p.name,playerSubmissionLabel(p)]));
     if (container.dataset.signature === signature) return;
     container.dataset.signature = signature; container.replaceChildren();
     for (const p of players) {
         const row = document.createElement('div'); row.className = 'room-status-row';
-        const name = document.createElement('span'); name.className = 'rs-name'; name.textContent = p.name;
-        const status = document.createElement('span'); status.className = 'rs-state'; status.textContent = playerSubmissionLabel(p);
-        const button = document.createElement('button'); button.className = 'btn secondary'; button.textContent = 'Copy player link'; button.onclick = () => copyPlayerLink(p.id);
+        const name = document.createElement('span'); name.className = 'rs-name'; userText(name, p.name);
+        const status = document.createElement('span'); status.className = 'rs-state'; uiText(status, playerSubmissionLabel(p));
+        const button = document.createElement('button'); button.className = 'btn secondary'; uiText(button, 'Copy player link'); button.onclick = () => copyPlayerLink(p.id);
         row.append(name, status, button); container.appendChild(row);
     }
 }
@@ -447,7 +447,7 @@ function showGuestError(message) {
     isSharedMode = false; document.body.classList.remove('shared-mode');
     document.body.classList.add('guest-mode'); switchView('view-guest');
     get('guest-name-wrap').style.display = 'none'; get('guest-pick-area').style.display = 'none'; get('guest-banner').style.display = 'none';
-    get('guest-error').textContent = message; get('guest-error').style.display = 'block';
+    uiText(get('guest-error'), message); get('guest-error').style.display = 'block';
 }
 async function guestRequest(action = 'read', payload = {}) {
     const { data, error } = await getSupabaseClient().rpc('sp_room', {
@@ -484,9 +484,10 @@ function applyGuestRoom(data) {
     else if (!dirty) { setGuestChoices(data.mine || data.initial_choices); guestSavedChoices = pickSignature(guestPick); guestDirtyConflict = false; }
     guestSession = { ...guestSession, ...data }; state.factions = data.factions;
     guestSession.lastResponse = response;
-    get('guest-banner').style.display = 'block'; get('guest-session-name').textContent = data.session_name || ''; get('guest-game-title').textContent = data.game_title || '';
+    get('guest-banner').style.display = 'block'; userText(get('guest-session-name'), data.session_name || ''); userText(get('guest-game-title'), data.game_title || '');
     guestPick.name = data.player_name || '';
-    get('guest-player-name').textContent = guestPick.name || (data.join?.open ? '' : 'Viewing only. Ask the organizer for your personal player link to submit picks.');
+    if (guestPick.name) userText(get('guest-player-name'), guestPick.name);
+    else uiText(get('guest-player-name'), data.join?.open ? '' : 'Viewing only. Ask the organizer for your personal player link to submit picks.');
     renderGuestJoin(data);
     setPreferenceOrder(guestPick, guestPick.preferences.filter(f => data.factions.includes(f))); guestPick.bans = guestPick.bans.filter(f => data.factions.includes(f));
     renderGuestRoster();
@@ -496,7 +497,7 @@ function applyGuestRoom(data) {
 function guestResultsReady(results) { return validateResultsPayload(results) !== null; }
 function renderGuestRoster() {
     const el = get('guest-roster'), players = guestSession?.players || [];
-    el.innerHTML = `<div class="gr-head">${players.filter(playerHasSubmitted).length}/${players.length} submitted</div><div class="gr-chips">${players.map(p => `<span class="gr-chip ${p.submitted ? 'done' : ''}">${p.submitted ? '✓ ' : ''}${escapeHtml(p.name)}</span>`).join('')}</div>`;
+    uiHTML(el, `<div class="gr-head">${players.filter(playerHasSubmitted).length}/${players.length} submitted</div><div class="gr-chips">${players.map(p => `<span class="gr-chip ${p.submitted ? 'done' : ''}">${p.submitted ? '✓ ' : ''}${escapeHtml(p.name)}</span>`).join('')}</div>`);
     el.style.display = players.length ? 'block' : 'none';
 }
 function showGuestPicks() { isSharedMode = false; document.body.classList.remove('shared-mode'); switchView('view-guest'); renderGuestPicks(); }
@@ -511,11 +512,11 @@ function onGuestNoPreferenceChange() { guestPick.noPreference = get('guest-no-pr
 function updateGuestSubmitted() {
     const status = get('guest-submitted'), closed = guestSession?.stage !== 'collecting';
     status.style.display = 'block';
-    status.textContent = guestDirtyConflict ? 'Saved choices changed elsewhere. Your edits are still here; choose which version to use.'
+    uiText(status, guestDirtyConflict ? 'Saved choices changed elsewhere. Your edits are still here; choose which version to use.'
         : closed ? 'Picking is closed. Your edits stay here until the organizer reopens it.'
         : guestSavedChoices !== pickSignature(guestPick) ? 'Edits not submitted yet'
         : guestSession?.mine?.source === 'organizer' ? 'Organizer updated your saved choices'
-        : guestSession?.mine ? 'Submitted — you can edit and submit again while picking is open.' : 'Ready to submit. Factions left in Available count as neutral.';
+        : guestSession?.mine ? 'Submitted — you can edit and submit again while picking is open.' : 'Ready to submit. Factions left in Available count as neutral.');
     get('guest-conflict-actions').hidden = !guestDirtyConflict;
     get('guest-submit-button').disabled = closed || guestDirtyConflict || guestSubmitting;
 }
@@ -547,9 +548,9 @@ function renderGuestJoin(data) {
     box.hidden = !!guestAccess?.player || !join.open;
     if (box.hidden) return;
     const full = join.taken >= join.max;
-    get('guest-join-status').textContent = full
+    uiText(get('guest-join-status'), full
         ? `This session is full (${join.taken} of ${join.max} seats). Ask the organizer if you should have a seat.`
-        : `${join.taken} of ${join.max} seats taken${join.min && join.taken < join.min ? `; the organizer needs at least ${join.min}` : ''}. Enter your name to take a seat.`;
+        : `${join.taken} of ${join.max} seats taken${join.min && join.taken < join.min ? `; the organizer needs at least ${join.min}` : ''}. Enter your name to take a seat.`);
     get('guest-join-form').hidden = full;
 }
 async function joinSession() {
@@ -573,7 +574,7 @@ function renderGuestJoined() {
     let joined = false;
     try { joined = !!guestAccess?.player && sessionStorage.getItem(`side_picker_joined_${guestSession.code}`) === '1'; } catch { /* optional */ }
     box.hidden = !joined;
-    if (joined) get('guest-joined-text').textContent = `You joined as ${guestPick.name}. This tab remembers you. To come back from another tab or device, copy your personal link and keep it private.`;
+    if (joined) uiText(get('guest-joined-text'), `You joined as ${guestPick.name}. This tab remembers you. To come back from another tab or device, copy your personal link and keep it private.`);
 }
 async function copyMyPlayerLink() {
     const link = makePrivateLink('player', guestAccess.token, { room: guestSession.code, player: guestAccess.player });

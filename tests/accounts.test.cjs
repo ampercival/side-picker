@@ -19,7 +19,7 @@ function app({ responses = {}, session = { user: { id: 'u1', app_metadata: { pro
             return value instanceof Error ? { data: null, error: value } : { data: value ?? {}, error: null };
         }
     };
-    const ctx = vm.createContext({
+    const ctx = vm.createContext({...require('../i18n.js'),
         console, crypto: nodeCrypto.webcrypto, TextEncoder, URL, URLSearchParams, setTimeout, clearTimeout, navigator: { userAgent: 'Mozilla/5.0 (Windows NT 10.0) Chrome/140.0' },
         location: { href: base, origin: 'https://example.test', pathname: '/side-picker/', hash: '', assign: url => visits.push(url) },
         localStorage: { getItem: k => storage.get(k) ?? null, setItem: (k, v) => storage.set(k, String(v)), removeItem: k => storage.delete(k), key: () => null, length: 0 },
@@ -47,7 +47,7 @@ test('sign-in returns are read once and removed without touching other link part
     assert.deepEqual(takeAuthCallback(base + '?code=xyz'), { code: 'xyz', error: null });
     assert.deepEqual(takeAuthCallback(base + '?error=access_denied&error_description=Cancelled'), { code: null, error: 'Cancelled' });
     const replaced = [];
-    const ctx = vm.createContext({ URL, URLSearchParams, history: { state: { view: 1 }, replaceState: (_s, _t, url) => replaced.push(url) } });
+    const ctx = vm.createContext({...require('../i18n.js'), URL, URLSearchParams, history: { state: { view: 1 }, replaceState: (_s, _t, url) => replaced.push(url) } });
     vm.runInContext(fs.readFileSync('accounts.js', 'utf8'), ctx);
     ctx.href = base + '?code=xyz&state=abc&keep=1#view';
     vm.runInContext('takeAuthCallback(href)', ctx);

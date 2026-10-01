@@ -5,7 +5,7 @@ test('summary includes game, declared goal and explanations as plain text',()=>{
     assert.match(text,/Friday · Example/);assert.match(text,/Goal: Fairest for Everyone/);assert.match(text,/Alex: A — Choice #2 \(\+7 points\)/);assert.ok(!text.includes('#organizer'));
 });
 function workflow(){
-    const elements=new Map(),ctx=vm.createContext({console,setTimeout,clearTimeout,window:{matchMedia:()=>({matches:true})},localStorage:{getItem:()=>null},
+    const elements=new Map(),ctx=vm.createContext({...require('../i18n.js'),console,setTimeout,clearTimeout,window:{matchMedia:()=>({matches:true})},localStorage:{getItem:()=>null},
         document:{documentElement:{removeAttribute(){}},addEventListener(){},getElementById:id=>{if(id==='theme-toggle')return null;if(!elements.has(id))elements.set(id,{style:{}});return elements.get(id);}},
         getWorkspaceKey:()=> 'workspace',setRoomStage:async()=>true});
     vm.runInContext(['optimizer.js','results.js','script.js','sharing.js'].map(f=>fs.readFileSync(f,'utf8')).join('\n'),ctx);

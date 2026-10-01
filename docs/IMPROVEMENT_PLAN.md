@@ -2,7 +2,7 @@
 
 Created: 2026-09-26. Last updated: 2026-09-30.
 
-Status: selected core improvements, optional accounts and UX-02–04 picker improvements are deployed. UX-04 offline checks and deployed asset verification pass. Its new tablet visual/device acceptance remains pending because browser verification is unavailable this session.
+Status: selected core improvements, optional accounts and UX-02–04 picker improvements are deployed. FEATURE-05 EN/FR localization is implemented and validated locally; deployment pending. UX-04 browser layout/alignment checks now pass; physical iPad acceptance remains pending.
 
 ## Goal and scope
 
@@ -14,10 +14,10 @@ Read [APP_GUIDE.md](APP_GUIDE.md) for current behavior. Follow [AGENTS.md](../AG
 
 ## Current handoff
 
-- **Current work (2026-09-30): UX-04 iPad correction deployed as `a37d20a`.** Names wrap independently of rank selectors; previews retain the full source layout and dimensions. Checks and Pages run `36802511907` passed, and live assets match the source. The prior releases remain `8184e3b` (ties) and `15159cd` (pointer dragging).
+- **Current work (2026-09-30): FEATURE-05 EN/FR toggle and Quebec French translation prepared.** All app modes and the privacy page are covered, with in-place switching and browser persistence. No schema change is required. UX-04 remains deployed as `a37d20a`; its browser acceptance is now recorded below.
 - **Database:** migration 009 is applied and verified. Before application: 0 sessions, 1 saved faction list, 0 picks; migration 008 present. Migration 009 and all eight SQL suites passed in a single rolled-back transaction, with pasted SQL verified against the prepared source. Application verified existing sessions and the saved faction list unchanged. Postflight: ranks column present, scoped guest RPC available, direct game/private-helper access denied, backup RLS enabled; counts unchanged.
-- **Validation:** 60 Node regressions, syntax and offline PowerShell checks pass, including retained preview dimensions and pointer offsets during movement/scrolling. Prior browser evidence belongs to UX-02/03. Current browser connection timed out on creation, tab lookup and inventory, so the new tablet layout and in-browser alignment harness have not been visually verified. An isolated Tablet picker fixture and alignment button are prepared for that check. No schema change or production write test is needed.
-- **Exact next action:** verify the supplied iPad case after refresh when browser/device access is available, using Tablet picker fixture and Check preview alignment at the documented widths; record that evidence. No further deployment or database operation is pending. Do not claim physical iPad acceptance without that evidence.
+- **Validation:** 66 Node regressions, syntax and offline PowerShell checks pass. Isolated browser checks cover French home/setup, persisted choice after reload, switching with unfinished input and tied ranks intact, French guest submission synchronized to host, comparison/publication, copied summary and bilingual shared snapshots. Host iframe and guest checks at 360px have no horizontal overflow; toggle buttons are 48×44px. Landscape tablet faction labels each fit on one line. Preview-alignment harness reports PASS for mouse/touch/pen including scrolling, and the touch drag harness passes movement/cancellation/control checks. Physical iPad verification remains separate.
+- **Exact next action:** commit/push FEATURE-05, wait for Checks and Pages, compare live localization assets and verify EN/FR plus privacy on the deployed site; record the release. A subsequent physical iPad check remains useful for the reported device, without blocking this language release.
 - **Prior work:** selected core improvements are complete. Migrations 006–008 and Google/Discord/GitHub sign-in were applied and verified on 2026-09-27 (see Work log). Live saved-account invitation and real-player open-joining acceptance remain prior optional checks; this task does not claim those complete. Reusable player groups and history/rotation remain deferred.
 - **Access and operations:** use remains account-free. Organizer capabilities control a workspace; personal invitations control one player's picks. Local keepalive requires this computer on, signed in, and connected; this session did not reverify its scheduled execution. Migration snapshots are private recovery copies, not off-project disaster backups.
 
@@ -170,9 +170,20 @@ Routine implementation choices can be resolved from the user's instructions and 
 - [x] Keep preview dimensions, full row styling and pickup offset unchanged, including after scrolling.
 - [x] Add a pointer-offset regression and isolated tablet/alignment browser fixtures; all 60 offline regressions pass.
 - [x] Commit, push and verify deployed assets. *(`a37d20a`, run `36802511907`; live HTML, drag, script and styles match.)*
-- [ ] Verify the new tablet layout and ghost alignment in a browser and on the reported iPad. *(Browser connection timed out; prepared fixture checks are not execution evidence.)*
+- [x] Verify the new tablet layout and ghost alignment in a browser. *(2026-09-30: landscape labels fit on one line; alignment harness PASS for mouse/touch/pen including scrolling; touch movement/cancellation/control checks PASS.)*
+- [ ] Verify on the reported physical iPad. *(Desktop browser checks do not reproduce physical Safari touch input.)*
 
 **Acceptance:** readable faction names and rank controls at tablet/phone widths; preview pickup point stays with the finger while highlighted placement follows that same point. Requested with iPad screenshot 2026-09-30.
+
+### FEATURE-05 — English and Quebec French
+
+- [x] Use the Quebec French Translator plugin instructions to translate all application and privacy copy, including dynamic status, errors, dialogs, help, summaries and accessibility labels.
+- [x] Add an accessible EN/FR switch to every app mode and the privacy page; remember the choice locally and preserve input/picks during switching.
+- [x] Preserve user names, proper nouns, URLs, private capabilities and canonical snapshot/result semantics; localize presentation, dates and numbers.
+- [x] Validate static copy coverage and preservation with six localization regressions; all 66 offline checks pass. Browser host/guest/results checks and 360px overflow checks pass.
+- [ ] Commit, push, verify Pages and the live switch/privacy page.
+
+**Acceptance:** complete, natural Quebec French UI; switching languages retains the current task; account-free use and existing shared results remain compatible. Requested explicitly with the Quebec French Translator plugin on 2026-09-30.
 
 ### FEATURE-01 — Faster repeat sessions
 
@@ -465,3 +476,12 @@ At the end of each implementation session, update Current handoff and append a d
 - All 60 Node regressions, JavaScript syntax and offline PowerShell checks passed. Added a controller test for size and pointer offset before/after scrolling. The browser harness now includes actual action controls and a measured alignment check; the app fixture includes the tablet names and ties from the screenshot. These browser checks are prepared but not executed: the browser connection timed out three times (new tab, URL lookup, inventory). No alternate browser automation was used.
 - Exact next action: commit/push this scoped correction, wait for Pages and compare changed assets. Current browser/device acceptance remains pending and must be recorded separately when available. No database changes or production game edits.
 - Release: `a37d20aa0671965beac7ae35f0568e943f571a55` pushed to `main`; run `36802511907` passed (checks 22s, deployment 18s). Live `index.html`, `drag.js`, `script.js` and `style.css` exactly matched source after newline normalization. Alignment-page inline JavaScript and served fixture configuration parse successfully. Browser/device visual acceptance is still pending; the release is not represented as an independently verified iPad gesture fix.
+
+### 2026-09-30 — FEATURE-05 EN/FR localization prepared
+
+- Applied the explicitly requested Quebec French Translator plugin skill: neutral public-facing Quebec French, consistent preferences/exclusions terminology, preserved product/provider names and placeholders, nonbreaking punctuation, localized dates/numbers. Translated the app, privacy notice, help, dialogs, save/connection/conflict states, ranking accessibility labels, and copied result summaries.
+- Added a 48×44px EN/FR switch outside the host-only header actions so guests and shared-results readers can use it. The privacy page shares the local choice. Presentation bindings update in place without resetting input, choices, callbacks, rooms, or account state. User text stays literal; canonical goals/notes and version-1 shared links remain compatible. No production database operation was performed.
+- Validation: all 66 Node regressions, JavaScript syntax, and offline PowerShell checks pass. Six new localization checks cover static-copy completeness, placeholders/punctuation, safe switching, storage failure, dynamic copy, and canonical results. Release staging checks include both new assets on both pages.
+- Isolated browser evidence: French survives reload; EN/FR switching retains unfinished player input and ranks 1,1,3,3. Rank edits remain French, guest submits successfully and host receives them, comparison/publication shows French goals, clipboard equals the displayed French summary, and a snapshot switches between English/French without regenerating its link. French account entry/providers are visible; names remain unchanged. Exact 360px host/guest document widths stay within viewport; buttons are 48×44px.
+- Browser access recovered, completing the prepared UX-04 browser check: Coalition/KPD/RC/NSDAP each fit on one line in the narrow landscape column. Preview alignment reports PASS for mouse/touch/pen including page scrolling; touch moves, ties, cancellation, outside-drop and control checks pass. This is browser evidence, not physical iPad/Safari acceptance.
+- Exact next action: commit and push this scoped release, wait for Checks and Pages, compare deployed assets and verify live EN/FR and privacy; record deployment evidence separately.

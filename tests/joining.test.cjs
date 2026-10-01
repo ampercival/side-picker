@@ -8,7 +8,7 @@ const plain = value => JSON.parse(JSON.stringify(value));
 function room(responses, elements = {}) {
     const calls = [], saves = [], replaced = [];
     const storage = new Map([['side_picker_private_workspace_v1', JSON.stringify({ credential: 'a'.repeat(64), ownerKey: 'A' })]]);
-    const ctx = vm.createContext({
+    const ctx = vm.createContext({...require('../i18n.js'),
         console, crypto: nodeCrypto.webcrypto, TextEncoder, URL, URLSearchParams, setTimeout, clearTimeout,
         location: { href: 'https://example.test/side-picker/?room=ROOM', replace: url => replaced.push(url), reload: () => replaced.push('reload') },
         localStorage: { getItem: k => storage.get(k) ?? null, setItem: (k, v) => storage.set(k, v), removeItem: k => storage.delete(k) },

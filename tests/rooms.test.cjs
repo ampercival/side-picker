@@ -3,7 +3,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs'),vm=require('node:vm');
 function fixture(){
     const elements=new Map();
-    const ctx=vm.createContext({window:{},setTimeout,clearTimeout,console,navigator:{onLine:true},
+    const ctx=vm.createContext({...require('../i18n.js'),window:{},setTimeout,clearTimeout,console,navigator:{onLine:true},
         get:id=>{if(!elements.has(id))elements.set(id,{style:{}});return elements.get(id);},state:{factions:['A','B']},
         renderGuestRoster(){},refreshListsForCard(){},validateResultsPayload:()=>null,showToast(){},
         localStorage:{getItem:()=>'{"ownerKey":"workspace"}'},renderPlayers(){},renderRoomStatus(){},updateRoomBanner(){},activeSessionName:'game',autoSave(){},

@@ -35,7 +35,7 @@ function deviceLabel(ua = '') {
 function accountName(session = accountSession) {
     const user = session?.user; if (!user) return '';
     const meta = user.user_metadata || {};
-    return String(meta.full_name || meta.name || meta.user_name || user.email || 'your account').slice(0, 200);
+    return String(meta.full_name || meta.name || meta.user_name || user.email || t('your account')).slice(0, 200);
 }
 function accountProviderName(session = accountSession) {
     return ACCOUNT_PROVIDER_NAMES[session?.user?.app_metadata?.provider] || 'your sign-in provider';
@@ -275,9 +275,9 @@ function openAccountModal() {
     get('modal-overlay').classList.add('active'); get('account-modal').classList.add('active');
     if (accountSession && !accountWorkspaces && !accountLoading) void refreshAccount();
 }
-function accountElement(tag, text, className) {
+function accountElement(tag, text, className, supplied = false) {
     const el = document.createElement(tag);
-    if (text !== undefined) el.textContent = text;
+    if (text !== undefined) { if (supplied) userText(el, text); else uiText(el, text); }
     if (className) el.className = className;
     return el;
 }
@@ -299,19 +299,19 @@ function renderAccountBody() {
         body.append(providers, accountPrivacyLink());
         return;
     }
-    body.append(accountElement('p', `Signed in as ${accountName()} with ${accountProviderName()}.`, 'account-note'));
+    body.append(accountElement('p', () => t('Signed in as {0} with {1}.', accountName(), t(accountProviderName())), 'account-note'));
     const games = accountGames();
     if (!games) {
         body.append(accountElement('p', accountLoading || accountSyncing ? 'Loading…' : 'Setting up your account…', 'subtitle'));
     } else {
         const summary = accountElement('div', undefined, 'account-workspace');
-        summary.append(accountElement('p', `${plural(games.sessions?.length || 0, 'session')} · ${plural(games.presets?.length || 0, 'saved game')}`, 'account-workspace-title'),
+        summary.append(accountElement('p', () => [plural(games.sessions?.length || 0, 'session'), plural(games.presets?.length || 0, 'saved game')].map(translateUI).join(' · '), 'account-workspace-title'),
             accountElement('p', "Your sessions and saved games appear on every device where you're signed in.", 'account-workspace-names'));
         body.append(summary, accountElement('h4', 'Signed-in devices and links'));
         for (const key of games.keys || []) {
             const row = accountElement('div', undefined, 'account-key');
             const name = key.kind === 'device' ? (key.label || 'Device') : 'Organizer link';
-            row.append(accountElement('span', `${name}${key.current ? ' (this device)' : ''} · added ${new Date(key.created_at).toLocaleDateString()}`));
+            row.append(accountElement('span', () => t('{0} · added {1}', translateUI(name) + (key.current ? t(' (this device)') : ''), uiDate(key.created_at, true))));
             if (!key.current) row.append(accountButton('Remove', 'btn-sm', () => revokeAccountKey(key)));
             body.append(row);
         }
@@ -378,8 +378,8 @@ function renderAccountInvitations() {
         const row = accountElement('div', undefined, 'invitation-row');
         const text = accountElement('div', undefined, 'invitation-text');
         const status = !invite.current ? 'invitation replaced' : invite.stage === 'published' ? 'results ready' : invite.stage === 'locked' ? 'picking closed' : 'picking open';
-        text.append(accountElement('strong', invite.session_name || 'Session'),
-            accountElement('span', [invite.game_title, invite.player_name ? `as ${invite.player_name}` : '', status].filter(Boolean).join(' · ')));
+        text.append(accountElement('strong', invite.session_name || 'Session', undefined, !!invite.session_name),
+            accountElement('span', () => [invite.game_title, invite.player_name ? t('as {0}', invite.player_name) : '', t(status)].filter(Boolean).join(' · ')));
         row.append(text);
         if (invite.current) row.append(accountButton('Open', 'btn primary', () => openSavedInvitation(invite)));
         row.append(accountButton('Remove', 'btn-sm', () => forgetSavedInvitation(invite)));

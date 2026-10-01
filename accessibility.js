@@ -2,7 +2,7 @@
 let restoringView = false;
 function announce(message) {
     const status = document.getElementById('interaction-status');
-    if (status) status.textContent = message;
+    if (status) uiText(status, message);
 }
 function onViewChanged(viewId) {
     const heading = get(viewId).querySelector('h2');
@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
     for (const id of ['guest-connection','room-connection','guest-submitted']) get(id)?.setAttribute('role','status');
     // Placeholder hints remain visible, but are no longer the only input names.
     for (const input of document.querySelectorAll('input[placeholder],textarea[placeholder]')) {
-        if (!input.labels?.length && !input.hasAttribute('aria-label')) input.setAttribute('aria-label',input.placeholder);
+        if (!input.labels?.length && !input.hasAttribute('aria-label')) uiAttr(input, 'aria-label', () => input.placeholder);
     }
     let top = null, lastOutside = document.activeElement;
     const openers = new Map(), modals = [...document.querySelectorAll('.modal')];

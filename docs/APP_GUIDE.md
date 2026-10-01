@@ -1,12 +1,14 @@
 # Side Picker application guide
 
-Last updated: 2026-09-30. Initial review: `2fae186`; latest deployed application release: `a37d20a` on `main`; assets verified, tablet visual acceptance pending.
+Last updated: 2026-09-30. Initial review: `2fae186`; latest deployed application release: `a37d20a` on `main`. EN/FR localization is prepared and validated locally; deployment pending.
 
 This describes the existing application, not the proposed future design. See [the improvement plan](IMPROVEMENT_PLAN.md) for changes and session handoffs. Verify live operational details when they matter; a successful check on the review date is not ongoing monitoring.
 
 ## Purpose
 
 Side Picker assigns distinct board-game factions to players using their ranked preferences, neutral choices, and bans. An organizer can enter everyone's choices or collect them through a live room, then optimize and share the assignments.
+
+The EN/FR switch is available to organizers, players, shared-results readers, and on the privacy page. English is the default; the choice is remembered in this browser. French follows the Quebec French Translator plugin's public-facing Quebec French conventions. Switching updates text and accessibility labels in place, preserving typed input, picks, callbacks, and the current screen. Player/faction/game/session names, provider names, URLs, stored ranks, and canonical result labels are preserved. A shared snapshot is displayed in the reader's chosen language; its encoding remains compatible with existing links. Dates and numbers use `en-CA`/`fr-CA`; French percentages use a nonbreaking space.
 
 **Product direction confirmed 2026-09-26:** this is a public app that anyone should be able to use immediately. Required Google/email sign-in is not the planned entry flow. Private organizer links and personal player invitations now provide the access model. See SEC-02 in the plan for deployment status and PRIVATE_LINKS.md for operations. Optional Discord/Google accounts (FEATURE-04) are prepared but not yet activated; see [ACCOUNTS.md](ACCOUNTS.md).
 
@@ -43,6 +45,8 @@ If both URL forms are present, room mode takes precedence at startup.
 | --- | --- |
 | `index.html` | All screens, modals, templates, inline event handlers, script loading |
 | `style.css` | Themes, cards, ranking lists, modals, responsive layout |
+| `i18n.js` | Locale persistence, presentation bindings, formatting, and safe in-place language switching |
+| `translations-fr.js` | Quebec French catalog keyed by English source copy, with preserved placeholders |
 | `script.js` | Organizer UI, state, ranking controls, optimizer, saving orchestration, presets, result links |
 | `results.js` | Snapshot validation, bounded decoding, safe result card rendering; also testable under Node |
 | `optimizer.js` | Pure scoring, input validation, conflict detection, strict-ban assignment solver |
@@ -64,7 +68,9 @@ If both URL forms are present, room mode takes precedence at startup.
 | `scripts/keep-supabase-active.ps1` | Daily local read-only database check, bounded retries, logging and status |
 | `scripts/register-keepalive-task.ps1` | Registers the daily Windows task and sign-in catch-up |
 
-The scripts are classic browser scripts sharing globals, not ES modules. Loading order is Supabase's CDN client, `config.js`, `access.js`, `save-journal.js`, `results.js`, `optimizer.js`, `drag.js`, `repeat-games.js`, the pinned QR encoder, `sharing.js`, `script.js`, `rooms.js`, `accounts.js`, then `persistence.js` and `accessibility.js`. Much of initialization runs at `DOMContentLoaded`, after the application scripts are available.
+The scripts are classic browser scripts sharing globals, not ES modules. Loading order is Supabase's CDN client, `translations-fr.js`, `i18n.js`, `config.js`, `access.js`, `save-journal.js`, `results.js`, `optimizer.js`, `drag.js`, `repeat-games.js`, the pinned QR encoder, `sharing.js`, `script.js`, `rooms.js`, `accounts.js`, then `persistence.js` and `accessibility.js`. Much of initialization runs at `DOMContentLoaded`, after the application scripts are available.
+
+Localization binds static DOM text and attributes once, and uses `uiText`, `uiAttr`, and `uiHTML` for generated copy. Template contents stay English and each clone is localized on creation. Use `userText` for supplied names and formatter callbacks for mixed user data and UI copy. A language change re-renders these presentation bindings without rebuilding cards or writing to Supabase. Detached bindings are pruned after synchronous renders. Keep `GOAL_NAMES` and result notes in English internally because result validation/counting and existing snapshots use them. New English copy needs a corresponding French catalog entry; `tests/i18n.test.cjs` checks all static app/privacy copy, placeholders, punctuation, data preservation, and representative dynamic flows. The privacy page discloses local language storage.
 
 There is no application server, framework, bundler, or package manifest. Focused Node tests now live in `tests/`. Supabase JS is pinned to version 2.117.2 with integrity verification. Google Fonts supplies Outfit.
 

@@ -12,5 +12,12 @@ test('release contains every local page asset but excludes tests, SQL, docs and 
         assert.equal(external.length,1);
         assert.match(external[0][0],/@supabase\/supabase-js@\d+\.\d+\.\d+\/dist\/umd\/supabase\.js/);
         assert.match(external[0][0],/integrity="sha384-[A-Za-z0-9+/=]+" crossorigin="anonymous"/);
+        for(const page of ['index.html','privacy.html']){
+            const source=fs.readFileSync(path.join(destination,page),'utf8');
+            for(const asset of ['translations-fr.js','i18n.js']){
+                assert.ok(source.includes(`src="${asset}"`),`${page} loads ${asset}`);
+                assert.ok(fs.existsSync(path.join(destination,asset)),`${asset} is deployed`);
+            }
+        }
     } finally {fs.rmSync(temporary,{recursive:true,force:true});}
 });

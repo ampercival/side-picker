@@ -53,7 +53,7 @@ test('invalid links get their own recoverable view and do not initialize a works
     for (const hash of ['#results=', '#results', '#results=broken', `#results=${encodeData({ ...sample(), v: 2 })}`]) {
         let startup, activeView, focused;
         const element = id => ({ style: {}, classList: { contains() { return activeView === id; }, add() { if (id.startsWith('view-')) activeView = id; }, remove() {} }, focus() { focused = id; } });
-        const context = vm.createContext({ console, TextEncoder, TextDecoder, atob, btoa,
+        const context = vm.createContext({...require('../i18n.js'), console, TextEncoder, TextDecoder, atob, btoa,
             location: { hash }, localStorage: { getItem: () => null },
             window: { matchMedia: () => ({ matches: true }) },
             document: { documentElement: { removeAttribute() {} }, body: element('body'),

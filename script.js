@@ -50,13 +50,13 @@ function updateThemeIcon(theme) {
     if (theme === 'light') {
         sun.style.display = 'none';
         moon.style.display = 'block';
-        btn.setAttribute('aria-label', 'Switch to dark mode');
-        btn.title = 'Switch to dark mode';
+        uiAttr(btn, 'aria-label', 'Switch to dark mode');
+        uiAttr(btn, 'title', 'Switch to dark mode');
     } else {
         sun.style.display = 'block';
         moon.style.display = 'none';
-        btn.setAttribute('aria-label', 'Switch to light mode');
-        btn.title = 'Switch to light mode';
+        uiAttr(btn, 'aria-label', 'Switch to light mode');
+        uiAttr(btn, 'title', 'Switch to light mode');
     }
 }
 
@@ -97,13 +97,13 @@ function showToast(type, title, message) {
     else if (type === 'error') icon = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>';
     else icon = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>';
 
-    toast.innerHTML = `
+    uiHTML(toast, `
         ${icon}
         <div class="toast-content">
             <div class="toast-title">${escapeHtml(title)}</div>
             <div class="toast-message">${escapeHtml(message)}</div>
         </div>
-    `;
+    `);
 
     container.appendChild(toast);
 
@@ -156,11 +156,11 @@ function renderPresetOptions() {
     const presets = getPresets();
     const names = Object.keys(presets).sort((a, b) => a.localeCompare(b));
 
-    select.innerHTML = '<option value="custom">None (add factions below)</option>';
+    uiHTML(select, '<option value="custom">None (add factions below)</option>');
     names.forEach(name => {
         const opt = document.createElement('option');
         opt.value = name;
-        opt.textContent = name;
+        userText(opt, name);
         select.appendChild(opt);
     });
 
@@ -169,9 +169,9 @@ function renderPresetOptions() {
     // Hint that points users at Manage when they have no games yet.
     const hint = get('game-select-hint');
     if (hint) {
-        hint.textContent = names.length === 0
+        uiText(hint, names.length === 0
             ? 'No saved games yet. Add one with Manage.'
-            : 'Add or edit saved games with Manage.';
+            : 'Add or edit saved games with Manage.');
     }
 }
 
@@ -182,12 +182,12 @@ function openInfoModal() {
 }
 
 function showConfirm(title, message, callback, btnText = 'Confirm', btnClass = 'primary', onCancel = null, cancelText = 'Cancel') {
-    get('confirm-title').textContent = title;
-    get('confirm-message').textContent = message;
-    get('confirm-cancel-btn').textContent = cancelText;
+    uiText(get('confirm-title'), title);
+    uiText(get('confirm-message'), message);
+    uiText(get('confirm-cancel-btn'), cancelText);
 
     const confirmBtn = get('confirm-btn');
-    confirmBtn.textContent = btnText;
+    uiText(confirmBtn, btnText);
     confirmBtn.className = `btn ${btnClass}`;
     confirmBtn.onclick = () => {
         closeModal('confirm-modal');
@@ -310,15 +310,16 @@ function renderFactions() {
     state.factions.sort((a, b) => a.localeCompare(b));
 
     if (state.factions.length === 0) {
-        container.innerHTML = '<div class="empty-state">No factions yet</div>';
+        uiHTML(container, '<div class="empty-state">No factions yet</div>');
         return;
     }
 
     const template = get('template-faction-tag');
     state.factions.forEach(faction => {
         const clone = template.content.cloneNode(true);
-        clone.querySelector('.name').textContent = faction;
-        clone.querySelector('.remove-btn').setAttribute('aria-label', `Remove ${faction}`);
+        uiTree(clone);
+        userText(clone.querySelector('.name'), faction);
+        uiAttr(clone.querySelector('.remove-btn'), 'aria-label', `Remove ${faction}`);
         container.appendChild(clone);
     });
 }
@@ -373,7 +374,7 @@ function updatePlayerName(element) {
 
     if (!newName) {
         // Revert to old name if empty
-        if (player) element.textContent = player.name;
+        if (player) userText(element, player.name);
         return;
     }
 
@@ -469,8 +470,8 @@ function renderPlayers() {
     container.innerHTML = '';
 
     if (state.players.length === 0) {
-        container.innerHTML = state.roomJoin?.open ? '<div class="empty-state">No players yet. People who join from the group link appear here.</div>'
-            : '<div class="empty-state">No players yet</div>';
+        uiHTML(container, state.roomJoin?.open ? '<div class="empty-state">No players yet. People who join from the group link appear here.</div>'
+            : '<div class="empty-state">No players yet</div>');
         return;
     }
 
@@ -478,6 +479,7 @@ function renderPlayers() {
 
     state.players.forEach(player => {
         const clone = template.content.cloneNode(true);
+        uiTree(clone);
         const card = clone.querySelector('.player-card');
         card.setAttribute('data-player-id', player.id);
 
@@ -486,23 +488,23 @@ function renderPlayers() {
             card.classList.add('active');
         }
 
-        clone.querySelector('.player-name').textContent = player.name;
+        userText(clone.querySelector('.player-name'), player.name);
         const expand = clone.querySelector('.expand-player');
-        expand.setAttribute('aria-label', `Choices for ${player.name}`);
+        uiAttr(expand, 'aria-label', `Choices for ${player.name}`);
         expand.setAttribute('aria-expanded', String(!!player.expanded));
-        clone.querySelector('.player-name').setAttribute('aria-label', `Player name: ${player.name}`);
+        uiAttr(clone.querySelector('.player-name'), 'aria-label', `Player name: ${player.name}`);
 
         // Lock State
         const lockBtn = clone.querySelector('.unlock');
         if (player.locked) {
             lockBtn.querySelector('.locked').style.display = 'inline';
             lockBtn.querySelector('.unlocked').style.display = 'none';
-            lockBtn.title = "Allow randomizing this player's choices";
+            uiAttr(lockBtn, 'title', "Allow randomizing this player's choices");
             card.classList.add('locked-mode');
         } else {
             lockBtn.querySelector('.locked').style.display = 'none';
             lockBtn.querySelector('.unlocked').style.display = 'inline';
-            lockBtn.title = "Keep this player's choices when randomizing";
+            uiAttr(lockBtn, 'title', "Keep this player's choices when randomizing");
             card.classList.remove('locked-mode');
         }
 
@@ -566,8 +568,8 @@ function refreshListsForCard(player, availableList, prefList, banList) {
         b.type = 'button';
         b.className = 'li-action';
         b.innerHTML = label;
-        b.title = title;
-        b.setAttribute('aria-label', title);
+        uiAttr(b, 'title', title);
+        uiAttr(b, 'aria-label', title);
         b.draggable = false;
         b.onclick = (e) => {
             e.stopPropagation();
@@ -575,7 +577,7 @@ function refreshListsForCard(player, availableList, prefList, banList) {
             onClick();
             const item = [availableList,prefList,banList].flatMap(list => [...list.children]).find(li => li.dataset.faction === faction);
             const buttons = [...(item?.querySelectorAll('button') || [])];
-            (buttons.find(button => button.getAttribute('aria-label') === title) || buttons[0])?.focus({preventScroll:true});
+            (buttons.find(button => button.getAttribute('aria-label') === translateUI(title)) || buttons[0])?.focus({preventScroll:true});
             if (typeof announce === 'function') announce(`${faction}: ${player.bans.includes(faction) ? 'banned' : player.preferences.includes(faction) ? `preference ${preferenceRanks(player)[player.preferences.indexOf(faction)]}` : 'available'}`);
         };
         return b;
@@ -585,14 +587,14 @@ function refreshListsForCard(player, availableList, prefList, banList) {
         const li = document.createElement('li');
         li.draggable = false;
         li.dataset.faction = name; // Read by drag commit instead of textContent.
-        const handle = document.createElement('span'); handle.className = 'drag-handle'; handle.textContent = '⠿';
-        handle.setAttribute('aria-hidden','true'); handle.title = 'Drag from here, or use the buttons'; li.appendChild(handle);
+        const handle = document.createElement('span'); handle.className = 'drag-handle'; uiText(handle, '⠿');
+        handle.setAttribute('aria-hidden','true'); uiAttr(handle, 'title', 'Drag from here, or use the buttons'); li.appendChild(handle);
 
         const label = document.createElement('span');
         label.className = 'li-label';
         const factionName = document.createElement('span');
         factionName.className = 'faction-name';
-        factionName.textContent = name;
+        userText(factionName, name);
         label.appendChild(factionName);
         li.appendChild(label);
 
@@ -605,15 +607,15 @@ function refreshListsForCard(player, availableList, prefList, banList) {
         } else if (listType === 'pref') {
             const ranks = preferenceRanks(player), rank = ranks[player.preferences.indexOf(name)];
             const select = document.createElement('select');
-            select.className = 'preference-rank'; select.setAttribute('aria-label', `Rank for ${name}`);
+            select.className = 'preference-rank'; uiAttr(select, 'aria-label', `Rank for ${name}`);
             select.disabled = !!player.noPreference;
             for (const value of [...new Set(ranks)]) {
                 const option = document.createElement('option'); option.value = value;
-                option.textContent = `Rank ${value}`; select.appendChild(option);
+                uiText(option, `Rank ${value}`); select.appendChild(option);
             }
             if (ranks.filter(value => value === rank).length > 1) {
                 const option = document.createElement('option'); option.value = 'separate';
-                option.textContent = 'Separate rank'; select.appendChild(option);
+                uiText(option, 'Separate rank'); select.appendChild(option);
             }
             select.value = rank;
             select.onchange = () => {
@@ -928,16 +930,13 @@ function displayResults(result, input = state, goalOverride = null) {
     const maxPossible = input.players.length * SCORES.rank1;
     const percent = maxPossible > 0 ? Math.round((result.score / maxPossible) * 100) : 0;
 
-    get('total-score').textContent = `${percent}%`;
+    uiText(get('total-score'), () => t('{0}%', uiNumber(percent)));
 
     const sessionName = (input.sessionName || '').trim();
     const gameTitle = (input.gameTitle || '').trim();
-    const subtitleParts = [sessionName, gameTitle].filter(Boolean);
-    get('results-subtitle').textContent =
-        subtitleParts.length ? subtitleParts.join(' · ') : 'Final assignments';
 
     const goalEl = document.querySelector('input[name="opt-mode"]:checked');
-    const goalText = goalOverride || (goalEl ? goalEl.parentElement.querySelector('strong').textContent : '');
+    const goalText = goalOverride || (goalEl ? GOAL_NAMES[goalEl.value] || '' : '');
 
     const shareRows = [];
 
@@ -957,8 +956,8 @@ function displayResults(result, input = state, goalOverride = null) {
     });
 
     lastResults = { v: 1, t: sessionName, gm: gameTitle, g: goalText, pct: percent, r: shareRows };
-    get('results-subtitle').textContent = [...subtitleParts, `Goal: ${goalText}`].join(' · ');
-    get('results-summary').textContent = describeResultRows(shareRows);
+    uiText(get('results-subtitle'), () => formatResultSubtitle(sessionName, gameTitle, goalText));
+    uiText(get('results-summary'), () => describeResultRows(shareRows).split(' · ').map(translateUI).join(' · '));
 }
 
 // --- Session Management ---
@@ -1077,13 +1076,13 @@ function updateWorkspaceIndicator() {
     if (!el) return;
     const links = document.createElement('button');
     links.className = 'link-btn'; links.onclick = () => openWorkspaceModal();
-    links.textContent = hasWorkspaceKey() ? 'Save or open your private organizer link' : 'Open your organizer link or start a workspace';
+    uiText(links, hasWorkspaceKey() ? 'Save or open your private organizer link' : 'Open your organizer link or start a workspace');
     el.replaceChildren(links);
     if (typeof accountsEnabled === 'function' && accountsEnabled()) {
         const account = document.createElement('button');
         account.className = 'link-btn'; account.onclick = () => openAccountModal();
-        account.textContent = !accountSession ? 'Sign in to use your sessions on all your devices (optional)'
-            : 'Signed in: your sessions are on all your devices';
+        uiText(account, !accountSession ? 'Sign in to use your sessions on all your devices (optional)'
+            : 'Signed in: your sessions are on all your devices');
         el.append(document.createTextNode(' · '), account);
     }
 }
@@ -1175,11 +1174,11 @@ function renderHomeSessions() {
     container.innerHTML = '';
 
     if (!isSupabaseConfigured()) {
-        container.innerHTML = '<div class="empty-state">Cloud sessions need Supabase configured in config.js.</div>';
+        uiHTML(container, '<div class="empty-state">Cloud sessions need Supabase configured in config.js.</div>');
         return;
     }
     if (!hasWorkspaceKey()) {
-        container.innerHTML = '<div class="empty-state">Open your private organizer link, or start a new workspace. No account needed.</div>';
+        uiHTML(container, '<div class="empty-state">Open your private organizer link, or start a new workspace. No account needed.</div>');
         return;
     }
 
@@ -1187,7 +1186,7 @@ function renderHomeSessions() {
     const names = Object.keys(sessions).sort((a, b) => new Date(sessions[b].date) - new Date(sessions[a].date));
 
     if (names.length === 0) {
-        container.innerHTML = '<div class="empty-state">No sessions yet. Start one with + New session.</div>';
+        uiHTML(container, '<div class="empty-state">No sessions yet. Start one with + New session.</div>');
         return;
     }
 
@@ -1195,15 +1194,15 @@ function renderHomeSessions() {
     names.forEach(name => {
         const data = sessions[name];
         const clone = template.content.cloneNode(true);
+        uiTree(clone);
         const card = clone.querySelector('.session-card');
 
-        clone.querySelector('.sc-name').textContent = (data.sessionName || '').trim() || name;
+        userText(clone.querySelector('.sc-name'), (data.sessionName || '').trim() || name);
         const fc = (data.factions || []).length;
         const pc = (data.players || []).length;
         const game = (data.gameTitle || '').trim();
-        clone.querySelector('.sc-meta').textContent =
-            `${game ? game + ' · ' : ''}${fc} faction${fc === 1 ? '' : 's'} · ${pc} player${pc === 1 ? '' : 's'}`;
-        clone.querySelector('.sc-date').textContent = new Date(data.date).toLocaleString();
+        uiText(clone.querySelector('.sc-meta'), () => [game, t(fc === 1 ? '{0} faction' : '{0} factions', fc), t(pc === 1 ? '{0} player' : '{0} players', pc)].filter(Boolean).join(' · '));
+        uiText(clone.querySelector('.sc-date'), () => uiDate(data.date));
 
         if (name === activeSessionName) card.classList.add('active-session');
 
@@ -1263,18 +1262,16 @@ function showHostResults(payload) {
     }
     const container = get('results-container');
     container.innerHTML = '';
-    get('total-score').textContent = `${payload.pct != null ? payload.pct : 0}%`;
+    uiText(get('total-score'), () => t('{0}%', uiNumber(payload.pct ?? 0)));
 
-    const parts = [payload.t, payload.gm, payload.g ? `Goal: ${payload.g}` : ''].filter(Boolean);
-    get('results-subtitle').textContent =
-        parts.length ? parts.join(' · ') : 'Final assignments';
+    uiText(get('results-subtitle'), () => formatResultSubtitle(payload.t, payload.gm, payload.g));
 
     (payload.r || []).forEach((row, index) => {
         container.appendChild(buildResultCard({ name: row.n, faction: row.f, note: row.note, score: row.s, index }));
     });
 
     lastResults = payload; // keep Share Results Link working after a resume
-    get('results-summary').textContent = describeResultRows(payload.r);
+    uiText(get('results-summary'), () => describeResultRows(payload.r).split(' · ').map(translateUI).join(' · '));
     isSharedMode = false;
     document.body.classList.remove('shared-mode');
     switchView('view-results');
@@ -1285,8 +1282,8 @@ function startNewSession() {
     if (!isSupabaseConfigured()) return showToast('error', 'Saving unavailable', 'Sessions need Supabase configured in config.js.');
     if (!hasWorkspaceKey()) { openWorkspaceModal(); return; }
     repeatSessionSource = null;
-    get('new-session-title').textContent = 'New session';
-    get('new-session-help').textContent = 'Name the session. Everything you set up afterward saves automatically.';
+    uiText(get('new-session-title'), 'New session');
+    uiText(get('new-session-help'), 'Name the session. Everything you set up afterward saves automatically.');
     get('new-session-input').value = '';
     get('modal-overlay').classList.add('active');
     get('new-session-modal').classList.add('active');
@@ -1330,7 +1327,7 @@ function renderPresetList() {
     const names = Object.keys(presets).sort((a, b) => a.localeCompare(b));
 
     if (names.length === 0) {
-        container.innerHTML = '<div class="empty-state">No saved games yet. Add one below.</div>';
+        uiHTML(container, '<div class="empty-state">No saved games yet. Add one below.</div>');
         return;
     }
 
@@ -1338,19 +1335,19 @@ function renderPresetList() {
         const count = presets[name].length;
         const item = document.createElement('div');
         item.className = 'load-item';
-        item.innerHTML = `
+        uiHTML(item, `
             <span class="session-name">${escapeHtml(name)}</span>
             <span class="session-date">${count} faction${count === 1 ? '' : 's'}</span>
-        `;
+        `);
 
         const editBtn = document.createElement('button');
         editBtn.className = 'btn-sm';
-        editBtn.textContent = 'Edit';
+        uiText(editBtn, 'Edit');
         editBtn.onclick = () => openPresetEditor(name);
 
         const delBtn = document.createElement('button');
         delBtn.className = 'btn-sm danger delete-btn';
-        delBtn.title = 'Delete';
+        uiAttr(delBtn, 'title', 'Delete');
         delBtn.innerHTML = '&times;';
         delBtn.onclick = (e) => {
             e.stopPropagation();
@@ -1368,10 +1365,10 @@ function openPresetEditor(name = null) {
 
     if (name && presets[name]) {
         presetEditState = { originalName: name, factions: [...presets[name]] };
-        get('preset-edit-title').textContent = 'Edit saved game';
+        uiText(get('preset-edit-title'), 'Edit saved game');
     } else {
         presetEditState = { originalName: null, factions: [] };
-        get('preset-edit-title').textContent = 'New saved game';
+        uiText(get('preset-edit-title'), 'New saved game');
     }
 
     get('preset-name-input').value = presetEditState.originalName || '';
@@ -1410,7 +1407,7 @@ function renderPresetFactionTags() {
     container.innerHTML = '';
 
     if (presetEditState.factions.length === 0) {
-        container.innerHTML = '<div class="empty-state" style="padding: 1.5rem 1rem;">No factions yet</div>';
+        uiHTML(container, '<div class="empty-state" style="padding: 1.5rem 1rem;">No factions yet</div>');
         return;
     }
 
@@ -1420,11 +1417,11 @@ function renderPresetFactionTags() {
 
         const span = document.createElement('span');
         span.className = 'name';
-        span.textContent = faction;
+        userText(span, faction);
 
         const btn = document.createElement('button');
         btn.className = 'remove-btn';
-        btn.setAttribute('aria-label', `Remove ${faction}`);
+        uiAttr(btn, 'aria-label', `Remove ${faction}`);
         btn.innerHTML = '&times;';
         btn.onclick = () => removePresetFaction(faction);
 
@@ -1526,7 +1523,7 @@ function openResultsShareModal() {
     const link = `${base}#results=${encoded}`;
 
     get('results-link-input').value = link;
-    get('results-summary-text').value = formatResultsSummary(payload);
+    uiValue(get('results-summary-text'), () => formatResultsSummary(payload));
     get('modal-overlay').classList.add('active');
     get('results-share-modal').classList.add('active');
     get('results-link-input').focus();
@@ -1570,15 +1567,11 @@ function enterSharedResultsMode(payload) {
 
     const container = get('results-container');
     container.innerHTML = '';
-    get('total-score').textContent = `${payload.pct != null ? payload.pct : 0}%`;
+    uiText(get('total-score'), () => t('{0}%', uiNumber(payload.pct ?? 0)));
 
     // Show the session name / game / goal as context, if present.
-    const parts = [];
-    if (payload.t) parts.push(payload.t);
-    if (payload.gm) parts.push(payload.gm);
-    if (payload.g) parts.push(`Goal: ${payload.g}`);
-    get('results-subtitle').textContent = parts.length ? parts.join(' · ') : 'Final assignments';
-    get('results-summary').textContent = describeResultRows(payload.r);
+    uiText(get('results-subtitle'), () => formatResultSubtitle(payload.t, payload.gm, payload.g));
+    uiText(get('results-summary'), () => describeResultRows(payload.r).split(' · ').map(translateUI).join(' · '));
 
     (payload.r || []).forEach((row, index) => {
         container.appendChild(buildResultCard({ name: row.n, faction: row.f, note: row.note, score: row.s, index }));

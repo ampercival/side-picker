@@ -117,7 +117,7 @@ function findAssignmentConflict(players, factions) {
         if (!assign(index)) {
             const names = [...seenPlayers].map(i => players[i].name);
             if (names.length === 1) return `${names[0]} has banned every available faction. Unban a faction or add another faction.`;
-            const shown = names.slice(0, 5).join(', ') + (names.length > 5 ? ` and ${names.length - 5} others` : '');
+            const shown = names.slice(0, 5).join(', ') + (names.length > 5 ? `, … (+${names.length - 5})` : '');
             return `${shown} need ${names.length} distinct factions, but their bans leave only ${seenFactions.size} available between them. Add factions or change one of those bans.`;
         }
     }

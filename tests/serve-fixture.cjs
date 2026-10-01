@@ -48,7 +48,7 @@ const fixtureAuth={listeners:[],
         localStorage.setItem('fixture_auth',JSON.stringify(session));this.listeners.forEach(cb=>cb('SIGNED_IN',session));return {data:{session},error:null}},
     async signOut(){localStorage.removeItem('fixture_auth');this.listeners.forEach(cb=>cb('SIGNED_OUT',null));return {error:null}}};
 window.supabase={createClient:()=>({auth:fixtureAuth,rpc:async(fn,args)=>{const r=await fetch('/fixture-api',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fn,args,user:fixtureSession()?.user?.id||null})});return r.json()}})};`;
-const files = new Set(['/index.html','/privacy.html','/accounts.js','/style.css','/script.js','/rooms.js','/results.js','/optimizer.js','/drag.js','/access.js','/save-journal.js','/persistence.js','/accessibility.js','/repeat-games.js','/sharing.js','/vendor/qrcode-generator-1.4.4.js']);
+const files = new Set(['/index.html','/privacy.html','/translations-fr.js','/i18n.js','/accounts.js','/style.css','/script.js','/rooms.js','/results.js','/optimizer.js','/drag.js','/access.js','/save-journal.js','/persistence.js','/accessibility.js','/repeat-games.js','/sharing.js','/vendor/qrcode-generator-1.4.4.js']);
 function fail(message='Invalid link',code='42501'){throw {message,code};}
 function invitation(seed,player){return crypto.createHmac('sha256',seed).update(player).digest('hex');}
 function rpc(fn,args,user=null){

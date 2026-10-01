@@ -8,7 +8,7 @@ for(const player of ['', 'player-11111111-2222-3333-4444-555555555555','legacy n
     let pixels;const canvas={};
     const context={fillStyle:'#fff',fillRect(x,y,w,h){pixels ||= new Uint8ClampedArray(canvas.width*canvas.height*4);for(let row=y;row<y+h;row++)for(let col=x;col<x+w;col++){const offset=(row*canvas.width+col)*4,colour=this.fillStyle==='#fff'?255:0;pixels.set([colour,colour,colour,255],offset);}}};
     canvas.getContext=()=>context;
-    const ctx=vm.createContext({qrcode,get:id=>id==='invitation-qr'?canvas:{}});
+    const ctx=vm.createContext({...require('../i18n.js'),qrcode,get:id=>id==='invitation-qr'?canvas:{}});
     vm.runInContext(fs.readFileSync('sharing.js','utf8'),ctx);ctx.link=link;vm.runInContext('showInvitationQR(link,"Test invitation")',ctx);
     assert.equal(decode(pixels,canvas.width,canvas.height)?.data,link);
 }

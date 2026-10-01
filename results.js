@@ -53,7 +53,9 @@ function buildResultCard({ name, faction, note, score, index }) {
     fields.forEach(([className, label]) => {
         const el = document.createElement('div');
         el.className = className;
-        el.textContent = label;
+        if (className.startsWith('score-badge') && typeof uiText === 'function') {
+            uiText(el, () => `${translateUI(note)} (${numericScore === null ? t('Unavailable') : (numericScore >= 0 ? '+' : '') + uiNumber(numericScore)})`);
+        } else el.textContent = label;
         card.appendChild(el);
     });
     return card;

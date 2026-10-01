@@ -17,6 +17,10 @@
         <header>
             <h1>Side Picker</h1>
             <p>Assign factions fairly from everyone's preferences</p>
+            <div class="language-switch" role="group" aria-label="Language">
+                <button type="button" data-language="en" lang="en" aria-label="English" aria-pressed="true">EN</button>
+                <button type="button" data-language="fr" lang="fr-CA" aria-label="Français" aria-pressed="false">FR</button>
+            </div>
             <div class="header-actions">
                 <button class="btn-sm" onclick="goHome()" title="Your sessions" aria-label="Your sessions">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
@@ -638,6 +642,8 @@
     </template>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js" integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok" crossorigin="anonymous"></script>
+    <script src="translations-fr.js"></script>
+    <script src="i18n.js"></script>
     <script src="config.js"></script>
     <script src="access.js"></script>
     <script src="save-journal.js"></script>

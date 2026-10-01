@@ -89,7 +89,7 @@ test('malformed inputs fail clearly, neutral and unranked choices remain valid',
 
 function loadRunner() {
     const elements = new Map();
-    const context = vm.createContext({ console, Blob, TextEncoder, TextDecoder, atob, btoa, setTimeout, clearTimeout,
+    const context = vm.createContext({...require('../i18n.js'), console, Blob, TextEncoder, TextDecoder, atob, btoa, setTimeout, clearTimeout,
         localStorage: { getItem: () => null }, window: { matchMedia: () => ({ matches: true }) },
         document: { documentElement: { removeAttribute() {} }, addEventListener() {},
             getElementById: id => { if (id === 'theme-toggle') return null; if (!elements.has(id)) elements.set(id, { style: {} }); return elements.get(id); } },
