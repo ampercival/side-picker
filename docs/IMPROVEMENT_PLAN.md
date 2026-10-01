@@ -2,7 +2,7 @@
 
 Created: 2026-09-26. Last updated: 2026-09-30.
 
-Status: selected core improvements, optional accounts, UX-02 tied ranks and UX-03 pointer dragging are deployed and verified. Physical-phone gestures and prior optional live checks remain recorded separately below.
+Status: selected core improvements, optional accounts, UX-02 tied ranks and UX-03 pointer dragging are deployed. UX-04 fixes the reported iPad text and preview jump; implementation and offline checks pass, with deployment next. Visual browser verification is unavailable this session.
 
 ## Goal and scope
 
@@ -14,10 +14,10 @@ Read [APP_GUIDE.md](APP_GUIDE.md) for current behavior. Follow [AGENTS.md](../AG
 
 ## Current handoff
 
-- **Current work (2026-09-30): requested picker improvements deployed.** UX-02 tied ranks deployed as `8184e3b`, run `36758981799`. UX-03 dragging deployed as `15159cd`, run `36800548979`. Both Checks and Pages runs succeeded and live assets matched the source. No-preference behavior remains available.
+- **Current work (2026-09-30): UX-04 iPad text and preview correction.** User supplied an iPad screenshot showing letter-by-letter names and reported a preview above the pickup point. Names now wrap independently of rank selectors; previews retain the full source layout and dimensions. The prior releases remain `8184e3b` (ties) and `15159cd` (pointer dragging).
 - **Database:** migration 009 is applied and verified. Before application: 0 sessions, 1 saved faction list, 0 picks; migration 008 present. Migration 009 and all eight SQL suites passed in a single rolled-back transaction, with pasted SQL verified against the prepared source. Application verified existing sessions and the saved faction list unchanged. Postflight: ranks column present, scoped guest RPC available, direct game/private-helper access denied, backup RLS enabled; counts unchanged.
-- **Validation:** 59 Node regressions, syntax and offline PowerShell checks pass. Prior tied-rank acceptance covers host/guest submission, polling, reload, both goals and 360px layouts. Drag checks add real mouse moves in the app, browser mouse/touch event checks, 360px edge scrolling, tied-rank preservation, cancellation and save-once behavior. Physical touch remains a device spot-check limitation. A fresh guest drag browser run could not open the copied invitation because the browser URL policy rejected an invalid address; the shared controller and prior guest picker flow are covered separately.
-- **Exact next action:** when a physical phone is available, spot-check grip dragging, edge scrolling, normal row swipes and gesture cancellation through a personal fixture invitation; then record that separate evidence. No additional feature work is required for this request. No production sessions were used for write tests.
+- **Validation:** 60 Node regressions, syntax and offline PowerShell checks pass, including retained preview dimensions and pointer offsets during movement/scrolling. Prior browser evidence belongs to UX-02/03. Current browser connection timed out on creation, tab lookup and inventory, so the new tablet layout and in-browser alignment harness have not been visually verified. An isolated Tablet picker fixture and alignment button are prepared for that check. No schema change or production write test is needed.
+- **Exact next action:** commit/push UX-04, wait for Checks and Pages, and compare the changed live assets. Then verify the supplied iPad case after refresh when browser/device access is available; do not claim physical iPad acceptance without that evidence.
 - **Prior work:** selected core improvements are complete. Migrations 006–008 and Google/Discord/GitHub sign-in were applied and verified on 2026-09-27 (see Work log). Live saved-account invitation and real-player open-joining acceptance remain prior optional checks; this task does not claim those complete. Reusable player groups and history/rotation remain deferred.
 - **Access and operations:** use remains account-free. Organizer capabilities control a workspace; personal invitations control one player's picks. Local keepalive requires this computer on, signed in, and connected; this session did not reverify its scheduled execution. Migration snapshots are private recovery copies, not off-project disaster backups.
 
@@ -163,6 +163,16 @@ Routine implementation choices can be resolved from the user's instructions and 
 - [ ] Physical-phone gesture spot check when a device is available. *(Browser-dispatched touch events are validated separately.)*
 
 **Acceptance:** factions move/reorder across the owning player's three lists, tied ranks remain consistent, controls remain usable, invalid drops do not edit choices, and long lists scroll during grip dragging. Requested 2026-09-30.
+
+### UX-04 — iPad text and drag preview alignment
+
+- [x] Keep faction names readable in narrow tablet columns; wrap selectors separately and stack lists below 800px.
+- [x] Keep preview dimensions, full row styling and pickup offset unchanged, including after scrolling.
+- [x] Add a pointer-offset regression and isolated tablet/alignment browser fixtures; all 60 offline regressions pass.
+- [ ] Commit, push and verify deployed assets.
+- [ ] Verify the new tablet layout and ghost alignment in a browser and on the reported iPad. *(Browser connection timed out; prepared fixture checks are not execution evidence.)*
+
+**Acceptance:** readable faction names and rank controls at tablet/phone widths; preview pickup point stays with the finger while highlighted placement follows that same point. Requested with iPad screenshot 2026-09-30.
 
 ### FEATURE-01 — Faster repeat sessions
 
@@ -447,3 +457,10 @@ At the end of each implementation session, update Current handoff and append a d
 - `node scripts/check.cjs` passed all 59 Node regressions, JavaScript syntax and offline PowerShell checks. No schema change or production write test was needed. Browser console after correction contains extension errors only. A new guest-browser drag check was blocked when the copied invitation was rejected as an invalid URL; no attempt was made to bypass the browser policy. Prior guest picker acceptance and shared-controller tests remain separate evidence. Physical-phone gesture arbitration still needs a device spot check.
 - Exact next action: commit/push this scoped change, wait for Checks and Pages, compare deployed assets including `drag.js`, and verify the live home. Record release evidence in Current handoff.
 - Release completed: `15159cd2afc61e85d9351c182366ae4795768247` pushed to `main`; Checks and Pages run `36800548979` passed (checks 18s, deployment 14s). Live `index.html`, `drag.js`, `script.js`, `optimizer.js`, `rooms.js` and `style.css` matched source after newline normalization. Live home and updated Help opened without application console errors; browser extension errors are unrelated. No production game edits were made. Physical-phone and fresh guest-drag browser checks remain the explicitly recorded limits above.
+
+### 2026-09-30 — UX-04 iPad text and preview correction prepared
+
+- The supplied screenshot shows rank controls squeezing anonymous faction text in a flex row into a narrow letter strip. Added an explicit name span and wrapping with a useful name basis; selectors wrap onto their own line. Host/guest lists stack at 800px or below, keeping their controls usable through intermediate widths. Selects now use the existing input background token.
+- The prior ghost removed action buttons and did not inherit the source list's row styles, shrinking it while keeping an offset measured on the full source row. The preview now lives in an inert source-styled list overlay with the original measured width/height and full contents. Its top-left still uses the exact pickup offset. Removed row hover/press transforms so pickup does not alter the measured geometry.
+- All 60 Node regressions, JavaScript syntax and offline PowerShell checks passed. Added a controller test for size and pointer offset before/after scrolling. The browser harness now includes actual action controls and a measured alignment check; the app fixture includes the tablet names and ties from the screenshot. These browser checks are prepared but not executed: the browser connection timed out three times (new tab, URL lookup, inventory). No alternate browser automation was used.
+- Exact next action: commit/push this scoped correction, wait for Pages and compare changed assets. Current browser/device acceptance remains pending and must be recorded separately when available. No database changes or production game edits.

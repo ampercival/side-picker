@@ -16,6 +16,12 @@ function keyInfo(hash){
     if(!keyMeta.has(hash))keyMeta.set(hash,{id:crypto.randomUUID(),kind:'link',user:null,label:null,created_at:new Date().toISOString()});
     return keyMeta.get(hash);
 }
+// Tablet reproduction: full faction names beside tied rank controls.
+workspaces.get('a'.repeat(64)).sessions.push({id:'tablet-sample',save_version:crypto.randomUUID(),
+ name:'Tablet picker fixture',session_name:'Tablet picker fixture',game_title:'Example Game',
+ factions:['Coalition','KPD','RC','NSDAP','A very long faction name with several words'],room_code:null,results:null,
+ updated_at:new Date().toISOString(),players:[{id:'tablet-player',name:'Tablet fixture',
+ preferences:['Coalition','KPD','RC','NSDAP'],preferenceRanks:[1,1,3,3],bans:[],expanded:true,noPreference:false}]});
 const rooms = new Map(), roomStates = new Map(), picks = new Map(), receipts = new Map(), roomJoins = new Map();
 const {setPreferenceOrder,preferenceRanks}=require('../optimizer.js');
 const choices=(p,f)=>{const copy={preferences:p?.preferences||[],preferenceRanks:p?.preferenceRanks??p?.preference_ranks??undefined};setPreferenceOrder(copy,copy.preferences.filter(x=>f.includes(x)));return {...copy,bans:(p?.bans||[]).filter(x=>f.includes(x)),noPreference:!!(p?.noPreference??p?.no_preference)}};

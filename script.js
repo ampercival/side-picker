@@ -590,7 +590,10 @@ function refreshListsForCard(player, availableList, prefList, banList) {
 
         const label = document.createElement('span');
         label.className = 'li-label';
-        label.textContent = name;
+        const factionName = document.createElement('span');
+        factionName.className = 'faction-name';
+        factionName.textContent = name;
+        label.appendChild(factionName);
         li.appendChild(label);
 
         const actions = document.createElement('span');

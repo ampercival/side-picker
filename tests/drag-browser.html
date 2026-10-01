@@ -2,7 +2,7 @@
 <title>Isolated faction drag checks</title><link rel="stylesheet" href="/style.css">
 <style>body{padding:24px}main{max-width:1000px;margin:auto}.checks{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}.columns{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}h2{margin:12px 0}#report{white-space:pre-wrap}button{min-height:44px;padding:8px}footer{margin-top:24px;height:100px}@media(max-width:600px){.columns{grid-template-columns:1fr}body{padding:16px}}</style>
 <main><h1>Faction drag checks</h1><p>Isolated sample data. Drag a faction or run the touch-event checks.</p>
-<div class="checks"><button id="reset">Reset</button><button id="mouse">Run mouse checks</button><button id="touch">Run touch checks</button><button id="scroll">Check touch auto-scroll</button></div>
+<div class="checks"><button id="reset">Reset</button><button id="mouse">Run mouse checks</button><button id="touch">Run touch checks</button><button id="scroll">Check touch auto-scroll</button><button id="alignment">Check preview alignment</button></div>
 <output id="report" role="status">Ready</output><pre id="pointer-log" hidden></pre>
 <div class="columns"><section><h2>Available</h2><ul class="sortable-list available-list" id="available"></ul></section><section><h2>Preferences</h2><ul class="sortable-list preference-list" id="preferences"></ul></section><section><h2>Banned</h2><ul class="sortable-list banned-list" id="banned"></ul></section></div>
 <footer id="outside">Dropping here cancels the drag.</footer></main>
@@ -12,9 +12,9 @@ for(const type of ['pointerdown','pointermove','pointerup','pointercancel','lost
 let player,all,saves;
 function reset(long=false){cancelFactionDrag();all=long?Array.from({length:24},(_,i)=>'Faction '+(i+1)):['A','B','C','D','E','F'];all.push('G','H');player={preferences:all.slice(0,-2),preferenceRanks:long?undefined:[1,1,3,3,3,6],bans:[]};saves=0;render();report('Ready');}
 function report(text){document.getElementById('report').textContent=text;}
-function row(f,list){const li=document.createElement('li');li.dataset.faction=f;const grip=document.createElement('span');grip.className='drag-handle';grip.textContent='⠿';const label=document.createElement('span');label.className='li-label';label.textContent=f;li.append(grip,label);
+function row(f,list){const li=document.createElement('li');li.dataset.faction=f;const grip=document.createElement('span');grip.className='drag-handle';grip.textContent='⠿';const label=document.createElement('span');label.className='li-label';const name=document.createElement('span');name.className='faction-name';name.textContent=f;label.append(name);li.append(grip,label);
  if(list===lists[1]){label.classList.add('ranked-label');const select=document.createElement('select');select.className='preference-rank';select.setAttribute('aria-label','Rank for '+f);const ranks=preferenceRanks(player);for(const r of [...new Set(ranks)]){const option=new Option('Rank '+r,r);select.append(option);}select.value=ranks[player.preferences.indexOf(f)];select.onchange=()=>{setPreferenceRank(player,f,select.value);render();};label.append(select);}
- list.append(li);}
+ const actions=document.createElement('span');actions.className='li-actions';for(const text of list===lists[1]?['↑','↓','✕']:['♥','⊘']){const button=document.createElement('button');button.className='li-action';button.textContent=text;actions.append(button);}li.append(actions);list.append(li);}
 function render(){for(const list of lists)list.replaceChildren();for(const f of all)if(!player.preferences.includes(f)&&!player.bans.includes(f))row(f,lists[0]);for(const f of player.preferences)row(f,lists[1]);for(const f of player.bans)row(f,lists[2]);}
 setupFactionDrag(lists,{commit(f,destination){setPreferenceOrder(player,[...lists[1].children].map(x=>x.dataset.faction));player.bans=[...lists[2].children].map(x=>x.dataset.faction);saves++;render();report(JSON.stringify({preferences:player.preferences,ranks:preferenceRanks(player),bans:player.bans,saves}));}});
 function assert(ok,message){if(!ok)throw Error(message);}
@@ -29,6 +29,23 @@ function checks(type){try{reset();drop('G',lists[1],type);assert(player.preferen
  assert(!document.querySelector('.drag-ghost')&&!document.body.classList.contains('faction-drag-active'),'Drag state leaked');report('PASS '+type+': moves, ties, cancellation, outside drop, controls, cleanup; '+saves+' saves');document.getElementById('report').scrollIntoView({block:'center'});
  }catch(error){cancelFactionDrag();report('FAIL '+error.message);}}
 document.getElementById('reset').onclick=()=>reset();document.getElementById('mouse').onclick=()=>checks('mouse');document.getElementById('touch').onclick=()=>checks('touch');
+document.getElementById('alignment').onclick=()=>{try{
+ reset();all=['Coalition','KPD','RC','NSDAP','Long faction name with several words','G'];player={preferences:all.slice(0,-1),preferenceRanks:[1,1,3,3,5],bans:[]};render();
+ for(const type of ['mouse','touch','pen']){
+  const p=start('Coalition',type),source=find('Coalition').getBoundingClientRect();
+  emit(document,'pointermove',p[0]+8,p[1]+11,type);
+  const ghost=document.querySelector('.drag-ghost'),box=ghost.getBoundingClientRect(),grip=ghost.querySelector('.drag-handle').getBoundingClientRect();
+  assert(Math.abs(box.width-source.width)<1&&Math.abs(box.height-source.height)<1,'Preview changed size');
+  assert(Math.abs(box.left-source.left-8)<1&&Math.abs(box.top-source.top-11)<1,'Preview jumped at pickup');
+  assert(Math.abs(grip.left+grip.width/2-p[0]-8)<1&&Math.abs(grip.top+grip.height/2-p[1]-11)<1,'Grip moved away from pointer');
+  const before={x:grip.left+grip.width/2,y:grip.top+grip.height/2};window.scrollBy(0,40);
+  emit(document,'pointermove',p[0]+28,p[1]+31,type);
+  const moved=ghost.querySelector('.drag-handle').getBoundingClientRect();
+  assert(Math.abs(moved.left+moved.width/2-before.x-20)<1&&Math.abs(moved.top+moved.height/2-before.y-20)<1,'Preview shifted after scrolling');
+  emit(document,'pointercancel',p[0]+28,p[1]+31,type);
+ }
+ assert(saves===0&&!document.querySelector('.drag-overlay'),'Alignment check saved or leaked');report('PASS preview alignment: same size and pickup point for mouse, touch and pen, including page scrolling');document.getElementById('report').scrollIntoView({block:'center'});
+}catch(error){cancelFactionDrag();report('FAIL '+error.message);}};
 document.getElementById('scroll').onclick=async()=>{try{reset(true);window.scrollTo(0,0);const startPoint=start('G','touch');emit(document,'pointermove',startPoint[0]+12,startPoint[1]);window.scrollTo(0,0);const left=lists[0].getBoundingClientRect().left+20;const initial=scrollY;emit(document,'pointermove',left,innerHeight-4);await new Promise(resolve=>setTimeout(resolve,180));assert(scrollY>initial,'No edge scrolling');emit(document,'pointercancel',left,innerHeight-4);assert(saves===0&&!document.querySelector('.drag-ghost'),'Scroll cancellation saved or leaked');report('PASS touch auto-scroll: '+(scrollY-initial)+' pixels; cancellation preserved choices');document.getElementById('report').scrollIntoView({block:'center'});}catch(error){cancelFactionDrag();report('FAIL '+error.message);}};
 reset();
 </script></html>

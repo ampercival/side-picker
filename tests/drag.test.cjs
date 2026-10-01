@@ -13,7 +13,9 @@ function fixture(fromTemplate=false) {
     const win={...events('win'),innerHeight:800,innerWidth:1200,
         requestAnimationFrame(fn){const id=nextFrame++;frames.set(id,fn);return id;},cancelAnimationFrame:id=>frames.delete(id),
         scrollBy({top}){scrolled+=top;},setTimeout(fn){fn();}};
+    const overlays=[];
     const doc={...events('doc'),defaultView:win,elementFromPoint:()=>hit,
+        createElement(){const element={style:{},setAttribute(){},appendChild(child){this.child=child;},remove(){this.removed=true;}};overlays.push(element);return element;},
         body:{classList:classes(),appendChild(){}}};
     const lists=[0,1,2,3].map(i=>({
         ...events('list'+i),ownerDocument:doc,isConnected:true,children:[],classList:classes(),
@@ -34,7 +36,7 @@ function fixture(fromTemplate=false) {
     if(fromTemplate)lists.forEach(list=>list.ownerDocument={defaultView:null});
     setupFactionDrag(lists.slice(0,3),{commit(){saved++;setPreferenceOrder(player,lists[1].children.map(x=>x.dataset.faction));player.bans=lists[2].children.map(x=>x.dataset.faction);}});
     lists.forEach(list=>list.ownerDocument=doc);
-    return {lists,a,b,c,player,doc,win,
+    return {lists,a,b,c,player,doc,win,overlays,
         hit(value){hit=value;},get saved(){return saved;},get scrolled(){return scrolled;},get frames(){return frames.size;},
         down(item,type='mouse',extra={}){item.parentElement.fire('pointerdown',{target:item,pointerType:type,clientX:20,clientY:125,...extra});},
         move(x=270,y=350){doc.fire('pointermove',{clientX:x,clientY:y});},
@@ -47,6 +49,17 @@ function fixture(fromTemplate=false) {
 test('template cards use the live document after being inserted',()=>{
     const f=fixture(true);f.hit(f.lists[1]);f.down(f.c);f.move();f.up();
     assert.equal(f.saved,1);assert.deepEqual(f.player.preferences,['A','B','C']);f.clean();
+});
+
+test('the preview retains source dimensions and pickup offset through movement and scrolling',()=>{
+    const f=fixture();f.hit(f.lists[1]);
+    f.down(f.c,'touch',{clientX:200,clientY:145});f.move(208,156);
+    const preview=f.overlays[0];
+    assert.equal(preview.style.width,'220px');assert.equal(preview.style.height,'50px');
+    assert.equal(preview.style.transform,'translate3d(18px,121px,0)');
+    f.win.scrollBy({top:100});f.move(300,500);
+    assert.equal(preview.style.transform,'translate3d(110px,465px,0)');
+    f.clean();assert.equal(preview.removed,true);assert.equal(f.saved,0);
 });
 
 test('mouse and touch drops move between lists, preserve ties, and save once',()=>{

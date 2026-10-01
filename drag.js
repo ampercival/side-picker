@@ -23,7 +23,7 @@ function setupFactionDrag(lists, callbacks) {
             const rect = item.getBoundingClientRect();
             const drag = {
                 item, lists, pointerId:event.pointerId, x:start.x, y:start.y,
-                ghost:null, frame:null, target:null, started:false,
+                ghost:null, overlay:null, frame:null, target:null, started:false,
                 finish, move, update, capture:list
             };
             activeFactionDrag = drag;
@@ -46,9 +46,17 @@ function setupFactionDrag(lists, callbacks) {
                 drag.ghost.classList.add('drag-ghost');
                 drag.ghost.setAttribute('aria-hidden','true');
                 drag.ghost.inert = true;
-                Object.assign(drag.ghost.style, {position:'fixed', left:'0', top:'0',
-                    width:rect.width+'px', margin:'0', pointerEvents:'none', zIndex:'10000'});
-                doc.body.appendChild(drag.ghost);
+                // Preserve the source list's full row styling, controls and size.
+                // A smaller preview moves the grip away from the pickup point.
+                drag.overlay = doc.createElement('ul');
+                drag.overlay.className = list.className + ' drag-overlay';
+                drag.overlay.setAttribute('aria-hidden','true');
+                drag.overlay.inert = true;
+                Object.assign(drag.overlay.style, {position:'fixed', left:'0', top:'0',
+                    width:rect.width+'px', height:rect.height+'px', margin:'0',
+                    pointerEvents:'none', zIndex:'10000'});
+                drag.overlay.appendChild(drag.ghost);
+                doc.body.appendChild(drag.overlay);
             }
             function move(e) {
                 if (e.pointerId !== drag.pointerId) return;
@@ -61,7 +69,7 @@ function setupFactionDrag(lists, callbacks) {
             }
             function update() {
                 if (!drag.started) return;
-                drag.ghost.style.transform = `translate3d(${drag.x-(start.x-rect.left)}px,${drag.y-(start.y-rect.top)}px,0)`;
+                drag.overlay.style.transform = `translate3d(${drag.x-(start.x-rect.left)}px,${drag.y-(start.y-rect.top)}px,0)`;
                 // The source placeholder must not intercept hit testing.
                 const hit = doc.elementFromPoint(drag.x,drag.y);
                 const target = hit?.closest('.sortable-list');
@@ -114,7 +122,7 @@ function setupFactionDrag(lists, callbacks) {
                 item.classList.remove('dragging');
                 lists.forEach(candidate=>candidate.classList.remove('drag-target'));
                 doc.body.classList.remove('faction-drag-active');
-                drag.ghost?.remove();
+                drag.overlay?.remove();
                 if (!drag.started) return;
                 if (!commit) {
                     if (list.isConnected) list.insertBefore(item,originalNext?.parentElement===list ? originalNext : null);
