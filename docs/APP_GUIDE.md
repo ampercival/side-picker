@@ -1,6 +1,6 @@
 # Side Picker application guide
 
-Last updated: 2026-09-30. Initial review: `2fae186`; latest deployed application release: `a37d20a` on `main`. EN/FR localization is prepared and validated locally; deployment pending.
+Last updated: 2026-09-30. Initial review: `2fae186`; latest deployed application release: `022d6ac` on `main`. EN/FR localization is deployed; live switching, persistence and bilingual privacy copy are verified.
 
 This describes the existing application, not the proposed future design. See [the improvement plan](IMPROVEMENT_PLAN.md) for changes and session handoffs. Verify live operational details when they matter; a successful check on the review date is not ongoing monitoring.
 

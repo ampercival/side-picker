@@ -2,7 +2,7 @@
 
 Created: 2026-09-26. Last updated: 2026-09-30.
 
-Status: selected core improvements, optional accounts and UX-02–04 picker improvements are deployed. FEATURE-05 EN/FR localization is implemented and validated locally; deployment pending. UX-04 browser layout/alignment checks now pass; physical iPad acceptance remains pending.
+Status: selected core improvements, optional accounts, UX-02–04 picker improvements and FEATURE-05 EN/FR localization are deployed. Live language switching, persistence and privacy copy are verified. UX-04 browser layout/alignment checks now pass; physical iPad acceptance remains pending.
 
 ## Goal and scope
 
@@ -14,10 +14,11 @@ Read [APP_GUIDE.md](APP_GUIDE.md) for current behavior. Follow [AGENTS.md](../AG
 
 ## Current handoff
 
-- **Current work (2026-09-30): FEATURE-05 EN/FR toggle and Quebec French translation prepared.** All app modes and the privacy page are covered, with in-place switching and browser persistence. No schema change is required. UX-04 remains deployed as `a37d20a`; its browser acceptance is now recorded below.
+- **Current work (2026-09-30): FEATURE-05 EN/FR toggle and Quebec French translation released as `022d6ac`.** All app modes and the privacy page are covered, with in-place switching and browser persistence. Checks and Pages run `36807740772` passed (checks 18s, deployment 17s). All 14 changed application assets match deployed source after newline normalization. No schema change was required. UX-04 browser acceptance is recorded below.
 - **Database:** migration 009 is applied and verified. Before application: 0 sessions, 1 saved faction list, 0 picks; migration 008 present. Migration 009 and all eight SQL suites passed in a single rolled-back transaction, with pasted SQL verified against the prepared source. Application verified existing sessions and the saved faction list unchanged. Postflight: ranks column present, scoped guest RPC available, direct game/private-helper access denied, backup RLS enabled; counts unchanged.
 - **Validation:** 66 Node regressions, syntax and offline PowerShell checks pass. Isolated browser checks cover French home/setup, persisted choice after reload, switching with unfinished input and tied ranks intact, French guest submission synchronized to host, comparison/publication, copied summary and bilingual shared snapshots. Host iframe and guest checks at 360px have no horizontal overflow; toggle buttons are 48×44px. Landscape tablet faction labels each fit on one line. Preview-alignment harness reports PASS for mouse/touch/pen including scrolling, and the touch drag harness passes movement/cancellation/control checks. Physical iPad verification remains separate.
-- **Exact next action:** commit/push FEATURE-05, wait for Checks and Pages, compare live localization assets and verify EN/FR plus privacy on the deployed site; record the release. A subsequent physical iPad check remains useful for the reported device, without blocking this language release.
+- **Live acceptance:** English/French switching and French persistence after reload pass on the deployed app. Help and privacy copy are French, privacy switches both ways and uses `fr-CA`, and application/privacy console error logs are empty. The live browser's existing organizer capability was rejected, so cloud session retrieval was not accepted as passing; no credential replacement or production game edits were performed. Full host/guest/results workflows use the isolated fixture evidence above.
+- **Exact next action:** FEATURE-05 is complete. A physical iPad spot check of text and drag pickup remains the next acceptance action for UX-04. Separately, use a current organizer link for any future live workspace acceptance; preserve existing browser data. Deferred features require selection before implementation.
 - **Prior work:** selected core improvements are complete. Migrations 006–008 and Google/Discord/GitHub sign-in were applied and verified on 2026-09-27 (see Work log). Live saved-account invitation and real-player open-joining acceptance remain prior optional checks; this task does not claim those complete. Reusable player groups and history/rotation remain deferred.
 - **Access and operations:** use remains account-free. Organizer capabilities control a workspace; personal invitations control one player's picks. Local keepalive requires this computer on, signed in, and connected; this session did not reverify its scheduled execution. Migration snapshots are private recovery copies, not off-project disaster backups.
 
@@ -181,7 +182,7 @@ Routine implementation choices can be resolved from the user's instructions and 
 - [x] Add an accessible EN/FR switch to every app mode and the privacy page; remember the choice locally and preserve input/picks during switching.
 - [x] Preserve user names, proper nouns, URLs, private capabilities and canonical snapshot/result semantics; localize presentation, dates and numbers.
 - [x] Validate static copy coverage and preservation with six localization regressions; all 66 offline checks pass. Browser host/guest/results checks and 360px overflow checks pass.
-- [ ] Commit, push, verify Pages and the live switch/privacy page.
+- [x] Commit, push, verify Pages and the live switch/privacy page; release `022d6ac`, run `36807740772`, 14 deployed assets match source.
 
 **Acceptance:** complete, natural Quebec French UI; switching languages retains the current task; account-free use and existing shared results remain compatible. Requested explicitly with the Quebec French Translator plugin on 2026-09-30.
 
@@ -485,3 +486,10 @@ At the end of each implementation session, update Current handoff and append a d
 - Isolated browser evidence: French survives reload; EN/FR switching retains unfinished player input and ranks 1,1,3,3. Rank edits remain French, guest submits successfully and host receives them, comparison/publication shows French goals, clipboard equals the displayed French summary, and a snapshot switches between English/French without regenerating its link. French account entry/providers are visible; names remain unchanged. Exact 360px host/guest document widths stay within viewport; buttons are 48×44px.
 - Browser access recovered, completing the prepared UX-04 browser check: Coalition/KPD/RC/NSDAP each fit on one line in the narrow landscape column. Preview alignment reports PASS for mouse/touch/pen including page scrolling; touch moves, ties, cancellation, outside-drop and control checks pass. This is browser evidence, not physical iPad/Safari acceptance.
 - Exact next action: commit and push this scoped release, wait for Checks and Pages, compare deployed assets and verify live EN/FR and privacy; record deployment evidence separately.
+
+### 2026-09-30 — FEATURE-05 release verified
+
+- Committed and pushed `022d6ac2a1a722c6be35bb085f00cdd46868247f` to `main`. Checks and Pages run `36807740772` succeeded (checks 18s, deployment 17s); all 66 regressions passed in CI. All 14 changed application assets match the deployed source after newline normalization.
+- Live app switches between English and French and remembers French after reload. French Help opens successfully. Privacy shares the choice, switches both ways, displays the translated September 30 update and uses `fr-CA`; both pages have no application console errors. Screenshots are saved as local output artifacts.
+- Live session loading is limited by the test browser's rejected existing organizer capability. No link rotation, browser-data deletion or production game edits were attempted. Host/guest/publication/shared-summary acceptance remains the successful isolated fixture evidence above, and physical iPad verification remains pending for UX-04.
+- FEATURE-05 is complete. Next acceptance action: physical iPad text and drag spot check; use a current organizer link before future live workspace workflow checks. No further language implementation is pending.
