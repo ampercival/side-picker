@@ -2,7 +2,7 @@
 
 Created: 2026-09-26. Last updated: 2026-09-30.
 
-Status: selected core improvements, optional accounts, UX-02 tied ranks and UX-03 pointer dragging are deployed. UX-04 fixes the reported iPad text and preview jump; implementation and offline checks pass, with deployment next. Visual browser verification is unavailable this session.
+Status: selected core improvements, optional accounts and UX-02–04 picker improvements are deployed. UX-04 offline checks and deployed asset verification pass. Its new tablet visual/device acceptance remains pending because browser verification is unavailable this session.
 
 ## Goal and scope
 
@@ -14,10 +14,10 @@ Read [APP_GUIDE.md](APP_GUIDE.md) for current behavior. Follow [AGENTS.md](../AG
 
 ## Current handoff
 
-- **Current work (2026-09-30): UX-04 iPad text and preview correction.** User supplied an iPad screenshot showing letter-by-letter names and reported a preview above the pickup point. Names now wrap independently of rank selectors; previews retain the full source layout and dimensions. The prior releases remain `8184e3b` (ties) and `15159cd` (pointer dragging).
+- **Current work (2026-09-30): UX-04 iPad correction deployed as `a37d20a`.** Names wrap independently of rank selectors; previews retain the full source layout and dimensions. Checks and Pages run `36802511907` passed, and live assets match the source. The prior releases remain `8184e3b` (ties) and `15159cd` (pointer dragging).
 - **Database:** migration 009 is applied and verified. Before application: 0 sessions, 1 saved faction list, 0 picks; migration 008 present. Migration 009 and all eight SQL suites passed in a single rolled-back transaction, with pasted SQL verified against the prepared source. Application verified existing sessions and the saved faction list unchanged. Postflight: ranks column present, scoped guest RPC available, direct game/private-helper access denied, backup RLS enabled; counts unchanged.
 - **Validation:** 60 Node regressions, syntax and offline PowerShell checks pass, including retained preview dimensions and pointer offsets during movement/scrolling. Prior browser evidence belongs to UX-02/03. Current browser connection timed out on creation, tab lookup and inventory, so the new tablet layout and in-browser alignment harness have not been visually verified. An isolated Tablet picker fixture and alignment button are prepared for that check. No schema change or production write test is needed.
-- **Exact next action:** commit/push UX-04, wait for Checks and Pages, and compare the changed live assets. Then verify the supplied iPad case after refresh when browser/device access is available; do not claim physical iPad acceptance without that evidence.
+- **Exact next action:** verify the supplied iPad case after refresh when browser/device access is available, using Tablet picker fixture and Check preview alignment at the documented widths; record that evidence. No further deployment or database operation is pending. Do not claim physical iPad acceptance without that evidence.
 - **Prior work:** selected core improvements are complete. Migrations 006–008 and Google/Discord/GitHub sign-in were applied and verified on 2026-09-27 (see Work log). Live saved-account invitation and real-player open-joining acceptance remain prior optional checks; this task does not claim those complete. Reusable player groups and history/rotation remain deferred.
 - **Access and operations:** use remains account-free. Organizer capabilities control a workspace; personal invitations control one player's picks. Local keepalive requires this computer on, signed in, and connected; this session did not reverify its scheduled execution. Migration snapshots are private recovery copies, not off-project disaster backups.
 
@@ -169,7 +169,7 @@ Routine implementation choices can be resolved from the user's instructions and 
 - [x] Keep faction names readable in narrow tablet columns; wrap selectors separately and stack lists below 800px.
 - [x] Keep preview dimensions, full row styling and pickup offset unchanged, including after scrolling.
 - [x] Add a pointer-offset regression and isolated tablet/alignment browser fixtures; all 60 offline regressions pass.
-- [ ] Commit, push and verify deployed assets.
+- [x] Commit, push and verify deployed assets. *(`a37d20a`, run `36802511907`; live HTML, drag, script and styles match.)*
 - [ ] Verify the new tablet layout and ghost alignment in a browser and on the reported iPad. *(Browser connection timed out; prepared fixture checks are not execution evidence.)*
 
 **Acceptance:** readable faction names and rank controls at tablet/phone widths; preview pickup point stays with the finger while highlighted placement follows that same point. Requested with iPad screenshot 2026-09-30.
@@ -464,3 +464,4 @@ At the end of each implementation session, update Current handoff and append a d
 - The prior ghost removed action buttons and did not inherit the source list's row styles, shrinking it while keeping an offset measured on the full source row. The preview now lives in an inert source-styled list overlay with the original measured width/height and full contents. Its top-left still uses the exact pickup offset. Removed row hover/press transforms so pickup does not alter the measured geometry.
 - All 60 Node regressions, JavaScript syntax and offline PowerShell checks passed. Added a controller test for size and pointer offset before/after scrolling. The browser harness now includes actual action controls and a measured alignment check; the app fixture includes the tablet names and ties from the screenshot. These browser checks are prepared but not executed: the browser connection timed out three times (new tab, URL lookup, inventory). No alternate browser automation was used.
 - Exact next action: commit/push this scoped correction, wait for Pages and compare changed assets. Current browser/device acceptance remains pending and must be recorded separately when available. No database changes or production game edits.
+- Release: `a37d20aa0671965beac7ae35f0568e943f571a55` pushed to `main`; run `36802511907` passed (checks 22s, deployment 18s). Live `index.html`, `drag.js`, `script.js` and `style.css` exactly matched source after newline normalization. Alignment-page inline JavaScript and served fixture configuration parse successfully. Browser/device visual acceptance is still pending; the release is not represented as an independently verified iPad gesture fix.

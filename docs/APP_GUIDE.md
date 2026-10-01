@@ -1,6 +1,6 @@
 # Side Picker application guide
 
-Last updated: 2026-09-30. Initial review: `2fae186`; latest verified application release: `15159cd` on `main`.
+Last updated: 2026-09-30. Initial review: `2fae186`; latest deployed application release: `a37d20a` on `main`; assets verified, tablet visual acceptance pending.
 
 This describes the existing application, not the proposed future design. See [the improvement plan](IMPROVEMENT_PLAN.md) for changes and session handoffs. Verify live operational details when they matter; a successful check on the review date is not ongoing monitoring.
 
