@@ -2,7 +2,7 @@
 
 Created: 2026-09-26. Last updated: 2026-09-30.
 
-Status: selected core improvements and optional account providers are deployed. UX-02 tied ranks is implemented and validated; its database migration is applied, with client deployment pending. Prior optional live checks and deferred features remain recorded below.
+Status: selected core improvements, optional accounts and UX-02 tied ranks are deployed and verified. UX-03 pointer dragging is implemented and validated, with deployment next. Prior optional live checks and deferred features remain recorded below.
 
 ## Goal and scope
 
@@ -14,9 +14,9 @@ Read [APP_GUIDE.md](APP_GUIDE.md) for current behavior. Follow [AGENTS.md](../AG
 
 ## Current handoff
 
-- **Current work (2026-09-30): UX-02 tied preference ranks.** User requested shared ranks that consume subsequent positions, while retaining no-preference behavior. Code and validation are complete; commit/push and Pages verification are next.
+- **Current work (2026-09-30): UX-03 web and mobile dragging.** User requested polished drag/drop on both. A shared pointer controller is implemented and validated; commit/push and Pages verification are next. UX-02 tied ranks deployed as `8184e3b`; Checks and Pages run `36758981799` succeeded and live assets matched the source.
 - **Database:** migration 009 is applied and verified. Before application: 0 sessions, 1 saved faction list, 0 picks; migration 008 present. Migration 009 and all eight SQL suites passed in a single rolled-back transaction, with pasted SQL verified against the prepared source. Application verified existing sessions and the saved faction list unchanged. Postflight: ranks column present, scoped guest RPC available, direct game/private-helper access denied, backup RLS enabled; counts unchanged.
-- **Validation:** 54 Node regressions, syntax and offline PowerShell checks pass. Independent exhaustive comparison covers 400 ordinary/tied solver cases. Isolated browser verified shared ranks, splitting a tie, equal-preferences toggle, guest submission, organizer polling/reload, and both goals awarding 20 points with two first-choice result labels. Organizer and guest layouts passed at 360px without horizontal overflow, with 44px rank controls and preserved selection focus; physical touch remains a device spot-check limitation.
+- **Validation:** 59 Node regressions, syntax and offline PowerShell checks pass. Prior tied-rank acceptance covers host/guest submission, polling, reload, both goals and 360px layouts. Drag checks add real mouse moves in the app, browser mouse/touch event checks, 360px edge scrolling, tied-rank preservation, cancellation and save-once behavior. Physical touch remains a device spot-check limitation. A fresh guest drag browser run could not open the copied invitation because the browser URL policy rejected an invalid address; the shared controller and prior guest picker flow are covered separately.
 - **Exact next action:** commit this scoped improvement and push `main`; wait for Checks and Pages and verify the deployed assets. No production sessions were used for write tests.
 - **Prior work:** selected core improvements are complete. Migrations 006–008 and Google/Discord/GitHub sign-in were applied and verified on 2026-09-27 (see Work log). Live saved-account invitation and real-player open-joining acceptance remain prior optional checks; this task does not claim those complete. Reusable player groups and history/rotation remain deferred.
 - **Access and operations:** use remains account-free. Organizer capabilities control a workspace; personal invitations control one player's picks. Local keepalive requires this computer on, signed in, and connected; this session did not reverify its scheduled execution. Migration snapshots are private recovery copies, not off-project disaster backups.
@@ -149,9 +149,20 @@ Routine implementation choices can be resolved from the user's instructions and 
 - [x] Keep neutral Available choices and the equal-preferences toggle; preserve ties when toggling back.
 - [x] Carry ranks through scoring, worker snapshots, result labels, saves, guest submissions and conflict detection.
 - [x] Apply migration 009 after a rollback trial and verify existing data and access protections.
-- [ ] Commit, push, and verify Pages after final phone acceptance.
+- [x] Commit, push, and verify Pages after final phone acceptance. *(`8184e3b`, run `36758981799`; live assets match and home loads without app errors.)*
 
 **Acceptance:** ranks `1, 1, 3` and `1, 2, 3, 3, 3, 6` score tied factions equally and skip consumed positions; host and guest edits survive reload; bans remain strict; old saves remain readable. Requested 2026-09-30.
+
+### UX-03 — Reliable web and mobile dragging
+
+- [x] Use one pointer workflow for mouse, touch and pen, with clear ghost, insertion position and drop highlighting.
+- [x] Preserve normal phone scrolling and accessible buttons/selectors; scroll long lists while dragging near the edge.
+- [x] Commit only on a valid release within the same player; cancelled/outside/cross-player drops restore choices without saving.
+- [x] Verify template integration, ties and cancellation with regression checks, real mouse input and 360px browser touch-event checks.
+- [ ] Commit, push and verify the deployed assets.
+- [ ] Physical-phone gesture spot check when a device is available. *(Browser-dispatched touch events are validated separately.)*
+
+**Acceptance:** factions move/reorder across the owning player's three lists, tied ranks remain consistent, controls remain usable, invalid drops do not edit choices, and long lists scroll during grip dragging. Requested 2026-09-30.
 
 ### FEATURE-01 — Faster repeat sessions
 
@@ -424,3 +435,14 @@ At the end of each implementation session, update Current handoff and append a d
 - Offline checks passed: 54 Node tests, syntax and PowerShell health checks. Includes 400 independent exhaustive-reference solver comparisons with ties, worker execution, stale snapshots, rank-only guest conflicts, canonical-rank validation, and removing/reordering/splitting choices.
 - Production preflight found 0 sessions, 1 saved faction list, 0 picks and migration 008 present. Migration 009 plus all eight SQL suites passed in one rolled-back transaction. SQL editor content was verified against the prepared source before execution. Applied the tested migration with a preservation assertion for existing sessions and saved faction lists. Postflight confirmed unchanged counts, new rank storage, unchanged scoped RPC/direct-access boundary, private helper denial, and RLS on the migration snapshot.
 - Isolated browser evidence: organizer `1,1,3,3,3,6`; split B into rank 2 and restore; equal-preferences mode disables rank selection and restores prior ranks. Guest rank changes submitted, synchronized to host and survived reload. Both solver goals scored 20 with minimum 10; publication labeled Alex's B and Jordan's A as Choice #1 and counted two first choices. Guest phone preview at 360px retained focus and had no horizontal overflow. Final compact controls passed visual review on organizer and guest at 360px; no horizontal overflow and rank controls remain 44px high. Browser logs contain extension errors only. Client deployment remains next.
+
+### 2026-09-30 — UX-02 release verified
+
+- Committed and pushed tied preferences as `8184e3bf57ba63e56f0f75bcc8649b4f078201ee`. Checks and Pages run `36758981799` succeeded. Live `index.html`, `script.js`, `optimizer.js`, `rooms.js`, and `style.css` matched the checked-in source after newline normalization. Live home loaded with All changes saved and no application console errors.
+
+### 2026-09-30 — UX-03 pointer dragging implemented and validated
+
+- Replaced separate native/touch paths with `drag.js`: mouse row/grip dragging, touch/pen grip dragging, a pointer ghost, insertion placeholder, list highlighting and viewport-edge scrolling. Controls and ordinary phone swipes remain independent. A valid drop commits once; outside/cross-player releases, Escape, pointer cancellation, blur, hidden tabs and rerender restore the prior position without saving.
+- Browser acceptance caught template-clone integration: setup occurs before cards enter the live document. Resolving the document on pointerdown fixed it; the new regression reproduces template adoption. Real mouse drops in the organizer app moved Available -> Banned -> Preferences; ranks and choices survived reload. The harness passed browser-dispatched mouse/touch moves, ties, cancellation, outside drops and controls; 360px touch-event edge scrolling passed. Actual 360px organizer preview had no horizontal overflow and 44px grips. Screenshots are ignored local artifacts.
+- `node scripts/check.cjs` passed all 59 Node regressions, JavaScript syntax and offline PowerShell checks. No schema change or production write test was needed. Browser console after correction contains extension errors only. A new guest-browser drag check was blocked when the copied invitation was rejected as an invalid URL; no attempt was made to bypass the browser policy. Prior guest picker acceptance and shared-controller tests remain separate evidence. Physical-phone gesture arbitration still needs a device spot check.
+- Exact next action: commit/push this scoped change, wait for Checks and Pages, compare deployed assets including `drag.js`, and verify the live home. Record release evidence in Current handoff.

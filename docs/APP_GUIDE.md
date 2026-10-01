@@ -1,6 +1,6 @@
 # Side Picker application guide
 
-Last updated: 2026-09-30. Initial review: `2fae186`; current verified core release: `0ea2704` on `main`.
+Last updated: 2026-09-30. Initial review: `2fae186`; latest verified release: `8184e3b` on `main`; pointer drag improvement prepared below.
 
 This describes the existing application, not the proposed future design. See [the improvement plan](IMPROVEMENT_PLAN.md) for changes and session handoffs. Verify live operational details when they matter; a successful check on the review date is not ongoing monitoring.
 
@@ -46,6 +46,7 @@ If both URL forms are present, room mode takes precedence at startup.
 | `script.js` | Organizer UI, state, ranking controls, optimizer, saving orchestration, presets, result links |
 | `results.js` | Snapshot validation, bounded decoding, safe result card rendering; also testable under Node |
 | `optimizer.js` | Pure scoring, input validation, conflict detection, strict-ban assignment solver |
+| `drag.js` | Shared mouse/touch/pen drag controller, valid-drop commits, cancellation and edge scrolling |
 | `rooms.js` | Capability-authorized RPC calls, private workspaces, scoped host/guest polling |
 | `accounts.js` | Optional sign-in, My games, device keys, sign-out and account deletion |
 | `privacy.html` | Static privacy and saved-data notice, published with the app |
@@ -63,7 +64,7 @@ If both URL forms are present, room mode takes precedence at startup.
 | `scripts/keep-supabase-active.ps1` | Daily local read-only database check, bounded retries, logging and status |
 | `scripts/register-keepalive-task.ps1` | Registers the daily Windows task and sign-in catch-up |
 
-The scripts are classic browser scripts sharing globals, not ES modules. Loading order is Supabase's CDN client, `config.js`, `access.js`, `save-journal.js`, `results.js`, `optimizer.js`, `repeat-games.js`, the pinned QR encoder, `sharing.js`, `script.js`, `rooms.js`, `accounts.js`, then `persistence.js` and `accessibility.js`. Much of initialization runs at `DOMContentLoaded`, after the application scripts are available.
+The scripts are classic browser scripts sharing globals, not ES modules. Loading order is Supabase's CDN client, `config.js`, `access.js`, `save-journal.js`, `results.js`, `optimizer.js`, `drag.js`, `repeat-games.js`, the pinned QR encoder, `sharing.js`, `script.js`, `rooms.js`, `accounts.js`, then `persistence.js` and `accessibility.js`. Much of initialization runs at `DOMContentLoaded`, after the application scripts are available.
 
 There is no application server, framework, bundler, or package manifest. Focused Node tests now live in `tests/`. Supabase JS is pinned to version 2.117.2 with integrity verification. Google Fonts supplies Outfit.
 
@@ -198,11 +199,11 @@ Run `node tests/optimizer.bench.cjs` for 100-player/100-faction neutral, shared-
 
 ## Phone and keyboard interaction
 
-Ranking buttons and selectors are at least 44px high and provide the complete no-drag workflow. Each preferred faction has a rank selector: choose an existing rank to tie it with that group, or **Separate rank** to split it into its own rank immediately after its old group. Consumed ranks are omitted automatically. The **Treat preferences equally** toggle disables rank selectors and gives every preferred faction 10 points, retaining the ranks for when it is turned off. Factions left Available remain neutral. Dragging and arrow buttons preserve adjacent ties, and split a group if another rank is moved between its members. Touch dragging starts only on the visible grip; swiping the rest of a row can scroll normally. Cancelling a touch drag restores the prior choices. Desktop drops stay within the same player. Empty ranking sections remain visible drop targets with a compact None label.
+Ranking buttons and selectors are at least 44px high and provide the complete no-drag workflow. Each preferred faction has a rank selector: choose an existing rank to tie it with that group, or **Separate rank** to split it into its own rank immediately after its old group. Consumed ranks are omitted automatically. The **Treat preferences equally** toggle disables rank selectors and gives every preferred faction 10 points, retaining the ranks for when it is turned off. Factions left Available remain neutral. Dragging and arrow buttons preserve adjacent ties, and split a group if another rank is moved between its members. Mouse dragging can start from the row or grip; touch and pen dragging start only on the 44px grip, so ordinary row swipes scroll. Buttons and rank selectors never initiate dragging. A ghost follows the pointer, the original row marks the insertion position, and the destination list highlights. Holding near the viewport edge scrolls long lists. A valid release within that player's lists commits once; outside/cross-player drops, Escape, pointer cancellation, window blur, navigation and rerender restore prior choices without saving. Empty lists remain visible drop targets with a compact None label.
 
 Views reset scrolling and focus their heading. Organizer navigation records view/session identity in browser history state, without putting private links in URLs; Back/Forward restore screens and preserve the existing save rules. Modals have accessible names, trap focus, make the background inert, support Escape, and restore focus to their opener. Ranking actions preserve focus and announce their result. Reduced-motion preferences shorten animation. Room polling avoids rebuilding unchanged invitation buttons or repeatedly announcing unchanged connection text.
 
-Validated with isolated 360px/390px iframe previews and a desktop browser: readable Add Player, keyboard ranking/submission, Help focus trap/Escape restoration, browser Back between setup and picks, room dialog, long result names, and reconnect catching up to published results. Both phone previews had no horizontal page overflow. Physical-device touch gestures were not emulated by the browser-control tools; the grip-only gesture path remains a useful real-phone spot check.
+Validated with isolated 360px/390px iframe previews and a desktop browser: readable Add Player, keyboard ranking/submission, Help focus trap/Escape restoration, browser Back between setup and picks, room dialog, long result names, and reconnect catching up to published results. Both phone previews had no horizontal page overflow. The pointer controller also passed browser-dispatched mouse/touch events at desktop and 360px, including scrolling and cancellation, plus real mouse drops in the organizer app and an isolated harness. A regression covers template cards acquiring the live document before dragging. Physical-phone hardware gestures still need a spot check; dispatched touch events do not reproduce the operating system's gesture handling.
 
 ## Repeat sessions and bulk entry
 

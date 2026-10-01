@@ -22,6 +22,12 @@ const choices=(p,f)=>{const copy={preferences:p?.preferences||[],preferenceRanks
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 let offline=false, loseNext=false, delay=0, roomsOffline=false;
 const fixture = `window.SUPABASE_CONFIG={url:'https://fixture.invalid',publishableKey:'fixture'};
+document.addEventListener('DOMContentLoaded',()=>{
+ const log=document.createElement('pre');log.id='fixture-pointer-log';log.hidden=true;document.body.append(log);
+ for(const type of ['pointerdown','pointermove','pointerup','pointercancel','lostpointercapture'])document.addEventListener(type,event=>{
+  log.textContent=(log.textContent+'\\n'+type+' '+Math.round(event.clientX)+','+Math.round(event.clientY)+' '+(event.target.closest?.('li')?.dataset.faction||event.target.tagName)).slice(-2500);
+ });
+});
 localStorage.removeItem('side_picker_workspace_key');
 if(!localStorage.getItem('side_picker_private_workspace_v1'))localStorage.setItem('side_picker_private_workspace_v1',JSON.stringify({credential:'${'a'.repeat(64)}',ownerKey:'fixture'}));
 window.SUPABASE_CONFIG.accountProviders=['google','discord','github'];
@@ -36,7 +42,7 @@ const fixtureAuth={listeners:[],
         localStorage.setItem('fixture_auth',JSON.stringify(session));this.listeners.forEach(cb=>cb('SIGNED_IN',session));return {data:{session},error:null}},
     async signOut(){localStorage.removeItem('fixture_auth');this.listeners.forEach(cb=>cb('SIGNED_OUT',null));return {error:null}}};
 window.supabase={createClient:()=>({auth:fixtureAuth,rpc:async(fn,args)=>{const r=await fetch('/fixture-api',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fn,args,user:fixtureSession()?.user?.id||null})});return r.json()}})};`;
-const files = new Set(['/index.html','/privacy.html','/accounts.js','/style.css','/script.js','/rooms.js','/results.js','/optimizer.js','/access.js','/save-journal.js','/persistence.js','/accessibility.js','/repeat-games.js','/sharing.js','/vendor/qrcode-generator-1.4.4.js']);
+const files = new Set(['/index.html','/privacy.html','/accounts.js','/style.css','/script.js','/rooms.js','/results.js','/optimizer.js','/drag.js','/access.js','/save-journal.js','/persistence.js','/accessibility.js','/repeat-games.js','/sharing.js','/vendor/qrcode-generator-1.4.4.js']);
 function fail(message='Invalid link',code='42501'){throw {message,code};}
 function invitation(seed,player){return crypto.createHmac('sha256',seed).update(player).digest('hex');}
 function rpc(fn,args,user=null){
@@ -253,6 +259,9 @@ function account(action,payload,user){
 }
 http.createServer(async(req,res)=>{
     const file=new URL(req.url,'http://localhost').pathname;
+    if(file==='/drag-checks.html'){
+        res.setHeader('Content-Type','text/html');return res.end(fs.readFileSync(path.join(__dirname,'drag-browser.html'),'utf8'));
+    }
     if(file==='/controls'){
         if(req.method==='POST'){
             const chunks=[];for await(const chunk of req)chunks.push(chunk);const mode=Buffer.concat(chunks).toString();

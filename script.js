@@ -130,6 +130,7 @@ function prevStep(viewId) {
 }
 
 function switchView(viewId) {
+    if (typeof cancelFactionDrag === 'function') cancelFactionDrag();
     const changed = !get(viewId).classList.contains('active');
     document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
     get(viewId).classList.add('active');
@@ -461,6 +462,7 @@ function togglePlayerCard(header) {
 
 
 function renderPlayers() {
+    if (typeof cancelFactionDrag === 'function') cancelFactionDrag();
     const container = get('players-container');
 
     // Full re-render from state. Simple and correct for this scale.
@@ -526,6 +528,7 @@ function renderPlayers() {
 }
 
 function refreshListsForCard(player, availableList, prefList, banList) {
+    if (typeof cancelFactionDrag === 'function') cancelFactionDrag();
     if (isGuestMode && typeof updateGuestSubmitted === 'function') updateGuestSubmitted();
     // Clear lists
     availableList.innerHTML = '';
@@ -580,7 +583,7 @@ function refreshListsForCard(player, availableList, prefList, banList) {
 
     const createLi = (name, listType) => {
         const li = document.createElement('li');
-        li.draggable = true;
+        li.draggable = false;
         li.dataset.faction = name; // Read by drag commit instead of textContent.
         const handle = document.createElement('span'); handle.className = 'drag-handle'; handle.textContent = '⠿';
         handle.setAttribute('aria-hidden','true'); handle.title = 'Drag from here, or use the buttons'; li.appendChild(handle);
@@ -700,200 +703,15 @@ function randomizeAllPreferences() {
 }
 
 // --- Drag and Drop Logic ---
-const touchDragState = {
-    item: null,
-    ghost: null,
-    offsetX: 0,
-    offsetY: 0,
-    allLists: null,
-    player: null,
-    lastTargetList: null,
-    lastAfterElement: null,
-    rafId: null,
-    lastTouch: null
-};
-
-function setupDragAndDrop(list1, list2, list3, playerObj) {
-    const lists = [list1, list2, list3];
-
-    lists.forEach(list => {
-        // Desktop Drag
-        list.addEventListener('dragstart', e => {
-            const li = e.target.closest('li');
-            if (li) li.classList.add('dragging');
-            e.dataTransfer.effectAllowed = 'move';
-        });
-
-        list.addEventListener('dragend', e => {
-            const li = e.target.closest('li');
-            if (li) li.classList.remove('dragging');
-            updatePlayerStateFromDOM(playerObj, list1, list2, list3);
-        });
-
-        list.addEventListener('dragover', e => {
-            e.preventDefault();
-            const afterElement = getDragAfterElement(list, e.clientY);
-            const draggable = document.querySelector('.dragging');
-            if (!draggable || !lists.includes(draggable.parentElement)) return;
-            if (afterElement == null) {
-                list.appendChild(draggable);
-            } else {
-                list.insertBefore(draggable, afterElement);
-            }
-        });
-
-        // Touch Drag
-        setupTouchDrag(list, [list1, list2, list3], playerObj);
-    });
-}
-
-function setupTouchDrag(list, allLists, playerObj) {
-    list.addEventListener('touchstart', e => {
-        // Let taps on the action buttons through (accessible, no-drag path).
-        if (!e.target.closest('.drag-handle')) return;
-
-        const li = e.target.closest('li');
-        if (!li) return;
-
-        if (touchDragState.item) return;
-        e.preventDefault();
-        const touch = e.touches[0];
-        if (!touch) return;
-        startTouchDrag(li, allLists, playerObj, touch);
-    }, { passive: false });
-}
-
-function startTouchDrag(li, allLists, playerObj, touch) {
-    cleanupTouchDrag();
-
-    touchDragState.item = li;
-    touchDragState.allLists = allLists;
-    touchDragState.player = playerObj;
-    touchDragState.lastTargetList = null;
-    touchDragState.lastAfterElement = null;
-    touchDragState.lastTouch = touch;
-
-    li.classList.add('dragging');
-
-    const rect = li.getBoundingClientRect();
-    const ghost = li.cloneNode(true);
-    ghost.classList.add('drag-ghost');
-    ghost.style.position = 'fixed';
-    ghost.style.left = '0px';
-    ghost.style.top = '0px';
-    ghost.style.width = `${rect.width}px`;
-    ghost.style.height = `${rect.height}px`;
-    ghost.style.zIndex = '10000';
-    ghost.style.opacity = '0.9';
-    ghost.style.pointerEvents = 'none';
-    ghost.style.background = '#3b82f6';
-    ghost.style.transform = `translate3d(${rect.left}px, ${rect.top}px, 0) scale(1.05)`;
-    ghost.style.transformOrigin = 'top left';
-    ghost.style.boxShadow = '0 10px 20px rgba(0,0,0,0.3)';
-    ghost.style.willChange = 'transform';
-    document.body.appendChild(ghost);
-
-    touchDragState.ghost = ghost;
-    touchDragState.offsetX = touch.clientX - rect.left;
-    touchDragState.offsetY = touch.clientY - rect.top;
-
-    document.addEventListener('touchmove', onTouchMove, { passive: false });
-    document.addEventListener('touchend', onTouchEnd, { passive: false });
-    document.addEventListener('touchcancel', onTouchEnd, { passive: false });
-}
-
-function onTouchMove(e) {
-    if (!touchDragState.item || !touchDragState.ghost) return;
-    const touch = e.touches[0];
-    if (!touch) return;
-    e.preventDefault();
-    touchDragState.lastTouch = touch;
-
-    if (touchDragState.rafId) return;
-    touchDragState.rafId = requestAnimationFrame(updateTouchDragPosition);
-}
-
-function updateTouchDragPosition() {
-    touchDragState.rafId = null;
-    const touch = touchDragState.lastTouch;
-    if (!touch || !touchDragState.item || !touchDragState.ghost) return;
-
-    const x = touch.clientX - touchDragState.offsetX;
-    const y = touch.clientY - touchDragState.offsetY;
-    touchDragState.ghost.style.transform = `translate3d(${x}px, ${y}px, 0) scale(1.05)`;
-
-    const target = document.elementFromPoint(touch.clientX, touch.clientY);
-    if (!target) return;
-
-    const targetList = target.closest('.sortable-list');
-    if (!targetList || !touchDragState.allLists.includes(targetList)) return;
-
-    const afterElement = getDragAfterElement(targetList, touch.clientY);
-    if (targetList === touchDragState.lastTargetList && afterElement === touchDragState.lastAfterElement) {
-        return;
-    }
-
-    if (afterElement == null) {
-        targetList.appendChild(touchDragState.item);
-    } else if (afterElement !== touchDragState.item) {
-        targetList.insertBefore(touchDragState.item, afterElement);
-    }
-
-    touchDragState.lastTargetList = targetList;
-    touchDragState.lastAfterElement = afterElement;
-}
-
-function onTouchEnd(event) {
-    cleanupTouchDrag(event?.type !== 'touchcancel');
-}
-
-function cleanupTouchDrag(commit = true) {
-    if (touchDragState.rafId) {
-        cancelAnimationFrame(touchDragState.rafId);
-        touchDragState.rafId = null;
-    }
-
-    if (touchDragState.item) {
-        touchDragState.item.classList.remove('dragging');
-    }
-
-    if (touchDragState.ghost) {
-        touchDragState.ghost.remove();
-    }
-
-    document.querySelectorAll('.drag-ghost').forEach(el => el.remove());
-
-    if (touchDragState.player && touchDragState.allLists) {
-        const [l1, l2, l3] = touchDragState.allLists;
-        if (commit) updatePlayerStateFromDOM(touchDragState.player, l1, l2, l3);
-        else refreshListsForCard(touchDragState.player, l1, l2, l3);
-    }
-
-    touchDragState.item = null;
-    touchDragState.ghost = null;
-    touchDragState.allLists = null;
-    touchDragState.player = null;
-    touchDragState.lastTargetList = null;
-    touchDragState.lastAfterElement = null;
-    touchDragState.lastTouch = null;
-
-    document.removeEventListener('touchmove', onTouchMove);
-    document.removeEventListener('touchend', onTouchEnd);
-    document.removeEventListener('touchcancel', onTouchEnd);
-}
-
-function getDragAfterElement(container, y) {
-    const draggableElements = [...container.querySelectorAll('li:not(.dragging)')];
-
-    return draggableElements.reduce((closest, child) => {
-        const box = child.getBoundingClientRect();
-        const offset = y - box.top - box.height / 2;
-        if (offset < 0 && offset > closest.offset) {
-            return { offset: offset, element: child };
-        } else {
-            return closest;
+function setupDragAndDrop(list1, list2, list3, player) {
+    setupFactionDrag([list1,list2,list3], {
+        commit(faction, destination) {
+            updatePlayerStateFromDOM(player,list1,list2,list3);
+            const row = [...destination.querySelectorAll('li')].find(item=>item.dataset.faction===faction);
+            row?.querySelector('select,button')?.focus({preventScroll:true});
+            if (typeof announce === 'function') announce(`${faction}: ${player.bans.includes(faction) ? 'banned' : player.preferences.includes(faction) ? `rank ${preferenceRanks(player)[player.preferences.indexOf(faction)]}` : 'available'}`);
         }
-    }, { offset: Number.NEGATIVE_INFINITY }).element;
+    });
 }
 
 function updatePlayerStateFromDOM(player, availableList, prefList, banList) {
