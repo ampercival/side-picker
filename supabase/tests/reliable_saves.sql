@@ -14,15 +14,15 @@ begin
   begin
     perform public.sp_workspace('save_session',token,game || jsonb_build_object('expected_version',first_save->'save_version','operation_id',gen_random_uuid()));
     raise exception 'Stale edit overwrote game';
-  exception when serialization_failure then null; end;
+  exception when sqlstate 'PT409' then null; end;
   reply := public.sp_workspace('save_session',token,request);
   if reply<>first_save or public.sp_workspace('load',token)->'sessions'->0->>'game_title'<>'Latest' then raise exception 'Retry changed newer data'; end if;
   begin perform public.sp_workspace('save_session',token,request || '{"game_title":"Changed retry"}'); raise exception 'Reused id accepted changed body'; exception when invalid_parameter_value then null; end;
-  begin perform public.sp_workspace('delete_session',token,jsonb_build_object('name',game->>'name','expected_version',first_save->'save_version','operation_id',gen_random_uuid())); raise exception 'Stale deletion allowed'; exception when serialization_failure then null; end;
+  begin perform public.sp_workspace('delete_session',token,jsonb_build_object('name',game->>'name','expected_version',first_save->'save_version','operation_id',gen_random_uuid())); raise exception 'Stale deletion allowed'; exception when sqlstate 'PT409' then null; end;
   p := public.sp_workspace('save_preset',token,jsonb_build_object('name','Original','factions','["A"]'::jsonb,'expected_version',null,'operation_id',gen_random_uuid()));
   q := public.sp_workspace('save_preset',token,jsonb_build_object('name','Destination','factions','["B"]'::jsonb,'expected_version',null,'operation_id',gen_random_uuid()));
   request := jsonb_build_object('name','Destination','original_name','Original','factions','["A"]'::jsonb,'expected_version',p->'save_version','target_version',null,'operation_id',gen_random_uuid());
-  begin perform public.sp_workspace('rename_preset',token,request); raise exception 'Rename overwrote changed target'; exception when serialization_failure then null; end;
+  begin perform public.sp_workspace('rename_preset',token,request); raise exception 'Rename overwrote changed target'; exception when sqlstate 'PT409' then null; end;
   if jsonb_array_length(public.sp_workspace('load',token)->'presets')<>2 then raise exception 'Failed rename removed original'; end if;
   request := request || jsonb_build_object('target_version',q->'save_version');
   p := public.sp_workspace('rename_preset',token,request);
@@ -31,6 +31,10 @@ begin
 end $$;
 reset role;
 do $$ begin
+  if exists(select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+    where n.nspname in ('public','side_picker_private') and p.prosrc like '%40001%') then
+    raise exception 'Business conflict can trigger infinite PostgREST retries';
+  end if;
   if has_function_privilege('anon','side_picker_private.workspace_legacy(text,text,jsonb)','EXECUTE') then raise exception 'Legacy write API exposed'; end if;
 end $$;
 rollback;

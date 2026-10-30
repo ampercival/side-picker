@@ -23,7 +23,7 @@ begin
  begin
   perform public.sp_workspace('save_session',c,game||jsonb_build_object('expected_version',saved->'save_version','operation_id',gen_random_uuid()));
   raise exception 'Competing rank edit accepted';
- exception when serialization_failure then null; end;
+ exception when sqlstate 'PT409' then null; end;
  saved:=public.sp_workspace('save_session',c,saved||jsonb_build_object('expected_version',saved->'save_version','operation_id',gen_random_uuid()));
  game:=jsonb_set(saved,'{players,0,preferenceRanks}','[1,1,3,3,3,6]');
  saved:=public.sp_workspace('save_session',c,game||jsonb_build_object('expected_version',saved->'save_version','operation_id',gen_random_uuid()));

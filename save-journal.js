@@ -59,7 +59,7 @@ class SaveJournal {
                 entry.request = null; entry.status = 'pending'; this.persist(entry);
             } catch (error) {
                 entry.errorCode = error?.code || 'NETWORK';
-                entry.status = error?.code === '40001' ? 'conflict' : ['42501','22023'].includes(error?.code) ? 'blocked' : 'failed';
+                entry.status = ['PT409', '40001'].includes(error?.code) ? 'conflict' : ['42501','22023'].includes(error?.code) ? 'blocked' : 'failed';
                 this.persist(entry); return false;
             }
         }

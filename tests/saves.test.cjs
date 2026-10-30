@@ -17,7 +17,7 @@ test('lost response retries identical operation before sending newer edits',asyn
  const j=journal({send:async(action,body)=>{
   calls.push(structuredClone(body));
   if(receipts.has(body.operation_id))return receipts.get(body.operation_id);
-  if(body.expected_version!==serverVersion)throw {code:'40001'};
+  if(body.expected_version!==serverVersion)throw {code:'PT409'};
   serverValue=body.factions[0];serverVersion=serverValue;const result={save_version:serverVersion};receipts.set(body.operation_id,result);
   if(lose){lose=false;throw new Error('lost');}return result;
  }});
@@ -33,7 +33,7 @@ test('editing during an in-flight save keeps latest draft until both writes ackn
  release();assert.equal(await saving,true);assert.equal(calls.length,2);assert.equal(calls[1].expected_version,'v1');
 });
 test('concurrent cloud edits block retries while retaining recoverable local work',async()=>{
- let count=0;const j=journal({send:async()=>{count++;throw {code:'40001'};}});
+ let count=0;const j=journal({send:async()=>{count++;throw {code:'PT409'};}});
  j.stage('session:game','save_session',payload('local'),'old');assert.equal(await j.flushAll(),false);
  j.stage('session:game','save_session',payload('more edits'),'new');assert.equal(await j.flushAll(),false);
  assert.equal(count,1);assert.equal(j.drafts()[0].status,'conflict');assert.equal(j.drafts()[0].latest.payload.factions[0],'more edits');
@@ -42,6 +42,14 @@ test('revoked access is not retried automatically, network failures are retryabl
  let code='FETCH_ERROR';const j=journal({send:async()=>{throw {code};}});
  j.stage('session:game','save_session',payload('local'),'old');await j.flushAll();assert.equal(j.drafts()[0].status,'failed');
  code='42501';await j.flushAll();assert.equal(j.drafts()[0].status,'blocked');
+});
+
+test('legacy conflict replies still stop retries and preserve the local draft',async()=>{
+ let count=0;const j=journal({send:async()=>{count++;throw {code:'40001'};}});
+ j.stage('session:game','save_session',payload('local'),'old');
+ assert.equal(await j.flushAll(),false);assert.equal(await j.flushAll(),false);
+ assert.equal(count,1);assert.equal(j.drafts()[0].status,'conflict');
+ assert.equal(j.drafts()[0].latest.payload.factions[0],'local');
 });
 test('storage failure never reports a durable draft and still allows an online save',async()=>{
  const broken={length:0,setItem(){throw Error('quota');},removeItem(){},key(){}};

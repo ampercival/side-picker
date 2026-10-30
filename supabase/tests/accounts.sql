@@ -50,7 +50,7 @@ begin
  if public.sp_workspace('load',device)->>'owner_key'<>owner then raise exception 'Device key did not open the workspace'; end if;
  perform public.sp_workspace('save_session',device,game || jsonb_build_object('session_name','Changed','expected_version',saved->'save_version','operation_id',gen_random_uuid()));
  begin perform public.sp_workspace('save_session',link,game || jsonb_build_object('expected_version',saved->'save_version','operation_id',gen_random_uuid()));
-  raise exception 'Stale save accepted through another key'; exception when serialization_failure then null; end;
+  raise exception 'Stale save accepted through another key'; exception when sqlstate 'PT409' then null; end;
  listed := public.sp_account('list')->'workspaces';
  if (select k->>'label' from jsonb_array_elements(listed->0->'keys') k where k->>'kind'='device') is distinct from 'Testbrowser'
   or listed->0->'sessions'->0->>'session_name'<>'Changed' then raise exception 'Device label or save missing: %',listed; end if;

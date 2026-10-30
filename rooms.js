@@ -35,7 +35,7 @@ function storeWorkspace(credential, ownerKey) {
 }
 function accessError(error, title = 'Could not save') {
     showToast('error', title, error?.code === '42501' ? 'This private link is no longer valid, or picking is closed. Open a current link or ask the organizer to reopen picking.'
-        : error?.code === '40001' ? 'A newer saved version exists. Reload it before trying this action again.' : error?.code === '22023' ? error.message : 'Check your connection and try again. Changes have not been confirmed saved.');
+        : ['PT409', '40001'].includes(error?.code) ? 'A newer saved version exists. Reload it before trying this action again.' : error?.code === '22023' ? error.message : 'Check your connection and try again. Changes have not been confirmed saved.');
 }
 async function workspaceRequest(action, payload = {}, credential = privateWorkspace().credential) {
     const sb = getSupabaseClient(); if (!sb) throw new Error('Unavailable');
@@ -148,7 +148,7 @@ async function checkedAction(action, payload) {
     const request = pendingActions.get(key) || { ...payload, operation_id: crypto.randomUUID() };
     pendingActions.set(key, request);
     try { const result = await workspaceRequest(action, request, credential); pendingActions.delete(key); return result; }
-    catch (error) { accessError(error, error?.code === '40001' ? 'Changed on another device' : 'Could not save'); return null; }
+    catch (error) { accessError(error, ['PT409', '40001'].includes(error?.code) ? 'Changed on another device' : 'Could not save'); return null; }
 }
 async function deleteSessionFromDb(name) {
     if (!(await journal.flush('session:' + name))) return false;

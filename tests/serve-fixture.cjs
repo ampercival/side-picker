@@ -63,10 +63,10 @@ function rpc(fn,args,user=null){
         if(prior){if(prior.fingerprint!==fingerprint)fail('Changed retry','22023');return prior.result;}
         if(!payload.operation_id||!Object.hasOwn(payload,'expected_version'))fail('Refresh the app','22023');
         const row=items.find(x=>x.name===source);
-        if((row?.save_version||null)!==payload.expected_version)fail('Changed elsewhere','40001');
+        if((row?.save_version||null)!==payload.expected_version)fail('Changed elsewhere','PT409');
         if(action==='rename_preset'){
             const target=w.presets.find(p=>p.name===payload.name);
-            if((target?.save_version||null)!==payload.target_version)fail('Target changed','40001');
+            if((target?.save_version||null)!==payload.target_version)fail('Target changed','PT409');
             w.presets=w.presets.filter(p=>p.name!==source&&p.name!==payload.name);
             w.presets.push({name:payload.name,factions:payload.factions,save_version:crypto.randomUUID()});
         }else rpc('fixture_legacy',args);
@@ -106,7 +106,7 @@ function rpc(fn,args,user=null){
                 const incoming=choices(p,row.factions),saved=choices(pick,row.factions);
                 let next=incoming;
                 if(p.submittedAt!==pick.updated_at){
-                    if(!same(incoming,saved)&&!same(incoming,choices(s?.players.find(x=>x.id===p.id),row.factions)))fail('Competing player update','40001');
+                    if(!same(incoming,saved)&&!same(incoming,choices(s?.players.find(x=>x.id===p.id),row.factions)))fail('Competing player update','PT409');
                     next=saved;
                 }
                 if(!same(next,choices(pick,s.factions))){pick={...pick,preferences:next.preferences,preference_ranks:next.preferenceRanks,bans:next.bans,no_preference:next.noPreference,source:'organizer',updated_at:new Date().toISOString()};picks.set(row.id+':'+p.id,pick);}
@@ -135,7 +135,7 @@ function rpc(fn,args,user=null){
         if(action==='set_room_stage'||action==='room_status'){
             const r=roomStates.get(s.id);if(!r)fail();
             if(action==='set_room_stage'){
-                if(payload.expected_version!==s.save_version)fail('Stale game','40001');
+                if(payload.expected_version!==s.save_version)fail('Stale game','PT409');
                 if(s.results)fail('Clear results first','22023');
                 if(r.locked!==(payload.stage==='locked')){r.locked=payload.stage==='locked';r.revision=crypto.randomUUID();}
             }
@@ -168,7 +168,7 @@ function rpc(fn,args,user=null){
         }
         if(action==='submit'){
             if(!player||s.results||r.locked)fail();
-            if(payload.expected_room!==r.revision||payload.expected_pick!==(prior?.updated_at||null))fail('Changed elsewhere','40001');
+            if(payload.expected_room!==r.revision||payload.expected_pick!==(prior?.updated_at||null))fail('Changed elsewhere','PT409');
             picks.set(s.id+':'+player,{...payload,source:'player',player_id:player,session_id:s.id,updated_at:new Date().toISOString()});
         }
         return {session_name:s.session_name,game_title:s.game_title,factions:s.factions,results:s.results||null,
